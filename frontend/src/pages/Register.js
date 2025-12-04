@@ -1,92 +1,154 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Box,
   Container,
   TextField,
   Button,
   Typography,
-  Paper,
-  Alert,
   CircularProgress,
-  Grid,
-  Stepper,
-  Step,
-  StepLabel,
+  Paper,
+  Divider,
+  Alert,
   MenuItem,
-} from '@mui/material';
-import {
-  MedicalServices,
-  CheckCircle,
-} from '@mui/icons-material';
-
-const steps = ['Account Details', 'Personal Information', 'Confirmation'];
+} from "@mui/material";
+import { Email, Lock, Person, Phone, CalendarMonth } from "@mui/icons-material";
 
 const Register = () => {
   const navigate = useNavigate();
-  const [activeStep, setActiveStep] = useState(0);
+
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
-    // Step 1
-    email: '',
-    password: '',
-    confirmPassword: '',
-    userType: 'customer',
-    
-    // Step 2
-    firstName: '',
-    lastName: '',
-    phone: '',
-    dateOfBirth: '',
-    gender: '',
-    address: '',
+    firstName: "",
+    lastName: "",
+    phone: "",
+    email: "",
+    dob: "",
+    password: "",
+    confirmPassword: "",
+    accountType: "",
   });
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleNext = () => {
-    setActiveStep((prevStep) => prevStep + 1);
-  };
-
-  const handleBack = () => {
-    setActiveStep((prevStep) => prevStep - 1);
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
+    // VALIDATION
+    if (
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.phone ||
+      !formData.email ||
+      !formData.dob ||
+      !formData.password ||
+      !formData.confirmPassword ||
+      !formData.accountType
+    ) {
+      setError("All fields are required.");
       return;
     }
 
-    // Simulate API call
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (!/^\d{10}$/.test(formData.phone)) {
+      setError("Phone number must be 10 digits.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
     setTimeout(() => {
+      navigate("/login");
       setLoading(false);
-      setSuccess('Account created successfully! Redirecting to login...');
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
-    }, 2000);
+    }, 1200);
   };
 
-  const renderStepContent = (step) => {
-    switch (step) {
-      case 0:
-        return (
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
+  return (
+    <Box sx={{ minHeight: "100vh", bgcolor: "#f8fafc" }}>
+      <Container maxWidth="sm">
+        <Box sx={{ py: 8 }}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 3, md: 5 },
+              borderRadius: 3,
+              border: "1px solid #e2e8f0",
+              bgcolor: "white",
+            }}
+          >
+            {/* LOGO AREA */}
+            <Box sx={{ textAlign: "center", mb: 4 }}>
+              <img
+                src="/favicon.png"
+                alt="HealthInsura360"
+                style={{ width: 80, marginBottom: 16 }}
+              />
+
+              <Typography variant="h4" fontWeight={700} color="#0a2540">
+                Create Your Account
+              </Typography>
+              <Typography variant="body1" color="#64748b">
+                Join HealthInsura360 today
+              </Typography>
+            </Box>
+
+            {/* ERROR ALERT */}
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+
+            {/* FORM */}
+            <form onSubmit={handleSubmit}>
+              <TextField
+                fullWidth
+                label="First Name"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                required
+                margin="normal"
+                InputProps={{
+                  startAdornment: <Person sx={{ mr: 1, color: "#94a3b8" }} />,
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Last Name"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                required
+                margin="normal"
+                InputProps={{
+                  startAdornment: <Person sx={{ mr: 1, color: "#94a3b8" }} />,
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Phone Number"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                required
+                margin="normal"
+                InputProps={{
+                  startAdornment: <Phone sx={{ mr: 1, color: "#94a3b8" }} />,
+                }}
+              />
+
               <TextField
                 fullWidth
                 label="Email Address"
@@ -95,26 +157,43 @@ const Register = () => {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                disabled={loading}
-                variant="outlined"
+                margin="normal"
+                InputProps={{
+                  startAdornment: <Email sx={{ mr: 1, color: "#94a3b8" }} />,
+                }}
               />
-            </Grid>
 
-            <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                label="Password"
+                label="Date of Birth"
+                name="dob"
+                type="date"
+                value={formData.dob}
+                onChange={handleChange}
+                required
+                margin="normal"
+                InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  startAdornment: (
+                    <CalendarMonth sx={{ mr: 1, color: "#94a3b8" }} />
+                  ),
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Create Password"
                 name="password"
                 type="password"
                 value={formData.password}
                 onChange={handleChange}
                 required
-                disabled={loading}
-                variant="outlined"
+                margin="normal"
+                InputProps={{
+                  startAdornment: <Lock sx={{ mr: 1, color: "#94a3b8" }} />,
+                }}
               />
-            </Grid>
 
-            <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 label="Confirm Password"
@@ -123,238 +202,83 @@ const Register = () => {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 required
-                disabled={loading}
-                variant="outlined"
+                margin="normal"
+                InputProps={{
+                  startAdornment: <Lock sx={{ mr: 1, color: "#94a3b8" }} />,
+                }}
               />
-            </Grid>
 
-            <Grid item xs={12}>
               <TextField
                 select
                 fullWidth
-                label="Account Type"
-                name="userType"
-                value={formData.userType}
+                label="Select Account Type"
+                name="accountType"
+                value={formData.accountType}
                 onChange={handleChange}
-                disabled={loading}
-                variant="outlined"
+                required
+                margin="normal"
               >
-                <MenuItem value="customer">👤 Customer/Policyholder</MenuItem>
-                <MenuItem value="agent">🤝 Insurance Agent</MenuItem>
-                <MenuItem value="hospital">🏥 Hospital Representative</MenuItem>
-                <MenuItem value="admin">⚙️ Administrator</MenuItem>
+                <MenuItem value="customer">Customer / Policyholder</MenuItem>
+                <MenuItem value="hospital">Hospital Representative</MenuItem>
+                <MenuItem value="agent">Agent</MenuItem>
               </TextField>
-            </Grid>
-          </Grid>
-        );
 
-      case 1:
-        return (
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="First Name"
-                name="firstName"
-                value={formData.firstName}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                variant="outlined"
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Last Name"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                variant="outlined"
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Phone Number"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                variant="outlined"
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Date of Birth"
-                name="dateOfBirth"
-                type="date"
-                value={formData.dateOfBirth}
-                onChange={handleChange}
-                InputLabelProps={{ shrink: true }}
-                disabled={loading}
-                variant="outlined"
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                select
-                fullWidth
-                label="Gender"
-                name="gender"
-                value={formData.gender}
-                onChange={handleChange}
-                disabled={loading}
-                variant="outlined"
-              >
-                <MenuItem value="male">Male</MenuItem>
-                <MenuItem value="female">Female</MenuItem>
-                <MenuItem value="other">Other</MenuItem>
-                <MenuItem value="prefer-not-to-say">Prefer not to say</MenuItem>
-              </TextField>
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Address"
-                name="address"
-                multiline
-                rows={3}
-                value={formData.address}
-                onChange={handleChange}
-                disabled={loading}
-                variant="outlined"
-              />
-            </Grid>
-          </Grid>
-        );
-
-      case 2:
-        return (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <CheckCircle sx={{ fontSize: 80, color: 'success.main', mb: 3 }} />
-            <Typography variant="h5" gutterBottom>
-              Review Your Information
-            </Typography>
-            <Typography variant="body1" color="text.secondary" paragraph>
-              Please review your information before creating your account.
-            </Typography>
-
-            <Paper sx={{ p: 3, textAlign: 'left', bgcolor: 'background.default' }}>
-              <Typography variant="subtitle1" gutterBottom>
-                <strong>Email:</strong> {formData.email}
-              </Typography>
-              <Typography variant="subtitle1" gutterBottom>
-                <strong>Account Type:</strong> {formData.userType}
-              </Typography>
-              <Typography variant="subtitle1" gutterBottom>
-                <strong>Name:</strong> {formData.firstName} {formData.lastName}
-              </Typography>
-              <Typography variant="subtitle1">
-                <strong>Phone:</strong> {formData.phone}
-              </Typography>
-            </Paper>
-          </Box>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <Container maxWidth="md">
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', py: 4 }}>
-        <Paper elevation={3} sx={{ p: 5, borderRadius: 3, width: '100%' }}>
-          {/* Header */}
-          <Box display="flex" alignItems="center" gap={1} mb={4} justifyContent="center">
-            <MedicalServices sx={{ fontSize: 40, color: 'primary.main' }} />
-            <Typography variant="h4" fontWeight="bold" color="primary">
-              HealthInsura360
-            </Typography>
-          </Box>
-
-          <Typography variant="h5" component="h1" gutterBottom align="center" fontWeight="bold">
-            Create Your Account
-          </Typography>
-          <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 4 }}>
-            Join thousands who trust us with their health insurance
-          </Typography>
-
-          {/* Stepper */}
-          <Stepper activeStep={activeStep} sx={{ mb: 5 }}>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 3 }}>
-              {error}
-            </Alert>
-          )}
-
-          {success && (
-            <Alert severity="success" sx={{ mb: 3 }}>
-              {success}
-            </Alert>
-          )}
-
-          {/* Form */}
-          <form onSubmit={activeStep === steps.length - 1 ? handleSubmit : (e) => { e.preventDefault(); handleNext(); }}>
-            {renderStepContent(activeStep)}
-
-            {/* Navigation Buttons */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+              {/* SUBMIT BUTTON */}
               <Button
-                disabled={activeStep === 0 || loading}
-                onClick={handleBack}
-                variant="outlined"
+                type="submit"
+                fullWidth
+                variant="contained"
+                disabled={loading}
+                sx={{
+                  mt: 3,
+                  py: 1.5,
+                  borderRadius: 2,
+                  bgcolor: "#0cc0df",
+                  fontWeight: 600,
+                  "&:hover": { bgcolor: "#0aa9c4" },
+                }}
+                startIcon={
+                  loading ? <CircularProgress size={20} color="inherit" /> : null
+                }
               >
-                Back
+                {loading ? "Creating..." : "Create Account"}
               </Button>
+            </form>
 
-              {activeStep === steps.length - 1 ? (
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={loading}
-                  startIcon={loading ? <CircularProgress size={20} /> : null}
-                  sx={{ px: 4 }}
-                >
-                  {loading ? 'Creating Account...' : 'Create Account'}
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  variant="contained"
-                >
-                  Next
-                </Button>
-              )}
+            <Divider sx={{ my: 4 }}>
+              <Typography variant="body2" color="#94a3b8">
+                OR
+              </Typography>
+            </Divider>
+
+            <Box textAlign="center">
+              <Typography variant="body2" color="#64748b" sx={{ mb: 2 }}>
+                Already have an account?
+              </Typography>
+
+              <Button
+                component={Link}
+                to="/login"
+                variant="outlined"
+                fullWidth
+                sx={{
+                  borderColor: "#0cc0df",
+                  color: "#0cc0df",
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  "&:hover": {
+                    borderColor: "#0aa9c4",
+                    bgcolor: "#f0faff",
+                  },
+                }}
+              >
+                Sign In
+              </Button>
             </Box>
-          </form>
-
-          <Typography variant="body2" align="center" sx={{ mt: 4, color: 'text.secondary' }}>
-            Already have an account?{' '}
-            <Link to="/login" style={{ color: '#2196f3', fontWeight: 'bold' }}>
-              Sign in here
-            </Link>
-          </Typography>
-        </Paper>
-      </Box>
-    </Container>
+          </Paper>
+        </Box>
+      </Container>
+    </Box>
   );
 };
 

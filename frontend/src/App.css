@@ -2,6 +2,71 @@
   text-align: center;
 }
 
+body {
+  background-color: white;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Center alignment for containers */
+.container-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* Center alignment for forms */
+.form-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* Center alignment for text fields */
+.textfield-center .MuiOutlinedInput-root {
+  text-align: center;
+}
+
+.textfield-center .MuiInputLabel-root {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Center the stepper */
+.MuiStepper-root {
+  justify-content: center;
+}
+
+/* Center grid items */
+.MuiGrid-container {
+  justify-content: center;
+}
+
+.MuiGrid-item {
+  display: flex;
+  justify-content: center;
+}
+
+/* Center buttons */
+.button-center {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+/* Center paper content */
+.paper-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px;
+}
+
 .App-logo {
   height: 40vmin;
   pointer-events: none;

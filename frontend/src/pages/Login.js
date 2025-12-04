@@ -6,26 +6,25 @@ import {
   TextField,
   Button,
   Typography,
-  Paper,
   Alert,
   CircularProgress,
-  Grid,
+  Paper,
   Divider,
 } from '@mui/material';
-import {
-  MedicalServices,
-  Facebook,
-  Google,
-} from '@mui/icons-material';
+import { Email, Lock } from '@mui/icons-material';
+
+// Import your logo (place it in src/assets/)
+import Logo from '../assets/HealthInsura360.png';
 
 const Login = () => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleChange = (e) => {
     setFormData({
@@ -34,12 +33,17 @@ const Login = () => {
     });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    // Simulate API call
+    if (!formData.email || !formData.password) {
+      setError('Please enter both email and password');
+      setLoading(false);
+      return;
+    }
+
     setTimeout(() => {
       setLoading(false);
       navigate('/dashboard');
@@ -47,87 +51,50 @@ const Login = () => {
   };
 
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', py: 4 }}>
-        <Grid container spacing={4}>
-          {/* Left side - Brand/Info */}
-          <Grid item xs={12} md={6}>
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <Box display="flex" alignItems="center" gap={1} mb={3}>
-                <MedicalServices sx={{ fontSize: 48, color: 'primary.main' }} />
-                <Typography variant="h3" fontWeight="bold" color="primary">
-                  HealthInsura360
-                </Typography>
-              </Box>
-              
-              <Typography variant="h4" gutterBottom fontWeight="medium">
-                Welcome Back!
-              </Typography>
-              
-              <Typography variant="body1" color="text.secondary" paragraph>
-                Sign in to access your personalized health insurance dashboard, track claims, and manage policies.
+    <Box sx={{ minHeight: '100vh', bgcolor: '#f8fafc' }}>
+      {/* Removed Header */}
+
+      <Container maxWidth="sm">
+        <Box sx={{ py: 8 }}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 3, md: 5 },
+              borderRadius: 3,
+              border: '1px solid #e2e8f0',
+              bgcolor: 'white',
+            }}
+          >
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
+              <img
+                src={Logo}
+                alt="HealthInsura360 Logo"
+                style={{ width: 70, height: 70, marginBottom: 16 }}
+              />
+
+              <Typography
+                variant="h4"
+                component="h1"
+                gutterBottom
+                fontWeight={700}
+                color="#0a2540"
+              >
+                Welcome Back
               </Typography>
 
-              <Box sx={{ mt: 4 }}>
-                <Typography variant="h6" gutterBottom>
-                  New to HealthInsura360?
-                </Typography>
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  size="large"
-                  component={Link}
-                  to="/register"
-                  sx={{ mt: 1 }}
-                >
-                  Create Free Account
-                </Button>
-              </Box>
+              <Typography variant="body1" color="#64748b">
+                Sign in to your HealthInsura360 account
+              </Typography>
             </Box>
-          </Grid>
 
-          {/* Right side - Login Form */}
-          <Grid item xs={12} md={6}>
-            <Paper elevation={3} sx={{ p: 5, borderRadius: 3 }}>
-              <Typography variant="h4" component="h1" gutterBottom align="center" fontWeight="bold">
-                Sign In
-              </Typography>
-              <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 4 }}>
-                Enter your credentials to continue
-              </Typography>
+            {error && (
+              <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                {error}
+              </Alert>
+            )}
 
-              {error && (
-                <Alert severity="error" sx={{ mb: 3 }}>
-                  {error}
-                </Alert>
-              )}
-
-              {/* Social Login Buttons */}
-              <Box sx={{ mb: 4 }}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<Google />}
-                  sx={{ mb: 2, py: 1.5 }}
-                >
-                  Continue with Google
-                </Button>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<Facebook />}
-                  sx={{ py: 1.5 }}
-                >
-                  Continue with Facebook
-                </Button>
-              </Box>
-
-              <Divider sx={{ my: 3 }}>
-                <Typography color="text.secondary">OR</Typography>
-              </Divider>
-
-              {/* Login Form */}
-              <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit}>
+              <Box sx={{ mb: 3 }}>
                 <TextField
                   fullWidth
                   label="Email Address"
@@ -135,11 +102,13 @@ const Login = () => {
                   type="email"
                   value={formData.email}
                   onChange={handleChange}
-                  margin="normal"
                   required
                   disabled={loading}
                   variant="outlined"
-                  size="medium"
+                  InputProps={{
+                    startAdornment: <Email sx={{ mr: 1, color: '#94a3b8' }} />,
+                  }}
+                  sx={{ mb: 3 }}
                 />
 
                 <TextField
@@ -149,55 +118,95 @@ const Login = () => {
                   type="password"
                   value={formData.password}
                   onChange={handleChange}
-                  margin="normal"
                   required
                   disabled={loading}
                   variant="outlined"
-                  size="medium"
-                  sx={{ mb: 1 }}
+                  InputProps={{
+                    startAdornment: <Lock sx={{ mr: 1, color: '#94a3b8' }} />,
+                  }}
                 />
+              </Box>
 
-                <Box sx={{ textAlign: 'right', mb: 3 }}>
-                  <Button
-                    component={Link}
-                    to="/forgot-password"
-                    variant="text"
-                    size="small"
-                  >
-                    Forgot Password?
-                  </Button>
-                </Box>
-
-                <Button
-                  fullWidth
-                  variant="contained"
-                  type="submit"
-                  disabled={loading}
-                  sx={{ py: 1.5, mb: 3 }}
-                  size="large"
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  mb: 4,
+                }}
+              >
+                <Link
+                  to="/forgot-password"
+                  style={{
+                    color: '#0cc0df',
+                    fontWeight: 500,
+                    textDecoration: 'none',
+                    fontSize: '0.875rem',
+                  }}
                 >
-                  {loading ? <CircularProgress size={24} /> : 'Sign In'}
-                </Button>
+                  Forgot password?
+                </Link>
+              </Box>
 
-                <Typography variant="body2" align="center" color="text.secondary">
-                  By signing in, you agree to our{' '}
-                  <Link to="/terms" style={{ color: '#2196f3' }}>Terms of Service</Link>{' '}
-                  and{' '}
-                  <Link to="/privacy" style={{ color: '#2196f3' }}>Privacy Policy</Link>
-                </Typography>
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                disabled={loading}
+                startIcon={loading ? <CircularProgress size={20} /> : null}
+                sx={{
+                  py: 1.5,
+                  borderRadius: 2,
+                  bgcolor: '#0cc0df',
+                  fontWeight: 600,
+                  fontSize: '1rem',
+                  '&:hover': { bgcolor: '#0aa9c4' },
+                }}
+              >
+                {loading ? 'Signing In...' : 'Sign In'}
+              </Button>
+            </form>
 
-                <Typography variant="body2" align="center" sx={{ mt: 3 }}>
-                  Don't have an account?{' '}
-                  <Link to="/register" style={{ color: '#2196f3', fontWeight: 'bold' }}>
-                    Sign up now
-                  </Link>
-                </Typography>
-              </form>
-            </Paper>
-          </Grid>
-        </Grid>
-      </Box>
-    </Container>
+            <Divider sx={{ my: 4 }}>
+              <Typography variant="body2" color="#94a3b8">
+                OR
+              </Typography>
+            </Divider>
+
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="body2" color="#64748b" sx={{ mb: 2 }}>
+                Don't have an account yet?
+              </Typography>
+
+              <Button
+                component={Link}
+                to="/register"
+                variant="outlined"
+                fullWidth
+                sx={{
+                  borderColor: '#0cc0df',
+                  color: '#0cc0df',
+                  fontWeight: 600,
+                  borderRadius: 2,
+                  '&:hover': {
+                    borderColor: '#0aa9c4',
+                    bgcolor: '#f0faff',
+                  },
+                }}
+              >
+                Create Account
+              </Button>
+            </Box>
+
+            <Box sx={{ mt: 4, pt: 4, borderTop: '1px solid #e2e8f0' }}>
+              <Typography variant="caption" color="#94a3b8" align="center">
+                By signing in, you agree to our Terms of Service and Privacy
+                Policy.
+              </Typography>
+            </Box>
+          </Paper>
+        </Box>
+      </Container>
+    </Box>
   );
 };
 
