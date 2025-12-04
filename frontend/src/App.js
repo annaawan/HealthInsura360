@@ -1,17 +1,25 @@
+// In App.js or your routing file
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import LandingPage from './pages/LandingPage';
-import Register from './pages/Register';
 import Login from './pages/Login';
-import './App.css';
+import Register from './pages/RegisterCustomer';
+import RegisterAgent from './pages/RegisterAgent';
+import RegisterHospital from './pages/RegisterHospital';
+
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/register" element={<Register />} />
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/register-agent" element={<RegisterAgent />} />
+        <Route path="/register-hospital" element={<RegisterHospital />} />
+        
+        {/* Protected/Private Routes */}
+        
+        {/* Add other routes as needed */}
       </Routes>
     </Router>
   );

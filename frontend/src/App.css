@@ -1,3 +1,5 @@
+/* App.css */
+
 .App {
   text-align: center;
 }
@@ -26,7 +28,118 @@ body {
   width: 100%;
 }
 
-/* Center alignment for text fields */
+/* Center alignment for ALL registration form text fields */
+.register-form .MuiTextField-root {
+  width: 100% !important;
+  max-width: 500px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* Center all text field inputs */
+.register-form .MuiOutlinedInput-root {
+  text-align: center;
+}
+
+.register-form .MuiInputBase-input {
+  text-align: center;
+}
+
+/* Center text field labels */
+.register-form .MuiInputLabel-root {
+  text-align: center;
+  width: 100%;
+}
+
+.register-form .MuiInputLabel-shrink {
+  transform: translate(0, -1.5px) scale(0.75) !important;
+  transform-origin: center !important;
+}
+
+/* Center grid items in registration forms */
+.register-form .MuiGrid-container {
+  justify-content: center;
+}
+
+.register-form .MuiGrid-item {
+  display: flex;
+  justify-content: center;
+}
+
+/* Center stepper in registration forms */
+.register-form .MuiStepper-root {
+  justify-content: center;
+  width: 100%;
+}
+
+/* Center paper content in registration forms */
+.register-form .MuiPaper-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* Center all buttons in registration forms */
+.register-form .MuiButton-root {
+  display: flex;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Center navigation buttons container */
+.register-form .MuiBox-root {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Center alerts in registration forms */
+.register-form .MuiAlert-root {
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Center card in confirmation step */
+.register-form .MuiCard-root {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  max-width: 600px;
+}
+
+/* Center alternative registration buttons */
+.register-form .MuiGrid-root .MuiButton-root {
+  width: 100%;
+  max-width: 300px;
+}
+
+/* Center all content in the main container */
+.MuiContainer-root {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+/* Center the main box that holds everything */
+.MuiBox-root[style*="min-height: 100vh"] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Center the form itself */
+.MuiPaper-root form {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+/* Center alignment for regular text fields */
 .textfield-center .MuiOutlinedInput-root {
   text-align: center;
 }
