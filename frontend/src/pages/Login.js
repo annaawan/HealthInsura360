@@ -12,8 +12,8 @@ import {
   Divider,
   MenuItem,
   InputAdornment,
-  Grid,
   IconButton,
+  Stack, // ADDED
 } from '@mui/material';
 import { Email, Lock, Person, Visibility, VisibilityOff } from '@mui/icons-material';
 
@@ -113,9 +113,12 @@ const Login = () => {
             borderRadius: 3,
             border: '1px solid #e2e8f0',
             bgcolor: 'white',
+            display: 'flex', // ADDED
+            flexDirection: 'column', // ADDED
+            alignItems: 'center', // ADDED
           }}
         >
-          <Box sx={{ textAlign: 'center', mb: 4 }}>
+          <Box sx={{ textAlign: 'center', mb: 4, width: '100%' }}>
             {/* Logo */}
             <Box sx={{ 
               display: 'flex', 
@@ -125,7 +128,7 @@ const Login = () => {
               mb: 3 
             }}>
               <img
-                src="/favicon.png"
+                src="/HealthInsura360.png"
                 alt="HealthInsura360 Logo"
                 style={{ 
                   width: 180, 
@@ -164,242 +167,239 @@ const Login = () => {
             </Typography>
           </Box>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-              {error}
-            </Alert>
-          )}
+          {/* Error Alert - Centered */}
+          <Box sx={{ width: '100%', maxWidth: 400, mb: 3 }}>
+            {error && (
+              <Alert severity="error" sx={{ borderRadius: 2, textAlign: 'left' }}>
+                {error}
+              </Alert>
+            )}
+          </Box>
 
-          <form onSubmit={handleSubmit}>
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Email Address"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  disabled={loading}
-                  variant="outlined"
-                  size="medium"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Email sx={{ color: '#94a3b8', mr: 1 }} />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Grid>
+          {/* Form - Centered with Stack */}
+          <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <Box sx={{ width: '100%', maxWidth: 400 }}>
+              <form onSubmit={handleSubmit}>
+                <Stack spacing={3}>
+                  <TextField
+                    fullWidth
+                    label="Email Address"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                    disabled={loading}
+                    variant="outlined"
+                    size="medium"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Email sx={{ color: '#94a3b8', mr: 1 }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
 
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  disabled={loading}
-                  variant="outlined"
-                  size="medium"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock sx={{ color: '#94a3b8', mr: 1 }} />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          aria-label="toggle password visibility"
-                          onClick={handleClickShowPassword}
-                          edge="end"
-                          size="large"
-                        >
-                          {showPassword ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Grid>
+                  <TextField
+                    fullWidth
+                    label="Password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                    disabled={loading}
+                    variant="outlined"
+                    size="medium"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Lock sx={{ color: '#94a3b8', mr: 1 }} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            aria-label="toggle password visibility"
+                            onClick={handleClickShowPassword}
+                            edge="end"
+                            size="large"
+                          >
+                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
 
-              <Grid item xs={12}>
-                <TextField
-                  select
-                  fullWidth
-                  label="Account Type"
-                  name="accountType"
-                  value={formData.accountType}
-                  onChange={handleChange}
-                  required
-                  disabled={loading}
-                  variant="outlined"
-                  size="medium"
-                  helperText={accountTypeDescriptions[formData.accountType]}
-                  SelectProps={{
-                    MenuProps: {
-                      PaperProps: {
-                        sx: {
-                          maxHeight: 300,
+                  <TextField
+                    select
+                    fullWidth
+                    label="Account Type"
+                    name="accountType"
+                    value={formData.accountType}
+                    onChange={handleChange}
+                    required
+                    disabled={loading}
+                    variant="outlined"
+                    size="medium"
+                    helperText={accountTypeDescriptions[formData.accountType]}
+                    SelectProps={{
+                      MenuProps: {
+                        PaperProps: {
+                          sx: {
+                            maxHeight: 300,
+                          },
                         },
                       },
-                    },
+                    }}
+                  >
+                    <MenuItem value="customer">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Person sx={{ color: '#0cc0df' }} />
+                        <Typography>Customer / Policyholder</Typography>
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="hospital">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span style={{ fontSize: '1.2rem' }}>🏥</span>
+                        <Typography>Hospital Representative</Typography>
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="agent">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span style={{ fontSize: '1.2rem' }}>🤝</span>
+                        <Typography>Insurance Agent</Typography>
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="admin">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span style={{ fontSize: '1.2rem' }}>⚙️</span>
+                        <Typography>Administrator</Typography>
+                      </Box>
+                    </MenuItem>
+                  </TextField>
+                </Stack>
+
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'flex-end', // Changed to align right
+                    alignItems: 'center',
+                    mb: 4,
+                    mt: 3
                   }}
                 >
-                  <MenuItem value="customer">
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Person sx={{ color: '#0cc0df' }} />
-                      <Typography>Customer / Policyholder</Typography>
-                    </Box>
-                  </MenuItem>
-                  <MenuItem value="hospital">
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <span style={{ fontSize: '1.2rem' }}>🏥</span>
-                      <Typography>Hospital Representative</Typography>
-                    </Box>
-                  </MenuItem>
-                  <MenuItem value="agent">
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <span style={{ fontSize: '1.2rem' }}>🤝</span>
-                      <Typography>Insurance Agent</Typography>
-                    </Box>
-                  </MenuItem>
-                  <MenuItem value="admin">
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <span style={{ fontSize: '1.2rem' }}>⚙️</span>
-                      <Typography>Administrator</Typography>
-                    </Box>
-                  </MenuItem>
-                </TextField>
-              </Grid>
-            </Grid>
+                  <Link
+                    to="/forgot-password"
+                    style={{
+                      color: '#0cc0df',
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    Forgot password?
+                  </Link>
+                </Box>
 
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                mb: 4,
-                mt: 3
-              }}
-            >
-              <Link
-                to="/forgot-password"
-                style={{
-                  color: '#0cc0df',
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                  fontSize: '0.875rem',
-                }}
-              >
-                Forgot password?
-              </Link>
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="contained"
+                  disabled={loading}
+                  startIcon={loading ? <CircularProgress size={20} /> : null}
+                  sx={{
+                    py: 1.5,
+                    borderRadius: 2,
+                    bgcolor: '#0cc0df',
+                    fontWeight: 600,
+                    fontSize: '1rem',
+                    '&:hover': { bgcolor: '#0aa9c4' },
+                    '&.Mui-disabled': {
+                      bgcolor: '#e2e8f0',
+                      color: '#94a3b8'
+                    }
+                  }}
+                >
+                  {loading ? 'Signing In...' : 'Sign In'}
+                </Button>
+              </form>
             </Box>
+          </Box>
 
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              disabled={loading}
-              startIcon={loading ? <CircularProgress size={20} /> : null}
-              sx={{
-                py: 1.5,
-                borderRadius: 2,
-                bgcolor: '#0cc0df',
-                fontWeight: 600,
-                fontSize: '1rem',
-                '&:hover': { bgcolor: '#0aa9c4' },
-                '&.Mui-disabled': {
-                  bgcolor: '#e2e8f0',
-                  color: '#94a3b8'
-                }
-              }}
-            >
-              {loading ? 'Signing In...' : 'Sign In'}
-            </Button>
-          </form>
-
-          <Divider sx={{ my: 4 }}>
+          <Divider sx={{ my: 4, width: '100%', maxWidth: 400 }}>
             <Typography variant="body2" color="#94a3b8">
               OR
             </Typography>
           </Divider>
 
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="body2" color="#64748b" sx={{ mb: 2 }}>
+          {/* Registration Options - Centered */}
+          <Box sx={{ width: '100%', maxWidth: 400, textAlign: 'center' }}>
+            <Typography variant="body2" color="#64748b" sx={{ mb: 3 }}>
               Don't have an account yet?
             </Typography>
 
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <Button
-                  component={Link}
-                  to="/register"
-                  variant="outlined"
-                  fullWidth
-                  sx={{
-                    borderColor: '#0cc0df',
-                    color: '#0cc0df',
-                    fontWeight: 600,
-                    borderRadius: 2,
-                    py: 1.5,
-                    '&:hover': {
-                      borderColor: '#0aa9c4',
-                      bgcolor: '#f0faff',
-                    },
-                  }}
-                >
-                  Register as Customer
-                </Button>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Button
-                  component={Link}
-                  to="/register-agent"
-                  variant="outlined"
-                  fullWidth
-                  sx={{
-                    borderColor: '#4caf50',
-                    color: '#4caf50',
-                    fontWeight: 600,
-                    borderRadius: 2,
-                    py: 1.5,
-                    '&:hover': {
-                      borderColor: '#388e3c',
-                      bgcolor: '#e8f5e9',
-                    },
-                  }}
-                >
-                  Register as Agent
-                </Button>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Button
-                  component={Link}
-                  to="/register-hospital"
-                  variant="outlined"
-                  fullWidth
-                  sx={{
-                    borderColor: '#ff9800',
-                    color: '#ff9800',
-                    fontWeight: 600,
-                    borderRadius: 2,
-                    py: 1.5,
-                    '&:hover': {
-                      borderColor: '#f57c00',
-                      bgcolor: '#fff3e0',
-                    },
-                  }}
-                >
-                  Register as Hospital
-                </Button>
-              </Grid>
-            </Grid>
+            <Stack spacing={2} sx={{ width: '100%' }}>
+              <Button
+                component={Link}
+                to="/register"
+                variant="outlined"
+                fullWidth
+                sx={{
+                  borderColor: '#0cc0df',
+                  color: '#0cc0df',
+                  fontWeight: 600,
+                  borderRadius: 2,
+                  py: 1.5,
+                  '&:hover': {
+                    borderColor: '#0aa9c4',
+                    bgcolor: '#f0faff',
+                  },
+                }}
+              >
+                Register as Customer
+              </Button>
+              <Button
+                component={Link}
+                to="/register-agent"
+                variant="outlined"
+                fullWidth
+                sx={{
+                  borderColor: '#4caf50',
+                  color: '#4caf50',
+                  fontWeight: 600,
+                  borderRadius: 2,
+                  py: 1.5,
+                  '&:hover': {
+                    borderColor: '#388e3c',
+                    bgcolor: '#e8f5e9',
+                  },
+                }}
+              >
+                Register as Agent
+              </Button>
+              <Button
+                component={Link}
+                to="/register-hospital"
+                variant="outlined"
+                fullWidth
+                sx={{
+                  borderColor: '#ff9800',
+                  color: '#ff9800',
+                  fontWeight: 600,
+                  borderRadius: 2,
+                  py: 1.5,
+                  '&:hover': {
+                    borderColor: '#f57c00',
+                    bgcolor: '#fff3e0',
+                  },
+                }}
+              >
+                Register as Hospital
+              </Button>
+            </Stack>
 
             <Box sx={{ mt: 3 }}>
               <Typography variant="caption" color="#64748b" sx={{ mb: 1, display: 'block' }}>
@@ -408,7 +408,8 @@ const Login = () => {
             </Box>
           </Box>
 
-          <Box sx={{ mt: 4, pt: 4, borderTop: '1px solid #e2e8f0' }}>
+          {/* Footer - Centered */}
+          <Box sx={{ width: '100%', maxWidth: 400, mt: 4, pt: 4, borderTop: '1px solid #e2e8f0' }}>
             <Typography variant="caption" color="#94a3b8" align="center">
               By signing in, you agree to our Terms of Service and Privacy Policy.
             </Typography>

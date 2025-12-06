@@ -11,127 +11,65 @@ body {
   min-height: 100vh;
 }
 
-/* Center alignment for containers */
-.container-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-}
-
-/* Center alignment for forms */
-.form-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-}
-
-/* Center alignment for ALL registration form text fields */
-.register-form .MuiTextField-root {
+/* ========== GLOBAL CENTERING RULES ========== */
+/* Force ALL containers to center */
+.container, .MuiContainer-root {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 100vh !important;
   width: 100% !important;
-  max-width: 500px !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
 }
 
-/* Center all text field inputs */
-.register-form .MuiOutlinedInput-root {
-  text-align: center;
+/* Force ALL boxes to center */
+.MuiBox-root {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
 }
 
-.register-form .MuiInputBase-input {
-  text-align: center;
+/* Force ALL papers to center */
+.MuiPaper-root {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  padding: 32px !important;
+  margin: auto !important;
 }
 
-/* Center text field labels */
-.register-form .MuiInputLabel-root {
-  text-align: center;
-  width: 100%;
+/* ========== FORM CENTERING ========== */
+/* Target ALL forms */
+form {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+  gap: 16px !important;
 }
 
-.register-form .MuiInputLabel-shrink {
-  transform: translate(0, -1.5px) scale(0.75) !important;
-  transform-origin: center !important;
-}
-
-/* Center grid items in registration forms */
+/* Force center all form elements in register forms */
 .register-form .MuiGrid-container {
-  justify-content: center;
+  justify-content: center !important;
 }
 
 .register-form .MuiGrid-item {
-  display: flex;
-  justify-content: center;
-}
-
-/* Center stepper in registration forms */
-.register-form .MuiStepper-root {
-  justify-content: center;
-  width: 100%;
-}
-
-/* Center paper content in registration forms */
-.register-form .MuiPaper-root {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-}
-
-/* Center all buttons in registration forms */
-.register-form .MuiButton-root {
-  display: flex;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Center navigation buttons container */
-.register-form .MuiBox-root {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  max-width: 500px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Center alerts in registration forms */
-.register-form .MuiAlert-root {
-  max-width: 500px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Center card in confirmation step */
-.register-form .MuiCard-root {
-  margin-left: auto !important;
-  margin-right: auto !important;
-  max-width: 600px;
-}
-
-/* Center alternative registration buttons */
-.register-form .MuiGrid-root .MuiButton-root {
-  width: 100%;
-  max-width: 300px;
-}
-
-/* Center all content in the main container */
-.MuiContainer-root {
   display: flex !important;
   justify-content: center !important;
-  align-items: center !important;
 }
 
-/* Center the main box that holds everything */
-.MuiBox-root[style*="min-height: 100vh"] {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+.register-form .MuiTextField-root {
+  width: 100% !important;
+  max-width: 300px !important;
+  margin: 8px auto !important;
+  display: block !important;
 }
 
-/* Center the form itself */
+/* Center the entire form */
 .MuiPaper-root form {
   display: flex !important;
   flex-direction: column !important;
@@ -139,47 +77,122 @@ body {
   width: 100% !important;
 }
 
-/* Center alignment for regular text fields */
-.textfield-center .MuiOutlinedInput-root {
-  text-align: center;
+/* Target ALL text fields in forms */
+form .MuiTextField-root,
+form .MuiFormControl-root {
+  width: 100% !important;
+  max-width: 500px !important;
+  margin: 8px 0 !important;
 }
 
-.textfield-center .MuiInputLabel-root {
-  left: 50%;
-  transform: translateX(-50%);
+/* Center ALL text field inputs */
+.MuiOutlinedInput-root,
+.MuiInputBase-root {
+  width: 100% !important;
 }
 
-/* Center the stepper */
-.MuiStepper-root {
-  justify-content: center;
+.MuiInputBase-input {
+  text-align: center !important;
+}
+
+/* Center ALL labels */
+.MuiInputLabel-root {
+  width: 100% !important;
+  text-align: center !important;
+}
+
+.MuiInputLabel-shrink {
+  transform: translate(0, -1.5px) scale(0.75) !important;
+  transform-origin: center !important;
+}
+
+/* ========== SPECIFIC PAGE CENTERING ========== */
+/* Registration forms */
+.registerCustomer,
+.registerAgent,
+.registerHospital,
+.loginPage,
+.register-form {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-height: 100vh !important;
 }
 
 /* Center grid items */
 .MuiGrid-container {
-  justify-content: center;
+  justify-content: center !important;
+  width: 100% !important;
 }
 
 .MuiGrid-item {
-  display: flex;
-  justify-content: center;
+  display: flex !important;
+  justify-content: center !important;
+  width: 100% !important;
 }
 
 /* Center buttons */
+.MuiButton-root {
+  margin: 8px auto !important;
+  display: block !important;
+}
+
 .button-center {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 24px;
+  display: flex !important;
+  justify-content: center !important;
+  gap: 16px !important;
+  margin: 24px auto !important;
+  width: 100% !important;
+  max-width: 500px !important;
 }
 
-/* Center paper content */
-.paper-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 32px;
+/* ========== UTILITY CLASSES ========== */
+/* Add these classes to your components if needed */
+.center-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 100vh !important;
+  width: 100% !important;
 }
 
+.center-form {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  margin: auto !important;
+}
+
+.center-field {
+  width: 100% !important;
+  max-width: 500px !important;
+  margin: 12px auto !important;
+}
+
+.center-text {
+  text-align: center !important;
+}
+
+/* ========== MEDIA QUERIES ========== */
+@media (max-width: 600px) {
+  .MuiPaper-root {
+    padding: 16px !important;
+    margin: 16px !important;
+    box-shadow: none !important;
+  }
+  
+  form .MuiTextField-root,
+  form .MuiFormControl-root {
+    max-width: 100% !important;
+  }
+}
+
+/* Keep existing App styles */
 .App-logo {
   height: 40vmin;
   pointer-events: none;
