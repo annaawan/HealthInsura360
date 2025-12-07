@@ -5,7 +5,9 @@ import Register from './pages/RegisterCustomer';
 import RegisterAgent from './pages/RegisterAgent';
 import RegisterHospital from './pages/RegisterHospital';
 import LandingPage from './pages/LandingPage';
-
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import AdminDashboard from './components/AdminDashboard';
 function App() {
   return (
     <Router>
@@ -16,7 +18,10 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/register-agent" element={<RegisterAgent />} />
         <Route path="/register-hospital" element={<RegisterHospital />} />
-        
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+
         {/* Protected/Private Routes */}
         
         {/* Add other routes as needed */}

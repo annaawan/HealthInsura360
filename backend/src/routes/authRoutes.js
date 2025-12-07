@@ -6,10 +6,14 @@ const {
   registerAgent, 
   registerHospital, 
   registerAdmin,
-  login,                   // For customer/agent/admin
-  loginHospital,           // ADDED: Separate hospital login
+  login,
+  loginHospital,
   verifyToken,
-  getProfile
+  getProfile,
+  requestPasswordReset,    // ADD THIS
+  verifyResetToken,        // ADD THIS
+  resetPassword,          // ADD THIS
+  testEmailEndpoint       // Optional - remove in production
 } = require('../controllers/authController');
 const { authMiddleware } = require('../middleware/auth');
 
@@ -20,21 +24,27 @@ router.post('/register/customer', registerCustomer);
 router.post('/register/agent', registerAgent);
 router.post('/register/hospital', registerHospital);
 
-// Login routes - SEPARATE for hospital and other users
-router.post('/login', login);                     // For customer/agent/admin
-router.post('/login/hospital', loginHospital);    // ADDED: Hospital login
+// Login routes
+router.post('/login', login);
+router.post('/login/hospital', loginHospital);
+
+// Password reset routes
+router.post('/forgot-password', requestPasswordReset);
+router.post('/verify-reset-token', verifyResetToken);
+router.post('/reset-password', resetPassword);
+
+// Test email route (remove in production)
+// router.post('/test-email', testEmailEndpoint);
 
 // Token verification
 router.get('/verify', verifyToken);
 
 // ========== PROTECTED ROUTES ==========
-// (require authentication)
 
 // User profile
 router.get('/profile', authMiddleware, getProfile);
 
 // Admin registration (protected - only accessible internally)
-// Note: This would typically be protected by admin middleware
 router.post('/register/admin', registerAdmin);
 
 module.exports = router;

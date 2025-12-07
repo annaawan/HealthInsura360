@@ -91,7 +91,7 @@ exports.registerCustomer = async (req, res) => {
         email: result.rows[0].email,
         userType: 'customer'
       },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || 'Allahuakbar786',
       { expiresIn: '7d' }
     );
 
@@ -150,7 +150,7 @@ exports.registerAgent = async (req, res) => {
     city,
     state,
     zipcode,
-    dob
+    date_of_birth
   } = req.body;
 
   try {
@@ -166,7 +166,7 @@ exports.registerAgent = async (req, res) => {
     console.log('city:', city, 'exists:', !!city);
     console.log('state:', state, 'exists:', !!state);
     console.log('zipcode:', zipcode, 'exists:', !!zipcode);
-    console.log('dob:', dob, 'exists:', !!dob);
+    console.log('dob:', date_of_birth, 'exists:', !!date_of_birth);
     console.log('========================');
 
     // Validate ONLY essential fields
@@ -215,7 +215,7 @@ exports.registerAgent = async (req, res) => {
         date_of_birth, created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
       RETURNING agent_id, first_name, last_name, email, license_number, 
-                 date_of_birth, created_at, updated_at`,
+                created_at, updated_at, date_of_birth`,
       [
         firstName,
         lastName,
@@ -229,7 +229,7 @@ exports.registerAgent = async (req, res) => {
         city || null,
         state || null,
         zipcode || null,
-        dob || null
+        date_of_birth || null
       ]
     );
 
@@ -242,7 +242,7 @@ exports.registerAgent = async (req, res) => {
         email: result.rows[0].email,
         userType: 'agent'
       },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || 'Allahuakbar786',
       { expiresIn: '7d' }
     );
 
@@ -489,7 +489,7 @@ exports.registerAdmin = async (req, res) => {
         userType: 'admin',
         role: result.rows[0].role
       },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || 'Allahuakbar786',
       { expiresIn: '7d' }
     );
 
@@ -615,7 +615,7 @@ exports.login = async (req, res) => {
     // Create JWT token
     const token = jwt.sign(
       tokenData,
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || 'Allahuakbar786',
       { expiresIn: '7d' }
     );
 
@@ -714,7 +714,7 @@ exports.loginHospital = async (req, res) => {
     // Create JWT token
     const token = jwt.sign(
       tokenData,
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || 'Allahuakbar786',
       { expiresIn: '7d' }
     );
 
@@ -763,7 +763,7 @@ exports.verifyToken = async (req, res) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Allahuakbar786');
     
     // Check if user still exists in database
     let tableName, idField;
@@ -925,6 +925,379 @@ exports.getProfile = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error'
+    });
+  }
+};
+
+// Request Password Reset
+exports.requestPasswordReset = async (req, res) => {
+  const { email, userType } = req.body;
+
+  try {
+    console.log('Password reset request for:', { email, userType });
+
+    // Validate inputs
+    if (!email || !userType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and user type are required'
+      });
+    }
+
+    let tableName, idField, nameField;
+
+    // Determine table based on user type
+    switch (userType) {
+      case 'customer':
+        tableName = 'customer';
+        idField = 'customer_id';
+        nameField = 'first_name';
+        break;
+      case 'agent':
+        tableName = 'agent';
+        idField = 'agent_id';
+        nameField = 'first_name';
+        break;
+      case 'admin':
+        tableName = 'admin';
+        idField = 'admin_id';
+        nameField = 'full_name';
+        break;
+      case 'hospital':
+        tableName = 'hospital';
+        idField = 'hospital_id';
+        nameField = 'name';
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid user type'
+        });
+    }
+
+    // Check if user exists
+    const userResult = await db.query(
+      `SELECT ${idField}, email, ${nameField} FROM ${tableName} WHERE email = $1`,
+      [email.toLowerCase()]
+    );
+
+    // For security, don't reveal if email exists or not
+    if (userResult.rows.length === 0) {
+      console.log('Email not found in database:', email);
+      return res.json({
+        success: true,
+        message: 'If your email is registered, you will receive a password reset link within a few minutes.'
+      });
+    }
+
+    const user = userResult.rows[0];
+    const userId = user[idField];
+    const userName = user[nameField] || 'User';
+
+    // Generate reset token (expires in 1 hour)
+    const resetToken = jwt.sign(
+      {
+        userId: userId,
+        email: user.email,
+        userType: userType,
+        purpose: 'password_reset'
+      },
+      process.env.JWT_SECRET || 'Allahuakbar786',
+      { expiresIn: '1h' }
+    );
+
+    // Send password reset email
+    const { sendPasswordResetEmail } = require('../utils/emailService');
+    const emailSent = await sendPasswordResetEmail(user.email, userName, resetToken, userType);
+
+    if (!emailSent) {
+      console.error('Failed to send password reset email to:', user.email);
+      // Still return success to user for security
+      console.log('Password reset token (email failed):', resetToken);
+      
+      // For development: Log the reset link
+      const encodedToken = Buffer.from(resetToken).toString('base64');
+      const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${encodedToken}&type=${userType}`;
+      console.log('🔗 Development Reset Link (use in browser):', resetLink);
+    } else {
+      console.log('✅ Password reset email sent successfully to:', user.email);
+    }
+
+    // Log audit
+    await db.query(
+      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+       VALUES ($1, $2, 'request_password_reset', $1, $2, NOW())`,
+      [userType, userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'If your email is registered, you will receive a password reset link within a few minutes. Please check your spam folder if you don\'t see it.'
+    });
+
+  } catch (error) {
+    console.error('Password reset request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error processing password reset request'
+    });
+  }
+};
+
+// Verify Reset Token
+exports.verifyResetToken = async (req, res) => {
+  const { token } = req.body;
+
+  try {
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset token is required'
+      });
+    }
+
+    // Decode base64 token
+    let decodedToken;
+    try {
+      decodedToken = Buffer.from(token, 'base64').toString('ascii');
+    } catch (decodeError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid reset token format'
+      });
+    }
+
+    // Verify JWT token
+    let verifiedToken;
+    try {
+      verifiedToken = jwt.verify(decodedToken, process.env.JWT_SECRET || 'Allahuakbar786');
+    } catch (jwtError) {
+      if (jwtError.name === 'TokenExpiredError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Reset link has expired. Please request a new one.'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid reset token'
+      });
+    }
+
+    // Check token purpose
+    if (verifiedToken.purpose !== 'password_reset') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid token purpose'
+      });
+    }
+
+    // Check if user still exists
+    let tableName, idField;
+    
+    switch (verifiedToken.userType) {
+      case 'customer':
+        tableName = 'customer';
+        idField = 'customer_id';
+        break;
+      case 'agent':
+        tableName = 'agent';
+        idField = 'agent_id';
+        break;
+      case 'admin':
+        tableName = 'admin';
+        idField = 'admin_id';
+        break;
+      case 'hospital':
+        tableName = 'hospital';
+        idField = 'hospital_id';
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid user type'
+        });
+    }
+
+    const userResult = await db.query(
+      `SELECT ${idField}, email FROM ${tableName} WHERE ${idField} = $1 AND email = $2`,
+      [verifiedToken.userId, verifiedToken.email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Token is valid',
+      email: verifiedToken.email,
+      userType: verifiedToken.userType
+    });
+
+  } catch (error) {
+    console.error('Token verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error verifying reset token'
+    });
+  }
+};
+
+// Reset Password
+exports.resetPassword = async (req, res) => {
+  const { token, newPassword, confirmPassword } = req.body;
+
+  try {
+    // Validate inputs
+    if (!token || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required'
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passwords do not match'
+      });
+    }
+
+    // Password strength validation
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character'
+      });
+    }
+
+    // Decode and verify token
+    let decodedToken;
+    try {
+      decodedToken = Buffer.from(token, 'base64').toString('ascii');
+    } catch (decodeError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid reset token format'
+      });
+    }
+
+    let verifiedToken;
+    try {
+      verifiedToken = jwt.verify(decodedToken, process.env.JWT_SECRET || 'Allahuakbar786');
+    } catch (jwtError) {
+      if (jwtError.name === 'TokenExpiredError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Reset link has expired. Please request a new one.'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid reset token'
+      });
+    }
+
+    if (verifiedToken.purpose !== 'password_reset') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid token purpose'
+      });
+    }
+
+    // Determine table
+    let tableName, idField;
+    switch (verifiedToken.userType) {
+      case 'customer':
+        tableName = 'customer';
+        idField = 'customer_id';
+        break;
+      case 'agent':
+        tableName = 'agent';
+        idField = 'agent_id';
+        break;
+      case 'admin':
+        tableName = 'admin';
+        idField = 'admin_id';
+        break;
+      case 'hospital':
+        tableName = 'hospital';
+        idField = 'hospital_id';
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid user type'
+        });
+    }
+
+    // Check if user exists
+    const userResult = await db.query(
+      `SELECT ${idField}, email FROM ${tableName} WHERE ${idField} = $1 AND email = $2`,
+      [verifiedToken.userId, verifiedToken.email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    // Update password in database
+    await db.query(
+      `UPDATE ${tableName} 
+       SET password_hash = $1, updated_at = NOW()
+       WHERE ${idField} = $2`,
+      [passwordHash, verifiedToken.userId]
+    );
+
+    // Log audit
+    await db.query(
+      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+       VALUES ($1, $2, 'password_reset', $1, $2, NOW())`,
+      [verifiedToken.userType, verifiedToken.userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully. You can now login with your new password.'
+    });
+
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error resetting password'
+    });
+  }
+};
+
+// Test Email Endpoint (for development only)
+exports.testEmailEndpoint = async (req, res) => {
+  try {
+    console.log('Test email endpoint called');
+    
+    // For now, just return success (implement emailService later)
+    res.json({
+      success: true,
+      message: 'Test email endpoint is working (email not sent - implement emailService first)'
+    });
+    
+  } catch (error) {
+    console.error('Test email endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Test email failed'
     });
   }
 };
