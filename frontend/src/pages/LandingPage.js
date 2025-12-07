@@ -10,7 +10,7 @@ function LandingPage() {
       {/* Logo - Replace with your actual logo */}
       <Box 
         component="img"
-        src="/favicon.png"
+        src="/HealthInsura360.png"
         alt="HealthInsura360 Logo"
         sx={{ width: 150, height: 150, mb: 3 }}
       />

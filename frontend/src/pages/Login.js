@@ -13,21 +13,33 @@ import {
   MenuItem,
   InputAdornment,
   IconButton,
-  Stack, // ADDED
+  Stack,
 } from '@mui/material';
-import { Email, Lock, Person, Visibility, VisibilityOff } from '@mui/icons-material';
+import { Email, Lock, Person, Visibility, VisibilityOff, Business } from '@mui/icons-material';
 
 const Login = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showRegistrationNumber, setShowRegistrationNumber] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    registrationNumber: '', // For hospital login
     accountType: 'customer', // Default to customer
   });
+
+  // Toggle password visibility
+  const handleClickShowPassword = () => {
+    setShowPassword(!showPassword);
+  };
+
+  // Toggle registration number visibility
+  const handleClickShowRegistrationNumber = () => {
+    setShowRegistrationNumber(!showRegistrationNumber);
+  };
 
   const handleChange = (e) => {
     setFormData({
@@ -36,65 +48,173 @@ const Login = () => {
     });
   };
 
-  const handleClickShowPassword = () => {
-    setShowPassword(!showPassword);
+  // Handle account type change
+  const handleAccountTypeChange = (e) => {
+    const newAccountType = e.target.value;
+    setFormData({
+      ...formData,
+      accountType: newAccountType,
+      password: newAccountType === 'hospital' ? '' : formData.password,
+      registrationNumber: newAccountType === 'hospital' ? formData.registrationNumber : ''
+    });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-    if (!formData.email || !formData.password || !formData.accountType) {
-      setError('Please fill all required fields');
-      setLoading(false);
-      return;
-    }
+  try {
+    console.log('=== LOGIN ATTEMPT ===');
+    console.log('Account Type:', formData.accountType);
+    console.log('Email:', formData.email);
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
+    // Validate basic fields
+    if (!formData.email || !formData.email.includes('@')) {
       setError('Please enter a valid email address');
       setLoading(false);
       return;
     }
 
-    // Simulate API call - In real app, verify credentials with backend
-    setTimeout(() => {
-      setLoading(false);
-      
-      // Store login info (in real app, this would be JWT token)
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userEmail', formData.email);
-      localStorage.setItem('accountType', formData.accountType);
-      
-      // Redirect based on account type
-      switch(formData.accountType) {
-        case 'customer':
-          navigate('/customer-dashboard');
-          break;
-        case 'hospital':
-          navigate('/hospital-dashboard');
-          break;
-        case 'agent':
-          navigate('/agent-dashboard');
-          break;
-        case 'admin':
-          navigate('/admin-dashboard');
-          break;
-        default:
-          navigate('/dashboard');
+    // HOSPITAL LOGIN
+    if (formData.accountType === 'hospital') {
+      if (!formData.registrationNumber) {
+        setError('Registration number is required');
+        setLoading(false);
+        return;
       }
-    }, 1500);
-  };
+
+      console.log('Hospital login data:', {
+        email: formData.email,
+        registrationNumber: formData.registrationNumber
+      });
+
+      const response = await fetch('http://localhost:5000/api/auth/login/hospital', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email.trim(),
+          registrationNumber: formData.registrationNumber.trim()
+        }),
+      });
+
+      console.log('Hospital login response status:', response.status);
+      
+      const data = await response.json();
+      console.log('Hospital login response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Hospital login failed');
+      }
+
+      // Store login info
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('userEmail', data.user.email);
+      localStorage.setItem('accountType', 'hospital');
+      localStorage.setItem('userId', data.user.id);
+      localStorage.setItem('hospitalName', data.user.name);
+      localStorage.setItem('token', data.token);
+
+      // Redirect to hospital dashboard
+      navigate('/hospital-dashboard');
+
+    } else {
+      // CUSTOMER/AGENT/ADMIN LOGIN (ALL USE THE SAME ENDPOINT)
+      if (!formData.password) {
+        setError('Password is required');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Login data:', {
+        email: formData.email,
+        password: '[HIDDEN]',
+        userType: formData.accountType
+      });
+
+      // ALL non-hospital users use the SAME endpoint: /api/auth/login
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Backend expects: email, password, userType
+        body: JSON.stringify({
+          email: formData.email.trim(),
+          password: formData.password,
+          userType: formData.accountType // This MUST be 'customer', 'agent', or 'admin'
+        }),
+      });
+
+      console.log('Login response status:', response.status);
+      
+      const data = await response.json();
+      console.log('Login response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Login failed');
+      }
+
+      // Store login info
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('userEmail', data.user.email);
+      localStorage.setItem('accountType', formData.accountType);
+      localStorage.setItem('userId', data.user.id);
+      localStorage.setItem('token', data.token);
+
+      // Store additional user info based on type
+      if (formData.accountType === 'agent') {
+        localStorage.setItem('agentName', data.user.fullName || `${data.user.firstName} ${data.user.lastName}`);
+        localStorage.setItem('licenseNumber', data.user.licenseNumber || '');
+      } else if (formData.accountType === 'customer') {
+        localStorage.setItem('customerName', data.user.fullName || `${data.user.firstName} ${data.user.lastName}`);
+      } else if (formData.accountType === 'admin') {
+        localStorage.setItem('adminName', data.user.fullName);
+        localStorage.setItem('adminRole', data.user.role || '');
+      }
+
+      // Redirect based on account type
+      const redirectPaths = {
+        customer: '/customer-dashboard',
+        agent: '/agent-dashboard',
+        admin: '/admin-dashboard',
+        hospital: '/hospital-dashboard'
+      };
+      
+      const redirectTo = redirectPaths[formData.accountType] || '/dashboard';
+      navigate(redirectTo);
+    }
+
+  } catch (err) {
+    console.error('Login error:', err);
+    
+    // More specific error messages
+    let errorMessage = err.message;
+    if (err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
+      errorMessage = 'Cannot connect to server. Please check if backend is running.';
+    } else if (err.message.includes('401')) {
+      errorMessage = 'Invalid email or password.';
+    } else if (err.message.includes('404')) {
+      errorMessage = 'Login service unavailable. Please contact administrator.';
+    }
+    
+    setError(errorMessage);
+    setLoading(false);
+  }
+};
 
   // Account type descriptions
   const accountTypeDescriptions = {
     customer: 'Access your policies, claims, and insurance details',
-    hospital: 'Manage patient claims and hospital records',
+    hospital: 'Manage patient claims and hospital records - Use registration number',
     agent: 'View clients, commissions, and sales dashboard',
     admin: 'System administration and user management'
   };
+
+  // Conditional fields based on account type
+  const isHospitalLogin = formData.accountType === 'hospital';
 
   return (
     <Box sx={{ 
@@ -113,9 +233,9 @@ const Login = () => {
             borderRadius: 3,
             border: '1px solid #e2e8f0',
             bgcolor: 'white',
-            display: 'flex', // ADDED
-            flexDirection: 'column', // ADDED
-            alignItems: 'center', // ADDED
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
           }}
         >
           <Box sx={{ textAlign: 'center', mb: 4, width: '100%' }}>
@@ -201,37 +321,76 @@ const Login = () => {
                     }}
                   />
 
-                  <TextField
-                    fullWidth
-                    label="Password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    disabled={loading}
-                    variant="outlined"
-                    size="medium"
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Lock sx={{ color: '#94a3b8', mr: 1 }} />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            aria-label="toggle password visibility"
-                            onClick={handleClickShowPassword}
-                            edge="end"
-                            size="large"
-                          >
-                            {showPassword ? <VisibilityOff /> : <Visibility />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
+                  {/* Password Field (not shown for hospital) */}
+                  {!isHospitalLogin && (
+                    <TextField
+                      fullWidth
+                      label="Password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                      variant="outlined"
+                      size="medium"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Lock sx={{ color: '#94a3b8', mr: 1 }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              aria-label="toggle password visibility"
+                              onClick={handleClickShowPassword}
+                              edge="end"
+                              size="large"
+                            >
+                              {showPassword ? <VisibilityOff /> : <Visibility />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  )}
+
+                  {/* Registration Number Field (only for hospital) */}
+                  {isHospitalLogin && (
+                    <TextField
+                      fullWidth
+                      label="Registration Number"
+                      name="registrationNumber"
+                      type={showRegistrationNumber ? 'text' : 'password'}
+                      value={formData.registrationNumber}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                      variant="outlined"
+                      size="medium"
+                      helperText="Your hospital registration number provided by admin"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Business sx={{ color: '#94a3b8', mr: 1 }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              aria-label="toggle registration number visibility"
+                              onClick={handleClickShowRegistrationNumber}
+                              edge="end"
+                              size="large"
+                            >
+                              {showRegistrationNumber ? <VisibilityOff /> : <Visibility />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  )}
 
                   <TextField
                     select
@@ -239,7 +398,7 @@ const Login = () => {
                     label="Account Type"
                     name="accountType"
                     value={formData.accountType}
-                    onChange={handleChange}
+                    onChange={handleAccountTypeChange}
                     required
                     disabled={loading}
                     variant="outlined"
@@ -282,27 +441,30 @@ const Login = () => {
                   </TextField>
                 </Stack>
 
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'flex-end', // Changed to align right
-                    alignItems: 'center',
-                    mb: 4,
-                    mt: 3
-                  }}
-                >
-                  <Link
-                    to="/forgot-password"
-                    style={{
-                      color: '#0cc0df',
-                      fontWeight: 500,
-                      textDecoration: 'none',
-                      fontSize: '0.875rem',
+                {/* Forgot Password Link (not shown for hospital) */}
+                {!isHospitalLogin && (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      alignItems: 'center',
+                      mb: 4,
+                      mt: 3
                     }}
                   >
-                    Forgot password?
-                  </Link>
-                </Box>
+                    <Link
+                      to="/forgot-password"
+                      style={{
+                        color: '#0cc0df',
+                        fontWeight: 500,
+                        textDecoration: 'none',
+                        fontSize: '0.875rem',
+                      }}
+                    >
+                      Forgot password?
+                    </Link>
+                  </Box>
+                )}
 
                 <Button
                   type="submit"

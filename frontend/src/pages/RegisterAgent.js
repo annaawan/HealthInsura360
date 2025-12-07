@@ -15,8 +15,8 @@ import {
   StepLabel,
   Card,
   IconButton,
-  Stack, // ADDED
-  MenuItem, // ADDED
+  Stack,
+  MenuItem,
 } from "@mui/material";
 import {
   Email,
@@ -28,12 +28,11 @@ import {
   MedicalServices,
   Visibility,
   VisibilityOff,
-  Badge,
   LocationCity,
   LocationOn,
   Map,
   Home,
-  CalendarMonth, // ADDED for DOB
+  CalendarMonth,
 } from "@mui/icons-material";
 
 const steps = ['Agent Details', 'Account Security', 'Confirmation'];
@@ -47,10 +46,9 @@ const RegisterAgent = () => {
   const [passwordMatch, setPasswordMatch] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showLicenseNumber, setShowLicenseNumber] = useState(false);
   const [passwordError, setPasswordError] = useState("");
 
-  // Updated formData state to match database schema
+  // Updated formData state WITHOUT licenseNumber and commissionRate
   const [formData, setFormData] = useState({
     // Step 1: Agent Details
     firstName: "",
@@ -59,8 +57,7 @@ const RegisterAgent = () => {
     dob: "",
     email: "",
     phone: "",
-    licenseNumber: "",
-    commissionRate: 0,
+    // REMOVED: licenseNumber and commissionRate
     
     // Address fields
     street: "",
@@ -114,15 +111,11 @@ const RegisterAgent = () => {
     setShowConfirmPassword(!showConfirmPassword);
   };
 
-  const handleClickShowLicenseNumber = () => {
-    setShowLicenseNumber(!showLicenseNumber);
-  };
-
   const handleNext = () => {
     // Validate current step before moving forward
     if (activeStep === 0) {
-      // Step 1 validations
-      const requiredFields = ['firstName', 'lastName', 'email', 'phone', 'licenseNumber', 'street', 'city', 'state', 'zipcode', 'dob'];
+      // Step 1 validations - REMOVED licenseNumber validation
+      const requiredFields = ['firstName', 'lastName', 'email', 'phone', 'street', 'city', 'state', 'zipcode', 'dob'];
       const emptyFields = requiredFields.filter(field => !formData[field].trim());
       
       if (emptyFields.length > 0) {
@@ -143,21 +136,9 @@ const RegisterAgent = () => {
         return;
       }
       
-      // License number validation
-      if (formData.licenseNumber.length < 5) {
-        setError("License number must be at least 5 characters");
-        return;
-      }
-      
       // Zip code validation
       if (!/^\d{5,6}$/.test(formData.zipcode)) {
         setError("Zip code must be 5-6 digits");
-        return;
-      }
-      
-      // Commission rate validation
-      if (formData.commissionRate < 0 || formData.commissionRate > 100) {
-        setError("Commission rate must be between 0 and 100");
         return;
       }
       
@@ -186,65 +167,84 @@ const RegisterAgent = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    setSuccess("");
+  e.preventDefault();
+  setLoading(true);
+  setError("");
+  setSuccess("");
 
-    try {
-      // Prepare agent data matching your table structure
-      const agentData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        gender: formData.gender,
-        email: formData.email,
-        phone: formData.phone,
-        password: formData.password,
-        licenseNumber: formData.licenseNumber,
-        commissionRate: parseFloat(formData.commissionRate) || 0,
-        street: formData.street,
-        city: formData.city,
-        state: formData.state,
-        zipcode: formData.zipcode,
-        dateOfBirth: formData.dob
-      };
+  try {
+    // Generate random license number
+    const randomLicenseNumber = `AGENT-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+    
+    // Prepare agent data
+    const agentData = {
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      gender: formData.gender,
+      email: formData.email,
+      phone: formData.phone,
+      password: formData.password,
+      licenseNumber: randomLicenseNumber,
+      commissionRate: null,
+      street: formData.street,
+      city: formData.city,
+      state: formData.state,
+      zipcode: formData.zipcode,
+      date_of_birth: formData.dob
+    };
 
-      console.log('Sending agent data to backend:', agentData);
+    // DEBUG: Log all fields
+    console.log('=== AGENT REGISTRATION DATA ===');
+    console.log('firstName:', formData.firstName, 'filled:', !!formData.firstName);
+    console.log('lastName:', formData.lastName, 'filled:', !!formData.lastName);
+    console.log('gender:', formData.gender, 'filled:', !!formData.gender);
+    console.log('email:', formData.email, 'filled:', !!formData.email);
+    console.log('phone:', formData.phone, 'filled:', !!formData.phone);
+    console.log('password:', '[HIDDEN]', 'filled:', !!formData.password);
+    console.log('street:', formData.street, 'filled:', !!formData.street);
+    console.log('city:', formData.city, 'filled:', !!formData.city);
+    console.log('state:', formData.state, 'filled:', !!formData.state);
+    console.log('zipcode:', formData.zipcode, 'filled:', !!formData.zipcode);
+    console.log('dob:', formData.dob, 'filled:', !!formData.dob);
+    console.log('licenseNumber (generated):', randomLicenseNumber);
+    console.log('commissionRate:', null);
+    console.log('===============================');
 
-      // API call to backend
-      const response = await fetch('http://localhost:5000/api/auth/register/agent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(agentData),
-      });
+    console.log('Sending agent data to backend:', agentData);
 
-      const data = await response.json();
+    // API call to backend
+    const response = await fetch('http://localhost:5000/api/auth/register/agent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(agentData),
+    });
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
-      }
+    const data = await response.json();
+    console.log('Backend response:', data);
 
-      // Success - data saved to database
-      setLoading(false);
-      setSuccess('Agent account created successfully! Redirecting to login...');
-      
-      // Store temporary data for login page if needed
-      localStorage.setItem('tempUserEmail', formData.email);
-      localStorage.setItem('tempUserType', 'agent');
-      
-      // Redirect to login page after success
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
-
-    } catch (err) {
-      console.error('Registration error:', err);
-      setError(err.message || 'Registration failed. Please try again.');
-      setLoading(false);
+    if (!response.ok) {
+      throw new Error(data.message || 'Registration failed');
     }
-  };
+
+    // Success
+    setLoading(false);
+    setSuccess('Agent account created successfully! Redirecting to login...');
+    
+    localStorage.setItem('tempUserEmail', formData.email);
+    localStorage.setItem('tempUserType', 'agent');
+    
+    setTimeout(() => {
+      navigate('/login');
+    }, 2000);
+
+  } catch (err) {
+    console.error('Registration error:', err);
+    setError(err.message || 'Registration failed. Please try again.');
+    setLoading(false);
+  }
+};
 
   const renderStepContent = (step) => {
     switch (step) {
@@ -374,56 +374,6 @@ const RegisterAgent = () => {
                     </InputAdornment>
                   ),
                 }}
-              />
-            </Box>
-
-            {/* License Number and Commission Rate side by side */}
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                fullWidth
-                label="License Number"
-                name="licenseNumber"
-                type={showLicenseNumber ? "text" : "password"}
-                value={formData.licenseNumber}
-                onChange={handleChange}
-                required
-                variant="outlined"
-                size="medium"
-                helperText="Professional license number"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Badge sx={{ color: "#94a3b8", mr: 1 }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle license number visibility"
-                        onClick={handleClickShowLicenseNumber}
-                        edge="end"
-                        size="large"
-                      >
-                        {showLicenseNumber ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <TextField
-                fullWidth
-                label="Commission Rate (%)"
-                name="commissionRate"
-                type="number"
-                value={formData.commissionRate}
-                onChange={handleChange}
-                required
-                variant="outlined"
-                size="medium"
-                InputProps={{
-                  inputProps: { min: 0, max: 100, step: 0.1 }
-                }}
-                helperText="0-100%"
               />
             </Box>
 
@@ -648,7 +598,7 @@ const RegisterAgent = () => {
               Review Your Information
             </Typography>
             <Typography variant="body1" color="#64748b" paragraph>
-              Please review your information before creating your agent account.
+              Please review your information. Commission rate will be set by admin.
             </Typography>
 
             <Card sx={{ 
@@ -675,15 +625,13 @@ const RegisterAgent = () => {
                 <strong style={{ color: '#0a2540' }}>Phone:</strong> {formData.phone}
               </Typography>
               <Typography variant="subtitle1" gutterBottom>
-                <strong style={{ color: '#0a2540' }}>License Number:</strong> 
-                {showLicenseNumber ? formData.licenseNumber : '••••••••'}
-              </Typography>
-              <Typography variant="subtitle1" gutterBottom>
-                <strong style={{ color: '#0a2540' }}>Commission Rate:</strong> {formData.commissionRate}%
-              </Typography>
-              <Typography variant="subtitle1" gutterBottom>
                 <strong style={{ color: '#0a2540' }}>Address:</strong> {formData.street}, {formData.city}, {formData.state} {formData.zipcode}
               </Typography>
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#e8f5e9', borderRadius: 1 }}>
+                <Typography variant="body2" color="#388e3c">
+                  <strong>Note:</strong> Your commission rate will be assigned by the admin after review.
+                </Typography>
+              </Box>
             </Card>
           </Box>
         );
@@ -699,7 +647,7 @@ const RegisterAgent = () => {
       bgcolor: "#f8fafc", 
       display: 'flex', 
       alignItems: 'center', 
-      justifyContent: 'center', // ADDED
+      justifyContent: 'center',
       py: 4 
     }}>
       <Container maxWidth="md">
@@ -710,9 +658,9 @@ const RegisterAgent = () => {
             borderRadius: 3,
             border: "1px solid #e2e8f0",
             bgcolor: "white",
-            display: 'flex', // ADDED
-            flexDirection: 'column', // ADDED
-            alignItems: 'center', // ADDED
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
           }}
         >
           {/* LOGO AREA */}
@@ -763,7 +711,7 @@ const RegisterAgent = () => {
               Register as Insurance Agent
             </Typography>
             <Typography variant="body1" color="#64748b">
-              Join our network of certified insurance agents
+              Join our network of insurance agents
             </Typography>
           </Box>
 

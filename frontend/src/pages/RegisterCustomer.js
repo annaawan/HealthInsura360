@@ -178,46 +178,60 @@ const Register = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+  e.preventDefault();
+  setLoading(true);
+  setError("");
 
-    try {
-      // Prepare data for backend
-      const customerData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        password: formData.password,
-        gender: formData.gender,
-        dateOfBirth: formData.dob,
-        phone: formData.phone,
-        address: `${formData.street}, ${formData.city}, ${formData.state} ${formData.zipCode}`,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
-        userType: 'customer'
-      };
+  try {
+    // Prepare data for backend - MATCHING YOUR BACKEND EXPECTATIONS
+    const customerData = {
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      gender: formData.gender,
+      email: formData.email,
+      phone: formData.phone,
+      dob: formData.dob,  // Changed from dateOfBirth to dob
+      password: formData.password,
+      street: formData.street,
+      city: formData.city,
+      state: formData.state,
+      zipcode: formData.zipCode // Make sure this matches (zipcode vs zipCode)
+    };
 
-      console.log('Sending to backend:', customerData);
+    console.log('Sending to backend:', customerData);
 
-      // TODO: Replace with actual API call
-      setTimeout(() => {
-        setLoading(false);
-        setSuccess('Account created successfully! Redirecting to login...');
-        
-        localStorage.setItem('tempUserEmail', formData.email);
-        
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
-      }, 1500);
+    // REAL API CALL to your backend
+    const response = await fetch('http://localhost:5000/api/auth/register/customer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(customerData),
+    });
 
-    } catch (err) {
-      setError('Registration failed. Please try again.');
-      setLoading(false);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Registration failed');
     }
-  };
+
+    // Success - data saved to database
+    setLoading(false);
+    setSuccess('Account created successfully! Redirecting to login...');
+    
+    // Optional: Store temporary data for login page
+    localStorage.setItem('tempUserEmail', formData.email);
+    
+    // Redirect to login page
+    setTimeout(() => {
+      navigate('/login');
+    }, 2000);
+
+  } catch (err) {
+    setError(err.message || 'Registration failed. Please try again.');
+    setLoading(false);
+  }
+};
 
   const renderStepContent = (step) => {
     switch (step) {
@@ -736,7 +750,7 @@ const Register = () => {
                   width: 200, 
                   height: 'auto',
                   objectFit: 'contain',
-                  marginBottom: 16
+                  marginBottom: 0
                 }}
                 onError={(e) => {
                   console.log('Logo image not found');

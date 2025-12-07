@@ -48,21 +48,25 @@ exports.registerCustomer = async (req, res) => {
         message: 'Email already registered'
       });
     }
+    console.log('Registration - Original password:', password);
 
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    console.log('Registration - Hashed password:', passwordHash);
+
     // Start transaction
     await db.query('BEGIN');
 
-    // Insert into customer table
+    // Insert into customer table WITH CREATED_AT AND UPDATED_AT
     const result = await db.query(
       `INSERT INTO customer (
         first_name, last_name, gender, email, phone, dob, 
-        password_hash, street, city, state, zipcode
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING customer_id, first_name, last_name, email, created_at`,
+        password_hash, street, city, state, zipcode,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      RETURNING customer_id, first_name, last_name, email, created_at, updated_at`,
       [
         firstName,
         lastName,
@@ -91,10 +95,10 @@ exports.registerCustomer = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Log audit
+    // Log audit with TIMESTAMP column
     await db.query(
-      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id)
-       VALUES ('customer', $1, 'register', 'customer', $1)`,
+      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+       VALUES ('customer', $1, 'register', 'customer', $1, NOW())`,
       [customerId]
     );
 
@@ -109,7 +113,9 @@ exports.registerCustomer = async (req, res) => {
         firstName: result.rows[0].first_name,
         lastName: result.rows[0].last_name,
         email: result.rows[0].email,
-        userType: 'customer'
+        userType: 'customer',
+        createdAt: result.rows[0].created_at,
+        updatedAt: result.rows[0].updated_at
       }
     });
 
@@ -140,20 +146,34 @@ exports.registerAgent = async (req, res) => {
     email,
     phone,
     password,
-    licenseNumber,
-    commissionRate,
     street,
     city,
     state,
-    zipcode
+    zipcode,
+    dob
   } = req.body;
 
   try {
-    // Validate required fields
-    if (!firstName || !lastName || !email || !password || !licenseNumber) {
+    // DEBUG: Log what backend receives
+    console.log('=== BACKEND RECEIVED ===');
+    console.log('firstName:', firstName, 'exists:', !!firstName);
+    console.log('lastName:', lastName, 'exists:', !!lastName);
+    console.log('gender:', gender, 'exists:', !!gender);
+    console.log('email:', email, 'exists:', !!email);
+    console.log('phone:', phone, 'exists:', !!phone);
+    console.log('password:', '[HIDDEN]', 'exists:', !!password);
+    console.log('street:', street, 'exists:', !!street);
+    console.log('city:', city, 'exists:', !!city);
+    console.log('state:', state, 'exists:', !!state);
+    console.log('zipcode:', zipcode, 'exists:', !!zipcode);
+    console.log('dob:', dob, 'exists:', !!dob);
+    console.log('========================');
+
+    // Validate ONLY essential fields
+    if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please fill all required fields'
+        message: 'Please fill all required fields: First Name, Last Name, Email, and Password'
       });
     }
 
@@ -170,18 +190,15 @@ exports.registerAgent = async (req, res) => {
       });
     }
 
-    // Check if license number exists
-    const existingLicense = await db.query(
-      'SELECT license_number FROM agent WHERE license_number = $1',
-      [licenseNumber]
-    );
+    // Generate random license number (format: AGENT-XXXXXXX)
+    const generateLicenseNumber = () => {
+      const prefix = 'AGENT-';
+      const randomPart = Math.random().toString(36).substr(2, 8).toUpperCase();
+      return prefix + randomPart;
+    };
 
-    if (existingLicense.rows.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'License number already registered'
-      });
-    }
+    const licenseNumber = generateLicenseNumber();
+    console.log('Generated license number:', licenseNumber);
 
     // Hash password
     const salt = await bcrypt.genSalt(10);
@@ -190,13 +207,15 @@ exports.registerAgent = async (req, res) => {
     // Start transaction
     await db.query('BEGIN');
 
-    // Insert into agent table
+    // Insert into agent table with generated license number and null commission rate
     const result = await db.query(
       `INSERT INTO agent (
         first_name, last_name, gender, email, phone, password_hash,
-        license_number, commission_rate, street, city, state, zipcode
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      RETURNING agent_id, first_name, last_name, email, license_number, created_at`,
+        license_number, commission_rate, street, city, state, zipcode,
+        date_of_birth, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+      RETURNING agent_id, first_name, last_name, email, license_number, 
+                 date_of_birth, created_at, updated_at`,
       [
         firstName,
         lastName,
@@ -204,12 +223,13 @@ exports.registerAgent = async (req, res) => {
         email.toLowerCase(),
         phone || null,
         passwordHash,
-        licenseNumber,
-        commissionRate || 0,
+        licenseNumber, // Generated license number
+        null, // Commission rate is null (will be set by admin)
         street || null,
         city || null,
         state || null,
-        zipcode || null
+        zipcode || null,
+        dob || null
       ]
     );
 
@@ -226,10 +246,10 @@ exports.registerAgent = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Log audit
+    // Log audit WITH TIMESTAMP
     await db.query(
-      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id)
-       VALUES ('agent', $1, 'register', 'agent', $1)`,
+      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+       VALUES ('agent', $1, 'register', 'agent', $1, NOW())`,
       [agentId]
     );
 
@@ -237,7 +257,7 @@ exports.registerAgent = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Agent registered successfully',
+      message: 'Agent registered successfully. License number has been assigned.',
       token,
       user: {
         id: agentId,
@@ -245,7 +265,10 @@ exports.registerAgent = async (req, res) => {
         lastName: result.rows[0].last_name,
         email: result.rows[0].email,
         licenseNumber: result.rows[0].license_number,
-        userType: 'agent'
+        dateOfBirth: result.rows[0].date_of_birth,
+        userType: 'agent',
+        createdAt: result.rows[0].created_at,
+        updatedAt: result.rows[0].updated_at
       }
     });
 
@@ -253,11 +276,20 @@ exports.registerAgent = async (req, res) => {
     await db.query('ROLLBACK');
     console.error('Agent registration error:', error);
     
-    if (error.code === '23505') {
-      return res.status(400).json({
-        success: false,
-        message: 'Email or license number already exists'
-      });
+    if (error.code === '23505') { // Unique constraint violation
+      if (error.constraint && error.constraint.includes('license_number')) {
+        // If license number conflict, retry with different number
+        console.log('License number conflict, retrying registration...');
+        return res.status(400).json({
+          success: false,
+          message: 'Registration failed due to license number conflict. Please try again.'
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists'
+        });
+      }
     }
 
     res.status(500).json({
@@ -281,26 +313,24 @@ exports.registerHospital = async (req, res) => {
 
   try {
     // Validate required fields
-    if (!name) {
+    if (!name || !email) {
       return res.status(400).json({
         success: false,
-        message: 'Hospital name is required'
+        message: 'Hospital name and email are required'
       });
     }
 
-    // Check if email exists (if provided)
-    if (email) {
-      const existingEmail = await db.query(
-        'SELECT email FROM hospital WHERE email = $1',
-        [email]
-      );
+    // Check if email exists
+    const existingEmail = await db.query(
+      'SELECT email FROM hospital WHERE email = $1 UNION SELECT email FROM customer WHERE email = $1 UNION SELECT email FROM agent WHERE email = $1 UNION SELECT email FROM admin WHERE email = $1',
+      [email]
+    );
 
-      if (existingEmail.rows.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email already registered'
-        });
-      }
+    if (existingEmail.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered'
+      });
     }
 
     // Generate unique registration number
@@ -333,16 +363,17 @@ exports.registerHospital = async (req, res) => {
     // Start transaction
     await db.query('BEGIN');
 
-    // Insert into hospital table
+    // Insert into hospital table WITH CREATED_AT AND UPDATED_AT
     const result = await db.query(
       `INSERT INTO hospital (
         name, email, phone, registration_number,
-        street, city, state, zipcode
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING hospital_id, name, email, registration_number, created_at`,
+        street, city, state, zipcode,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+      RETURNING hospital_id, name, email, registration_number, created_at, updated_at`,
       [
         name,
-        email || null,
+        email.toLowerCase(),
         phone || null,
         registrationNumber,
         street || null,
@@ -354,10 +385,10 @@ exports.registerHospital = async (req, res) => {
 
     const hospitalId = result.rows[0].hospital_id;
 
-    // Log audit
+    // Log audit WITH TIMESTAMP
     await db.query(
-      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id)
-       VALUES ('system', 0, 'register', 'hospital', $1)`,
+      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+       VALUES ('hospital', $1, 'register', 'hospital', $1, NOW())`,
       [hospitalId]
     );
 
@@ -371,7 +402,9 @@ exports.registerHospital = async (req, res) => {
         name: result.rows[0].name,
         email: result.rows[0].email,
         registrationNumber: result.rows[0].registration_number,
-        status: 'pending_verification'
+        status: 'pending_verification',
+        createdAt: result.rows[0].created_at,
+        updatedAt: result.rows[0].updated_at
       }
     });
 
@@ -413,7 +446,7 @@ exports.registerAdmin = async (req, res) => {
 
     // Check if email exists
     const existingEmail = await db.query(
-      'SELECT email FROM admin WHERE email = $1',
+      'SELECT email FROM admin WHERE email = $1 UNION SELECT email FROM customer WHERE email = $1 UNION SELECT email FROM agent WHERE email = $1 UNION SELECT email FROM hospital WHERE email = $1',
       [email]
     );
 
@@ -431,12 +464,13 @@ exports.registerAdmin = async (req, res) => {
     // Start transaction
     await db.query('BEGIN');
 
-    // Insert into admin table
+    // Insert into admin table WITH CREATED_AT AND UPDATED_AT
     const result = await db.query(
       `INSERT INTO admin (
-        full_name, email, password_hash, role
-      ) VALUES ($1, $2, $3, $4)
-      RETURNING admin_id, full_name, email, role, created_at`,
+        full_name, email, password_hash, role,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, NOW(), NOW())
+      RETURNING admin_id, full_name, email, role, created_at, updated_at`,
       [
         fullName,
         email.toLowerCase(),
@@ -459,10 +493,10 @@ exports.registerAdmin = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Log audit
+    // Log audit WITH TIMESTAMP
     await db.query(
-      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id)
-       VALUES ('admin', $1, 'register', 'admin', $1)`,
+      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+       VALUES ('admin', $1, 'register', 'admin', $1, NOW())`,
       [adminId]
     );
 
@@ -477,7 +511,9 @@ exports.registerAdmin = async (req, res) => {
         fullName: result.rows[0].full_name,
         email: result.rows[0].email,
         role: result.rows[0].role,
-        userType: 'admin'
+        userType: 'admin',
+        createdAt: result.rows[0].created_at,
+        updatedAt: result.rows[0].updated_at
       }
     });
 
@@ -504,6 +540,11 @@ exports.login = async (req, res) => {
   const { email, password, userType } = req.body;
 
   try {
+    // ADD THESE DEBUG LOGS:
+    console.log('=== LOGIN ATTEMPT ===');
+    console.log('Email:', email);
+    console.log('User Type:', userType);
+    console.log('Password provided:', password ? '[PROVIDED]' : '[MISSING]');
     // Validate inputs
     if (!email || !password || !userType) {
       return res.status(400).json({
@@ -512,24 +553,21 @@ exports.login = async (req, res) => {
       });
     }
 
-    let user, tableName, idField, nameFields;
+    let tableName, idField;
 
     // Determine which table to query based on userType
     switch (userType) {
       case 'customer':
         tableName = 'customer';
         idField = 'customer_id';
-        nameFields = ['first_name', 'last_name'];
         break;
       case 'agent':
         tableName = 'agent';
         idField = 'agent_id';
-        nameFields = ['first_name', 'last_name'];
         break;
       case 'admin':
         tableName = 'admin';
         idField = 'admin_id';
-        nameFields = ['full_name'];
         break;
       default:
         return res.status(400).json({
@@ -602,10 +640,10 @@ exports.login = async (req, res) => {
       userData.role = dbUser.role;
     }
 
-    // Log audit
+    // Log audit with timestamp column
     await db.query(
-      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id)
-       VALUES ($1, $2, 'login', $1, $2)`,
+      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+       VALUES ($1, $2, 'login', $1, $2, NOW())`,
       [userType, dbUser[idField]]
     );
 
@@ -621,6 +659,94 @@ exports.login = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error during login'
+    });
+  }
+};
+
+// SEPARATE HOSPITAL LOGIN (no password, uses registration number)
+exports.loginHospital = async (req, res) => {
+  const { email, registrationNumber } = req.body;
+
+  try {
+    // Validate inputs
+    if (!email || !registrationNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide email and registration number'
+      });
+    }
+
+    console.log('Hospital login attempt for:', email, 'Registration:', registrationNumber);
+
+    // Check if hospital exists with matching email AND registration number
+    const result = await db.query(
+      `SELECT hospital_id, name, email, registration_number, verified_status 
+       FROM hospital 
+       WHERE email = $1 AND registration_number = $2`,
+      [email.toLowerCase(), registrationNumber]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or registration number'
+      });
+    }
+
+    const hospital = result.rows[0];
+
+    // Check if hospital is verified
+    if (!hospital.verified_status) {
+      return res.status(403).json({
+        success: false,
+        message: 'Hospital account is not verified yet. Please contact admin.'
+      });
+    }
+
+    // Prepare token data
+    const tokenData = {
+      userId: hospital.hospital_id,
+      email: hospital.email,
+      userType: 'hospital',
+      hospitalName: hospital.name
+    };
+
+    // Create JWT token
+    const token = jwt.sign(
+      tokenData,
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Prepare user data for response
+    const userData = {
+      id: hospital.hospital_id,
+      name: hospital.name,
+      email: hospital.email,
+      registrationNumber: hospital.registration_number,
+      verifiedStatus: hospital.verified_status,
+      userType: 'hospital'
+    };
+
+    // Log audit with timestamp column
+    await db.query(
+      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+       VALUES ('hospital', $1, 'login', 'hospital', $1, NOW())`,
+      [hospital.hospital_id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Hospital login successful',
+      token,
+      user: userData
+    });
+
+  } catch (error) {
+    console.error('Hospital login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during hospital login'
     });
   }
 };
@@ -654,6 +780,10 @@ exports.verifyToken = async (req, res) => {
       case 'admin':
         tableName = 'admin';
         idField = 'admin_id';
+        break;
+      case 'hospital':
+        tableName = 'hospital';
+        idField = 'hospital_id';
         break;
       default:
         return res.status(401).json({
@@ -716,6 +846,10 @@ exports.getProfile = async (req, res) => {
         tableName = 'admin';
         idField = 'admin_id';
         break;
+      case 'hospital':
+        tableName = 'hospital';
+        idField = 'hospital_id';
+        break;
       default:
         return res.status(400).json({
           success: false,
@@ -754,17 +888,31 @@ exports.getProfile = async (req, res) => {
       profileData.state = user.state;
       profileData.zipcode = user.zipcode;
       profileData.createdAt = user.created_at;
+      profileData.updatedAt = user.updated_at;
       
       if (userType === 'customer') {
         profileData.dob = user.dob;
       } else if (userType === 'agent') {
         profileData.licenseNumber = user.license_number;
         profileData.commissionRate = user.commission_rate;
+        profileData.dateOfBirth = user.date_of_birth;
       }
     } else if (userType === 'admin') {
       profileData.fullName = user.full_name;
       profileData.role = user.role;
       profileData.createdAt = user.created_at;
+      profileData.updatedAt = user.updated_at;
+    } else if (userType === 'hospital') {
+      profileData.name = user.name;
+      profileData.registrationNumber = user.registration_number;
+      profileData.verifiedStatus = user.verified_status;
+      profileData.phone = user.phone;
+      profileData.street = user.street;
+      profileData.city = user.city;
+      profileData.state = user.state;
+      profileData.zipcode = user.zipcode;
+      profileData.createdAt = user.created_at;
+      profileData.updatedAt = user.updated_at;
     }
 
     res.json({
