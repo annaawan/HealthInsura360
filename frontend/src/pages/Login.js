@@ -115,8 +115,7 @@ const Login = () => {
       localStorage.setItem('accountType', 'hospital');
       localStorage.setItem('userId', data.user.id);
       localStorage.setItem('hospitalName', data.user.name);
-      localStorage.setItem('token', data.token);
-
+      localStorage.setItem('healthinsura360_token', data.token);
       // Redirect to hospital dashboard
       navigate('/hospital-dashboard');
 
@@ -162,8 +161,7 @@ const Login = () => {
       localStorage.setItem('userEmail', data.user.email);
       localStorage.setItem('accountType', formData.accountType);
       localStorage.setItem('userId', data.user.id);
-      localStorage.setItem('token', data.token);
-
+      localStorage.setItem('healthinsura360_token', data.token);
       // Store additional user info based on type
       if (formData.accountType === 'agent') {
         localStorage.setItem('agentName', data.user.fullName || `${data.user.firstName} ${data.user.lastName}`);

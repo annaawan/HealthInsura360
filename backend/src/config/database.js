@@ -10,6 +10,13 @@ const pool = new Pool({
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'Allahuakbar786',
     database: process.env.DB_NAME || 'HealthInsura360',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+    connectTimeout: 10000,
+    acquireTimeout: 10000
 });
 
 // Test connection
