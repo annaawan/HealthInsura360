@@ -53,12 +53,17 @@ const accounts = require('./src/routes/accounts');
 const authRoutes = require('./src/routes/authRoutes');
 const hospitalsRoutes = require('./src/routes/hospitalRoutes');   // ✅ NEW
 const auditRoutes = require('./src/routes/auditRoutes');
+const policyPlansRoutes = require('./src/routes/policyPlans');
+const analyticsRoutes = require('./src/routes/analyticsRoutes');
 
 // Routes
 app.use('/api/accounts', accounts);
 app.use('/api/auth', authRoutes);
 app.use('/api/hospitals', hospitalsRoutes);   // ✅ NEW
 app.use('/api/audit-logs', auditRoutes);
+app.use('/api/policy-plans', policyPlansRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
