@@ -503,10 +503,16 @@ if (data.name && table === 'hospital') {  // ✅ ADD THIS SECTION
           fieldMappings[key]) {
         const dbColumn = fieldMappings[key];
         
-        // Special handling for status field
+        // Special handling for status field for hospitals
         if (key === 'status' && table === 'hospital') {
-          // For hospitals, also update verified_status and verified_at
-          if (data.status === 'verified') {
+          // For hospitals, map 'active' to 'verified'
+          let mappedStatus = data.status;
+          if (data.status === 'active') {
+            mappedStatus = 'verified';
+          }
+          
+          // Also update verified_status and verified_at based on status
+          if (mappedStatus === 'verified') {
             setClauses.push(`verified_status = $${valueIndex}`);
             values.push(true);
             valueIndex++;
@@ -514,7 +520,7 @@ if (data.name && table === 'hospital') {  // ✅ ADD THIS SECTION
             setClauses.push(`verified_at = $${valueIndex}`);
             values.push(new Date());
             valueIndex++;
-          } else if (data.status === 'pending') {
+          } else if (mappedStatus === 'pending') {
             setClauses.push(`verified_status = $${valueIndex}`);
             values.push(false);
             valueIndex++;
@@ -523,26 +529,31 @@ if (data.name && table === 'hospital') {  // ✅ ADD THIS SECTION
             values.push(null);
             valueIndex++;
           }
+          
+          // Use the mapped status value
+          setClauses.push(`${dbColumn} = $${valueIndex}`);
+          values.push(mappedStatus);
+          valueIndex++;
+        } else {
+          setClauses.push(`${dbColumn} = $${valueIndex}`);
+          
+          // Convert commission_rate to number if needed
+          if (key === 'commission_rate' && typeof data[key] === 'string') {
+            values.push(parseFloat(data[key]) || 0);
+          } 
+          // Convert total_sales to number if needed
+          else if (key === 'total_sales' && typeof data[key] === 'string') {
+            values.push(parseFloat(data[key]) || 0);
+          }
+          // Handle dob conversion
+          else if (key === 'dob' && !data[key]) {
+            values.push(null);
+          }
+          else {
+            values.push(data[key]);
+          }
+          valueIndex++;
         }
-        
-        setClauses.push(`${dbColumn} = $${valueIndex}`);
-        
-        // Convert commission_rate to number if needed
-        if (key === 'commission_rate' && typeof data[key] === 'string') {
-          values.push(parseFloat(data[key]) || 0);
-        } 
-        // Convert total_sales to number if needed
-        else if (key === 'total_sales' && typeof data[key] === 'string') {
-          values.push(parseFloat(data[key]) || 0);
-        }
-        // Handle dob conversion
-        else if (key === 'dob' && !data[key]) {
-          values.push(null);
-        }
-        else {
-          values.push(data[key]);
-        }
-        valueIndex++;
       }
     });
     

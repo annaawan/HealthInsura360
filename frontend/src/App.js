@@ -8,6 +8,8 @@ import LandingPage from './pages/LandingPage';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AdminDashboard from './components/AdminDashboard';
+import { CustomerDashboard } from './components/CustomerDashboard';
+
 function App() {
   return (
     <Router>
@@ -21,6 +23,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/customer-dashboard" element={<CustomerDashboard />} />
 
         {/* Protected/Private Routes */}
         

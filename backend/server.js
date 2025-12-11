@@ -55,6 +55,7 @@ const hospitalsRoutes = require('./src/routes/hospitalRoutes');   // ✅ NEW
 const auditRoutes = require('./src/routes/auditRoutes');
 const policyPlansRoutes = require('./src/routes/policyPlans');
 const analyticsRoutes = require('./src/routes/analyticsRoutes');
+const reportsRoutes = require('./src/routes/reportsRoutes');
 
 // Routes
 app.use('/api/accounts', accounts);
@@ -63,6 +64,7 @@ app.use('/api/hospitals', hospitalsRoutes);   // ✅ NEW
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/policy-plans', policyPlansRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

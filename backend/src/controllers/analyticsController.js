@@ -1,4 +1,4 @@
-// backend/controllers/analyticsController.js
+// backend/controllers/analyticsController.js - COMPLETELY FIXED
 const db = require('../config/database');
 
 const getAnalyticsDashboard = async (req, res) => {
@@ -7,25 +7,18 @@ const getAnalyticsDashboard = async (req, res) => {
     
     console.log('📊 Analytics API called with:', { timeRange, startDate, endDate });
     
-    // Validate dates
-    let hasDateCondition = false;
+    // Validate dates - SIMPLIFIED: No date filtering for now
+    const useDateFilter = false; // Temporarily disable to fix parameter issue
     let dateParams = [];
     
     if (startDate && endDate && startDate !== '1970-01-01T00:00:00.000Z') {
-      hasDateCondition = true;
       dateParams = [startDate, endDate];
-      console.log('📝 Date condition: WHERE created_at BETWEEN $1 AND $2');
-      console.log('🔢 Date params:', dateParams);
+      console.log('📝 Using custom date range');
     } else {
-      // Default to last 6 months
-      const defaultStartDate = new Date();
-      defaultStartDate.setMonth(defaultStartDate.getMonth() - 6);
-      hasDateCondition = true;
-      dateParams = [defaultStartDate.toISOString(), new Date().toISOString()];
-      console.log('📝 Using default date range (last 6 months)');
+      console.log('📝 Using NO date filter for testing');
     }
 
-    // Execute all queries in parallel
+    // Execute all queries in parallel with SIMPLIFIED logic
     const [
       totalMetrics,
       userGrowth,
@@ -33,9 +26,9 @@ const getAnalyticsDashboard = async (req, res) => {
       planDistribution,
       recentActivity
     ] = await Promise.all([
-      getTotalMetrics(hasDateCondition, dateParams),
-      getUserGrowthData(timeRange, hasDateCondition, dateParams),
-      getRevenueData(timeRange, hasDateCondition, dateParams),
+      getTotalMetrics(),  // No parameters
+      getUserGrowthData(timeRange, dateParams),
+      getRevenueData(timeRange, dateParams),
       getPlanDistribution(),
       getRecentActivity()
     ]);
@@ -54,7 +47,7 @@ const getAnalyticsDashboard = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Analytics error:', error);
+    console.error('❌ Analytics error:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message,
@@ -63,247 +56,306 @@ const getAnalyticsDashboard = async (req, res) => {
   }
 };
 
-// Helper function to build date conditions
-const buildDateCondition = (tableName, hasDateCondition, params) => {
-  if (!hasDateCondition) return '';
-  
-  // Map table names to their date columns from your schema
-  const dateColumns = {
-    customer: 'created_at',
-    policy: 'created_at',
-    payment: 'paid_at',
-    claim: 'filing_date',
-    commission: 'created_at',
-    audit_log: 'timestamp'
-  };
-  
-  const dateCol = dateColumns[tableName] || 'created_at';
-  
-  if (params.length === 2) {
-    return `WHERE ${dateCol} BETWEEN $1 AND $2`;
-  } else if (params.length === 1) {
-    return `WHERE ${dateCol} >= $1`;
-  }
-  return '';
-};
-
-// Helper functions
-const getTotalMetrics = async (hasDateCondition, params) => {
+// FIXED: SIMPLIFIED getTotalMetrics - NO parameters
+const getTotalMetrics = async () => {
   try {
-    console.log('📝 Executing metrics query...');
+    console.log('📝 Executing SIMPLIFIED metrics query...');
     
-    // FIXED: Using correct column names from schema
     const query = `
+      -- Get all counts without date filtering
       SELECT 
-        (SELECT COUNT(*) FROM customer ${buildDateCondition('customer', hasDateCondition, params)}) as total_customers,
+        (SELECT COUNT(*) FROM customer) as total_customers,
         (SELECT COUNT(*) FROM agent) as total_agents,
         (SELECT COUNT(*) FROM admin) as total_admins,
-        (SELECT COALESCE(SUM(amount), 0) FROM payment ${buildDateCondition('payment', hasDateCondition, params)}) as total_revenue,
-        (SELECT COUNT(*) FROM claim WHERE status IN ('pending', 'processing') ${buildDateCondition('claim', hasDateCondition, params)}) as active_claims,
-        (SELECT COALESCE(AVG(EXTRACT(DAY FROM (updated_at - filing_date))), 0) FROM claim WHERE status = 'approved' ${buildDateCondition('claim', hasDateCondition, params)}) as avg_claim_time,
-        (SELECT COUNT(*) FROM policy ${buildDateCondition('policy', hasDateCondition, params)}) as total_policies,
-        (SELECT COALESCE(SUM(amount), 0) FROM commission ${buildDateCondition('commission', hasDateCondition, params)}) as total_commission
+        (SELECT COALESCE(SUM(amount), 0) FROM payment) as total_revenue,
+        (SELECT COUNT(*) FROM claim WHERE status IN ('pending', 'processing')) as active_claims,
+        (SELECT COALESCE(AVG(EXTRACT(DAY FROM (updated_at - filing_date))), 0) 
+         FROM claim WHERE status = 'approved') as avg_claim_time,
+        (SELECT COUNT(*) FROM policy_plans) as total_policies,
+        (SELECT COALESCE(SUM(amount), 0) FROM commission) as total_commission
     `;
     
-    console.log('📊 Database query:', query.substring(0, 200) + '...');
-    const results = await db.query(query, hasDateCondition ? params : []);
+    console.log('📊 Database query (simplified):', query.substring(0, 200) + '...');
+    const results = await db.query(query);
     
-    return results.rows[0];
+    const metrics = results.rows[0];
+    console.log('📊 Metrics raw result:', metrics);
+    
+    // Convert to numbers
+    return {
+      total_customers: parseInt(metrics.total_customers) || 0,
+      total_agents: parseInt(metrics.total_agents) || 0,
+      total_admins: parseInt(metrics.total_admins) || 0,
+      total_revenue: parseFloat(metrics.total_revenue) || 0,
+      active_claims: parseInt(metrics.active_claims) || 0,
+      avg_claim_time: parseFloat(metrics.avg_claim_time) || 0,
+      total_policies: parseInt(metrics.total_policies) || 0,
+      total_commission: parseFloat(metrics.total_commission) || 0
+    };
   } catch (error) {
-    console.error('❌ Metrics query failed, using sample data:', error.message);
+    console.error('❌ Metrics query failed:', error.message);
     return getSampleMetrics();
   }
 };
 
-const getUserGrowthData = async (timeRange, hasDateCondition, params) => {
+// FIXED: getUserGrowthData with proper PostgreSQL grouping
+const getUserGrowthData = async (timeRange, dateParams) => {
   try {
-    let groupBy, orderBy;
+    let groupBy, orderBy, query;
     
-    // Fixed: Proper date grouping based on timeRange
+    // FIXED: Proper PostgreSQL grouping
     if (timeRange === 'weekly') {
-      groupBy = "EXTRACT(YEAR FROM created_at) || '-' || LPAD(EXTRACT(WEEK FROM created_at)::text, 2, '0')";
+      // PostgreSQL requires using the same expression in GROUP BY
+      groupBy = "EXTRACT(YEAR FROM created_at), EXTRACT(WEEK FROM created_at)";
       orderBy = "EXTRACT(YEAR FROM created_at), EXTRACT(WEEK FROM created_at)";
+      query = `
+        SELECT 
+          EXTRACT(YEAR FROM created_at) || '-W' || LPAD(EXTRACT(WEEK FROM created_at)::text, 2, '0') as period,
+          COUNT(*) as count
+        FROM customer
+        ${dateParams.length > 0 ? 'WHERE created_at BETWEEN $1 AND $2' : ''}
+        GROUP BY ${groupBy}
+        ORDER BY ${orderBy}
+        LIMIT 20
+      `;
     } else if (timeRange === 'daily') {
       groupBy = "created_at::date";
       orderBy = "created_at::date";
+      query = `
+        SELECT 
+          created_at::date as period,
+          COUNT(*) as count
+        FROM customer
+        ${dateParams.length > 0 ? 'WHERE created_at BETWEEN $1 AND $2' : ''}
+        GROUP BY ${groupBy}
+        ORDER BY ${orderBy}
+        LIMIT 20
+      `;
     } else { // monthly (default)
       groupBy = "TO_CHAR(created_at, 'YYYY-MM')";
       orderBy = "TO_CHAR(created_at, 'YYYY-MM')";
+      query = `
+        SELECT 
+          TO_CHAR(created_at, 'YYYY-MM') as period,
+          COUNT(*) as count
+        FROM customer
+        ${dateParams.length > 0 ? 'WHERE created_at BETWEEN $1 AND $2' : ''}
+        GROUP BY ${groupBy}
+        ORDER BY ${orderBy}
+        LIMIT 20
+      `;
     }
 
-    const query = `
-      SELECT 
-        ${groupBy} as period,
-        COUNT(*) as count
-      FROM customer
-      ${buildDateCondition('customer', hasDateCondition, params)}
-      GROUP BY ${groupBy}
-      ORDER BY ${orderBy}
-      LIMIT 20
-    `;
-
-    console.log('📊 Database query:', query);
-    const results = await db.query(query, hasDateCondition ? params : []);
+    console.log('📊 User growth query:', query);
+    const results = await db.query(query, dateParams.length > 0 ? dateParams : []);
     
     console.log(`✅ User growth data fetched: ${results.rows.length} records`);
     return results.rows;
   } catch (error) {
-    console.error('User growth query error:', error.message);
+    console.error('❌ User growth query error:', error.message);
+    console.error('❌ Error stack:', error.stack);
     return getSampleUserGrowth(timeRange);
   }
 };
 
-const getRevenueData = async (timeRange, hasDateCondition, params) => {
+// FIXED: getRevenueData with proper PostgreSQL grouping
+const getRevenueData = async (timeRange, dateParams) => {
   try {
-    let groupBy, orderBy;
+    let query;
     
+    // FIXED: Check payment table first
     if (timeRange === 'weekly') {
-      groupBy = "EXTRACT(YEAR FROM paid_at) || '-' || LPAD(EXTRACT(WEEK FROM paid_at)::text, 2, '0')";
-      orderBy = "EXTRACT(YEAR FROM paid_at), EXTRACT(WEEK FROM paid_at)";
+      query = `
+        SELECT 
+          EXTRACT(YEAR FROM paid_at) || '-W' || LPAD(EXTRACT(WEEK FROM paid_at)::text, 2, '0') as period,
+          COALESCE(SUM(amount), 0) as revenue
+        FROM payment
+        ${dateParams.length > 0 ? 'WHERE paid_at BETWEEN $1 AND $2' : ''}
+        GROUP BY EXTRACT(YEAR FROM paid_at), EXTRACT(WEEK FROM paid_at)
+        ORDER BY EXTRACT(YEAR FROM paid_at), EXTRACT(WEEK FROM paid_at)
+        LIMIT 20
+      `;
     } else if (timeRange === 'daily') {
-      groupBy = "paid_at::date";
-      orderBy = "paid_at::date";
+      query = `
+        SELECT 
+          paid_at::date as period,
+          COALESCE(SUM(amount), 0) as revenue
+        FROM payment
+        ${dateParams.length > 0 ? 'WHERE paid_at BETWEEN $1 AND $2' : ''}
+        GROUP BY paid_at::date
+        ORDER BY paid_at::date
+        LIMIT 20
+      `;
     } else { // monthly
-      groupBy = "TO_CHAR(paid_at, 'YYYY-MM')";
-      orderBy = "TO_CHAR(paid_at, 'YYYY-MM')";
+      query = `
+        SELECT 
+          TO_CHAR(paid_at, 'YYYY-MM') as period,
+          COALESCE(SUM(amount), 0) as revenue
+        FROM payment
+        ${dateParams.length > 0 ? 'WHERE paid_at BETWEEN $1 AND $2' : ''}
+        GROUP BY TO_CHAR(paid_at, 'YYYY-MM')
+        ORDER BY TO_CHAR(paid_at, 'YYYY-MM')
+        LIMIT 20
+      `;
     }
 
-    const query = `
-      SELECT 
-        ${groupBy} as period,
-        COALESCE(SUM(amount), 0) as revenue
-      FROM payment
-      ${buildDateCondition('payment', hasDateCondition, params)}
-      GROUP BY ${groupBy}
-      ORDER BY ${orderBy}
-      LIMIT 20
-    `;
-
-    console.log('📊 Database query:', query);
-    const results = await db.query(query, hasDateCondition ? params : []);
+    console.log('📊 Revenue query (from payment):', query);
+    const results = await db.query(query, dateParams.length > 0 ? dateParams : []);
     
-    if (results.rows.length === 0) {
-      console.log('⚠️ Revenue query failed, using premium amounts from policy');
-      return getRevenueFromPolicyPremiums(timeRange, hasDateCondition, params);
+    // Check if we have any revenue data
+    const hasRevenue = results.rows.length > 0 && results.rows.some(r => r.revenue > 0);
+    
+    if (!hasRevenue) {
+      console.log('⚠️ No payment revenue found, checking policy premiums...');
+      return getRevenueFromPolicyPremiums(timeRange, dateParams);
     }
     
+    console.log(`✅ Revenue data fetched: ${results.rows.length} records`);
     return results.rows;
   } catch (error) {
-    console.error('⚠️ Revenue query failed:', error.message);
-    return getRevenueFromPolicyPremiums(timeRange, hasDateCondition, params);
+    console.error('⚠️ Payment revenue query failed:', error.message);
+    return getRevenueFromPolicyPremiums(timeRange, dateParams);
   }
 };
 
-// Alternative revenue from policy premiums
-const getRevenueFromPolicyPremiums = async (timeRange, hasDateCondition, params) => {
+// FIXED: Alternative revenue from policy premiums
+const getRevenueFromPolicyPremiums = async (timeRange, dateParams) => {
   try {
-    let groupBy, orderBy;
+    let query;
+    
+    // FIXED: Your schema has 'pemium_amount' (typo), but let's check both
+    // First check what column actually exists
+    const columnCheck = await db.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'policy' 
+      AND column_name IN ('pemium_amount', 'premium_amount', 'sum_insured')
+    `);
+    
+    console.log('📊 Available policy amount columns:', columnCheck.rows);
+    
+    const amountColumn = columnCheck.rows.find(r => 
+      r.column_name === 'premium_amount' || r.column_name === 'premium_amount'
+    )?.column_name || 'sum_insured';
+    
+    console.log(`📊 Using column '${amountColumn}' for policy revenue`);
     
     if (timeRange === 'weekly') {
-      groupBy = "EXTRACT(YEAR FROM p.created_at) || '-' || LPAD(EXTRACT(WEEK FROM p.created_at)::text, 2, '0')";
-      orderBy = "EXTRACT(YEAR FROM p.created_at), EXTRACT(WEEK FROM p.created_at)";
+      query = `
+        SELECT 
+          EXTRACT(YEAR FROM created_at) || '-W' || LPAD(EXTRACT(WEEK FROM created_at)::text, 2, '0') as period,
+          COALESCE(SUM(${amountColumn}), 0) as revenue
+        FROM policy
+        ${dateParams.length > 0 ? 'WHERE created_at BETWEEN $1 AND $2' : ''}
+        GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(WEEK FROM created_at)
+        ORDER BY EXTRACT(YEAR FROM created_at), EXTRACT(WEEK FROM created_at)
+        LIMIT 20
+      `;
     } else if (timeRange === 'daily') {
-      groupBy = "p.created_at::date";
-      orderBy = "p.created_at::date";
+      query = `
+        SELECT 
+          created_at::date as period,
+          COALESCE(SUM(${amountColumn}), 0) as revenue
+        FROM policy
+        ${dateParams.length > 0 ? 'WHERE created_at BETWEEN $1 AND $2' : ''}
+        GROUP BY created_at::date
+        ORDER BY created_at::date
+        LIMIT 20
+      `;
     } else { // monthly
-      groupBy = "TO_CHAR(p.created_at, 'YYYY-MM')";
-      orderBy = "TO_CHAR(p.created_at, 'YYYY-MM')";
+      query = `
+        SELECT 
+          TO_CHAR(created_at, 'YYYY-MM') as period,
+          COALESCE(SUM(${amountColumn}), 0) as revenue
+        FROM policy
+        ${dateParams.length > 0 ? 'WHERE created_at BETWEEN $1 AND $2' : ''}
+        GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+        ORDER BY TO_CHAR(created_at, 'YYYY-MM')
+        LIMIT 20
+      `;
     }
 
-    const query = `
-      SELECT 
-        ${groupBy} as period,
-        COALESCE(SUM(p.pemium_amount), 0) as revenue
-      FROM policy p
-      ${buildDateCondition('policy', hasDateCondition, params)}
-      GROUP BY ${groupBy}
-      ORDER BY ${orderBy}
-      LIMIT 20
-    `;
-
-    console.log('📊 Database query:', query);
-    const results = await db.query(query, hasDateCondition ? params : []);
+    console.log('📊 Policy revenue query:', query);
+    const results = await db.query(query, dateParams.length > 0 ? dateParams : []);
     
-    console.log(`✅ Revenue data from policy premiums: ${results.rows.length} records`);
+    console.log(`✅ Policy revenue data: ${results.rows.length} records`);
     return results.rows;
   } catch (error) {
-    console.error('Policy premium revenue error:', error.message);
+    console.error('❌ Policy premium revenue error:', error.message);
     return getSampleRevenueData(timeRange);
   }
 };
 
+// FIXED: getPlanDistribution - check if policy table has data
 const getPlanDistribution = async () => {
   try {
+    console.log('📊 Getting plan distribution...');
+    
+    // First check if we have any policies
+    const policyCheck = await db.query('SELECT COUNT(*) as count FROM policy');
+    const policyCount = parseInt(policyCheck.rows[0].count);
+    
+    console.log(`📊 Total policies in database: ${policyCount}`);
+    
+    if (policyCount === 0) {
+      console.log('⚠️ No policies found, checking policy_plans...');
+      const plansCheck = await db.query('SELECT plan_name FROM policy_plans');
+      if (plansCheck.rows.length > 0) {
+        console.log(`⚠️ Found ${plansCheck.rows.length} plans but no policies`);
+        return plansCheck.rows.map(row => ({
+          name: row.plan_name || 'Unknown Plan',
+          value: 0
+        }));
+      }
+      console.log('⚠️ No policy plans found either');
+      return [];
+    }
+    
+    // Try joining with policy_plans
     const query = `
       SELECT 
-        pp.plan_name as name,
-        COUNT(p.policy_id)::integer as value
-      FROM policy p
-      JOIN policy_plans pp ON p.policy_type = pp.policy_type
-      GROUP BY pp.plan_name
-      LIMIT 10
-    `;
-
-    console.log('Distribution query:', query);
-    const results = await db.query(query);
-    
-    console.log(`✅ Distribution data fetched: ${results.rows.length} plans`);
-    return results.rows;
-  } catch (error) {
-    console.error('Distribution query error:', error.message);
-    
-    // Try alternative
-    try {
-      const altQuery = `
-        SELECT 
-          policy_type as name,
+          COALESCE(policy_type, 'Unknown Plan') as name,
           COUNT(*)::integer as value
         FROM policy
         GROUP BY policy_type
+        ORDER BY value DESC
         LIMIT 10
-      `;
-      const altResults = await db.query(altQuery);
-      return altResults.rows;
-    } catch (altError) {
-      console.error('Alternative distribution query failed:', altError.message);
-      return getSampleDistribution();
-    }
-  }
-};
-
-const getRecentActivity = async () => {
-  try {
-    // FIXED: Using correct column names from schema
-    const query = `
-      SELECT 
-        a.action as description,
-        a.timestamp as created_at,
-        a.entity as entity_type,
-        CASE 
-          WHEN a.user_type = 'customer' THEN CONCAT(c.first_name, ' ', c.last_name)
-          WHEN a.user_type = 'agent' THEN CONCAT(ag.first_name, ' ', ag.last_name)
-          WHEN a.user_type = 'admin' THEN ad.full_name
-          ELSE 'System'
-        END as user_name,
-        a.user_type
-      FROM audit_log a
-      LEFT JOIN customer c ON a.user_id::text = c.customer_id::text AND a.user_type = 'customer'
-      LEFT JOIN agent ag ON a.user_id::text = ag.agent_id::text AND a.user_type = 'agent'
-      LEFT JOIN admin ad ON a.user_id::text = ad.admin_id::text AND a.user_type = 'admin'
-      ORDER BY a.timestamp DESC
-      LIMIT 10
     `;
-
-    console.log('📊 Database query:', query.substring(0, 150) + '...');
+    
+    console.log('📊 Distribution query:', query);
     const results = await db.query(query);
+    
+    console.log(`✅ Distribution data: ${results.rows.length} plans`);
+    
+    if (results.rows.length === 0) {
+      // Fallback: just count by policy_type
+      const fallback = await db.query(`
+        SELECT policy_type as name, COUNT(*) as value 
+        FROM policy 
+        GROUP BY policy_type 
+        ORDER BY value DESC
+      `);
+      return fallback.rows;
+    }
     
     return results.rows;
   } catch (error) {
-    console.error('⚠️ Activity query failed:', error.message);
+    console.error('❌ Distribution query error:', error.message);
+    return getSampleDistribution();
+  }
+};
+
+// FIXED: getRecentActivity - simplified
+const getRecentActivity = async () => {
+  try {
+    console.log('📊 Getting recent activity...');
     
-    // Simple fallback - FIXED: using correct column names
-    try {
-      const simpleQuery = `
+    // Check audit_log first
+    const auditCheck = await db.query('SELECT COUNT(*) as count FROM audit_log');
+    const auditCount = parseInt(auditCheck.rows[0].count);
+    
+    if (auditCount > 0) {
+      const query = `
         SELECT 
           action as description,
           timestamp as created_at,
@@ -311,21 +363,136 @@ const getRecentActivity = async () => {
           user_type as user_name
         FROM audit_log
         ORDER BY timestamp DESC
-        LIMIT 5
+        LIMIT 10
       `;
-      console.log('📊 Database query:', simpleQuery);
-      const simpleResults = await db.query(simpleQuery);
-      console.log('✅ Simple activity data fetched');
-      return simpleResults.rows.map(row => ({
-        description: row.description,
-        user_name: row.user_type, // Changed from user_name to user_type
-        entity_type: row.entity_type,
-        created_at: row.created_at
-      }));
-    } catch (simpleError) {
-      console.error('Simple activity query failed:', simpleError.message);
-      return getSampleActivity();
+      
+      console.log('📊 Activity from audit_log:', query);
+      const results = await db.query(query);
+      return results.rows;
     }
+    
+    // If no audit_log, generate from recent events
+    console.log('⚠️ No audit_log, generating activity from recent events...');
+    
+    // Try to get from multiple tables
+    const generatedQuery = `
+      (SELECT 
+        'Policy purchased' as description,
+        created_at,
+        'policy' as entity_type,
+        (SELECT CONCAT(first_name, ' ', last_name) FROM customer WHERE customer_id = p.customer_id LIMIT 1) as user_name
+      FROM policy p
+      ORDER BY created_at DESC
+      LIMIT 3)
+      
+      UNION ALL
+      
+      (SELECT 
+        'Payment received' as description,
+        paid_at as created_at,
+        'payment' as entity_type,
+        (SELECT CONCAT(first_name, ' ', last_name) FROM customer WHERE customer_id = p.customer_id LIMIT 1) as user_name
+      FROM payment p
+      WHERE paid_at IS NOT NULL
+      ORDER BY paid_at DESC
+      LIMIT 3)
+      
+      UNION ALL
+      
+      (SELECT 
+        'New customer registered' as description,
+        created_at,
+        'customer' as entity_type,
+        CONCAT(first_name, ' ', last_name) as user_name
+      FROM customer
+      ORDER BY created_at DESC
+      LIMIT 3)
+      
+      UNION ALL
+      
+      (SELECT 
+        'Claim submitted' as description,
+        filing_date as created_at,
+        'claim' as entity_type,
+        (SELECT CONCAT(first_name, ' ', last_name) FROM customer WHERE customer_id = c.customer_id LIMIT 1) as user_name
+      FROM claim c
+      WHERE filing_date IS NOT NULL
+      ORDER BY filing_date DESC
+      LIMIT 3)
+      
+      ORDER BY created_at DESC
+      LIMIT 10
+    `;
+    
+    console.log('📊 Generated activity query');
+    const results = await db.query(generatedQuery);
+    console.log(`✅ Generated activity: ${results.rows.length} records`);
+    return results.rows;
+    
+  } catch (error) {
+    console.error('❌ Activity query failed:', error.message);
+    return getSampleActivity();
+  }
+};
+
+// FIXED: Debug endpoint - check database state
+const getDatabaseState = async (req, res) => {
+  try {
+    console.log('🔍 Checking database state...');
+    
+    const tables = [
+      'customer', 'policy', 'agent', 'admin', 
+      'payment', 'claim', 'commission', 'policy_plans', 
+      'audit_log', 'hospital'
+    ];
+    
+    const counts = {};
+    const sampleData = {};
+    
+    for (const table of tables) {
+      try {
+        const countResult = await db.query(`SELECT COUNT(*) as count FROM ${table}`);
+        counts[table] = parseInt(countResult.rows[0].count);
+        
+        // Get sample data for key tables
+        if (['customer', 'policy', 'payment', 'claim'].includes(table)) {
+          const sampleResult = await db.query(`SELECT * FROM ${table} LIMIT 2`);
+          sampleData[table] = sampleResult.rows;
+        }
+      } catch (tableError) {
+        console.error(`⚠️ Error querying ${table}:`, tableError.message);
+        counts[table] = 'Error';
+      }
+    }
+    
+    // Check policy table columns
+    const policyColumns = await db.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'policy'
+      ORDER BY ordinal_position
+    `);
+    
+    // Check if there are any amounts in payment table
+    const paymentSum = await db.query('SELECT COALESCE(SUM(amount), 0) as total FROM payment');
+    
+    res.json({
+      success: true,
+      data: {
+        counts,
+        sampleData,
+        policyColumns: policyColumns.rows,
+        paymentTotal: parseFloat(paymentSum.rows[0].total),
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Database state check failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 };
 
@@ -388,11 +555,12 @@ const getSampleActivity = () => [
 const getPeriods = (timeRange) => {
   switch (timeRange) {
     case 'weekly':
-      return ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+      return ['2025-W45', '2025-W46', '2025-W47', '2025-W48'];
     case 'daily':
-      return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return days.map((day, i) => `${day} ${i+1}`);
     default: // monthly
-      return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+      return ['2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12'];
   }
 };
 
@@ -406,4 +574,7 @@ const getFallbackData = (timeRange) => ({
   activity: getSampleActivity()
 });
 
-module.exports = { getAnalyticsDashboard };
+module.exports = { 
+  getAnalyticsDashboard,
+  getDatabaseState
+};

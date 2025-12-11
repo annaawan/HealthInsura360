@@ -5,6 +5,8 @@ import { auditLogger} from '../utils/auditLogger';
 import { fetchAnalyticsData } from '../services/analyticsServices';
 import DateRangePicker from './analytics/DateRangePicker.jsx';
 import MetricsGrid from './charts/MetricsGrid.jsx';
+import { Line as LineChart, Doughnut as DonutChart } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
 // Icons from lucide-react
 import { 
   Plus,
@@ -12,12 +14,9 @@ import {
   Edit, 
   Building, 
   Mail,
-  Phone,
   LayoutDashboard, 
   Users, 
   FileText, 
-  Globe,
-  Settings, 
   LogOut,
   Shield,
   Menu,
@@ -37,12 +36,9 @@ import {
   Hospital,
   Archive,
   RefreshCw,
-  LineChart,
-  Donut,
   BarChart3,
   Table,
   Printer,
-  Database,
   Calendar,
   Clock,
   Users as UsersIcon,
@@ -53,9 +49,6 @@ import {
   AlertCircle,
   Eye, 
   Tag,
-  Sun,
-  Info,
-  HelpCircle,
 } from 'lucide-react';
 
 // Chart components from recharts
@@ -73,6 +66,9 @@ import {
   ResponsiveContainer,
   Pie
 } from 'recharts';
+
+// Register Chart.js plugins
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
 
 // API configuration
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
@@ -1631,25 +1627,27 @@ function DashboardOverview() {
         {/* Claims Status */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Claims Status</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={claimsData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ status, value }) => `${status}: ${value}`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {claimsData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          <div style={{ width: '100%', height: '300px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={claimsData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ status, value }) => `${status}: ${value}`}
+                  outerRadius={70}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {claimsData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Recent Activities */}
@@ -1666,1023 +1664,6 @@ function DashboardOverview() {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Settings Panel Component 
-// function SettingsPanel() {
-//   const [activeTab, setActiveTab] = useState("profile");
-//   const [darkMode, setDarkMode] = useState(false);
-
-//   const tabs = [
-//     { id: "profile", label: "Account & Profile", icon: UsersIcon },
-//     { id: "notifications", label: "Notifications", icon: Bell },
-//     { id: "security", label: "Privacy & Security", icon: Shield },
-//     { id: "appearance", label: "Appearance", icon: Sun },
-//     { id: "general", label: "General Info", icon: Info },
-//   ];
-
-//   return (
-//     <div className="p-8">
-//       {/* Header */}
-//       <div className="mb-8">
-//         <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
-//         <p className="text-gray-600">Manage your account settings and preferences</p>
-//       </div>
-
-//       <div className="grid lg:grid-cols-4 gap-6">
-        
-//         {/* Tabs Sidebar */}
-//         <div className="lg:col-span-1">
-//           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
-//             {tabs.map((tab) => {
-//               const Icon = tab.icon;
-//               return (
-//                 <button
-//                   key={tab.id}
-//                   onClick={() => setActiveTab(tab.id)}
-//                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-//                     activeTab === tab.id
-//                       ? "bg-blue-50 text-blue-600"
-//                       : "text-gray-700 hover:bg-gray-50"
-//                   }`}
-//                 >
-//                   <Icon className="h-5 w-5" />
-//                   <span>{tab.label}</span>
-//                 </button>
-//               );
-//             })}
-//           </div>
-//         </div>
-
-//         {/* Content Area */}
-//         <div className="lg:col-span-3">
-//           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            
-//             {/* -------- Profile Tab -------- */}
-//             {activeTab === "profile" && (
-//               <div>
-//                 <h2 className="text-lg font-semibold text-gray-900 mb-6">Account & Profile</h2>
-                
-//                 <div className="space-y-6">
-//                   {/* Profile Info */}
-//                   <div className="grid md:grid-cols-2 gap-4">
-//                     <div>
-//                       <label className="block text-gray-700 mb-2">First Name</label>
-//                       <input type="text" defaultValue="Admin" className="w-full px-4 py-2 border rounded-lg"/>
-//                     </div>
-//                     <div>
-//                       <label className="block text-gray-700 mb-2">Last Name</label>
-//                       <input type="text" defaultValue="User" className="w-full px-4 py-2 border rounded-lg"/>
-//                     </div>
-//                   </div>
-
-//                   <div>
-//                     <label className="block text-gray-700 mb-2">Email Address</label>
-//                     <input type="email" defaultValue="admin@healthinsura360.com" className="w-full px-4 py-2 border rounded-lg"/>
-//                   </div>
-
-//                   <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-//                     Save Profile
-//                   </button>
-
-//                   {/* Delete Account */}
-//                   <div className="pt-6 mt-6 border-t border-gray-200">
-//                     <h3 className="text-red-600 font-medium mb-2">Danger Zone</h3>
-//                     <p className="text-gray-600 mb-3">Delete your account permanently.</p>
-//                     <button className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-//                       Delete Account
-//                     </button>
-//                   </div>
-//                 </div>
-//               </div>
-//             )}
-
-//             {/* -------- Notifications Tab -------- */}
-//             {activeTab === "notifications" && (
-//               <div>
-//                 <h2 className="text-lg font-semibold text-gray-900 mb-6">Notification Preferences</h2>
-
-//                 <div className="space-y-4">
-//                   {["New user registrations", "New claims submitted", "System alerts"].map((item) => (
-//                     <label key={item} className="flex items-center gap-3">
-//                       <input type="checkbox" defaultChecked className="w-4 h-4"/>
-//                       <span>{item}</span>
-//                     </label>
-//                   ))}
-//                 </div>
-
-//                 <button className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-//                   Save Preferences
-//                 </button>
-//               </div>
-//             )}
-
-//             {/* -------- Security Tab -------- */}
-//             {activeTab === "security" && (
-//               <div>
-//                 <h2 className="text-lg font-semibold text-gray-900 mb-6">Privacy & Security</h2>
-
-//                 <div className="space-y-6">
-                  
-//                   {/* Change Password */}
-//                   <div>
-//                     <h3 className="font-medium mb-4">Change Password</h3>
-//                     <div className="space-y-4">
-//                       <input type="password" placeholder="Current Password" className="w-full px-4 py-2 border rounded-lg"/>
-//                       <input type="password" placeholder="New Password" className="w-full px-4 py-2 border rounded-lg"/>
-//                     </div>
-//                   </div>
-
-//                   <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-//                     Update Password
-//                   </button>
-
-//                   {/* Privacy Policy */}
-//                   <div className="pt-6 border-t">
-//                     <a className="text-blue-600 underline block mb-2" href="/privacy-policy">Privacy Policy</a>
-//                     <a className="text-blue-600 underline" href="/terms-of-service">Terms of Service</a>
-//                   </div>
-//                 </div>
-//               </div>
-//             )}
-
-//             {/* -------- Appearance Tab -------- */}
-//             {activeTab === "appearance" && (
-//               <div>
-//                 <h2 className="text-lg font-semibold text-gray-900 mb-6">Appearance & Display</h2>
-
-//                 <div className="flex items-center justify-between">
-//                   <span className="text-gray-700">Dark Mode</span>
-
-//                   <button
-//                     onClick={() => setDarkMode(!darkMode)}
-//                     className={`px-4 py-2 rounded-lg border ${
-//                       darkMode ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-800"
-//                     }`}
-//                   >
-//                     {darkMode ? "Disable Dark Mode" : "Enable Dark Mode"}
-//                   </button>
-//                 </div>
-//               </div>
-//             )}
-
-//             {/* -------- General Info Tab -------- */}
-//             {activeTab === "general" && (
-//               <div>
-//                 <h2 className="text-lg font-semibold text-gray-900 mb-6">General Information</h2>
-
-//                 <p className="text-gray-700 mb-3">Version: 1.0.0</p>
-//                 <p className="text-gray-700 mb-3">© 2025 HealthInsura360</p>
-// <a
-//   href="/support"
-//   className="text-blue-600 underline flex items-center gap-2 mb-4"
-// >
-//   <HelpCircle className="w-4 h-4" />
-//   Help & Support
-// </a>
-
-//               </div>
-//             )}
-
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
-// Settings Panel Component with Admin Data Fetching, Profile Management, and Security Features
-function SettingsPanel() {
-  const [activeTab, setActiveTab] = useState("profile");
-  const [darkMode, setDarkMode] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  
-  // Admin profile data state
-  const [adminData, setAdminData] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    position: '',
-    department: '',
-    created_at: '',
-    last_login: ''
-  });
-  
-  // Profile form state
-  const [profileForm, setProfileForm] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: ''
-  });
-  
-  // Password form state
-  const [passwordForm, setPasswordForm] = useState({
-    current_password: '',
-    new_password: '',
-    confirm_password: ''
-  });
-  
-  // Validation states
-  const [profileErrors, setProfileErrors] = useState({});
-  const [passwordErrors, setPasswordErrors] = useState({});
-  const [message, setMessage] = useState({ type: '', text: '' });
-
-  const tabs = [
-    { id: "profile", label: "Account & Profile", icon: UsersIcon },
-    { id: "security", label: "Privacy & Security", icon: Shield },
-    { id: "appearance", label: "Appearance", icon: Sun },
-    { id: "general", label: "General Info", icon: Info },
-  ];
-
-  // ---------------------------
-  // Fetch Admin Data from Backend
-  // ---------------------------
-  const fetchAdminData = async () => {
-    setLoading(true);
-    try {
-      const config = getAxiosConfig();
-      const response = await axios.get(`${API_BASE_URL}/accounts/admin/profile`, config);
-      
-      if (response.data.success) {
-        const admin = response.data.data;
-        setAdminData({
-          first_name: admin.first_name || '',
-          last_name: admin.last_name || '',
-          email: admin.email || '',
-          phone: admin.phone || '',
-          position: admin.position || 'Administrator',
-          department: admin.department || 'Management',
-          created_at: admin.created_at || '',
-          last_login: admin.last_login || ''
-        });
-        
-        // Set profile form with current data
-        setProfileForm({
-          first_name: admin.first_name || '',
-          last_name: admin.last_name || '',
-          email: admin.email || '',
-          phone: admin.phone || ''
-        });
-      } else {
-        throw new Error(response.data.message);
-      }
-    } catch (error) {
-      console.error("Error fetching admin data:", error);
-      setMessage({
-        type: 'error',
-        text: 'Failed to load admin profile data'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAdminData();
-  }, []);
-
-  // ---------------------------
-  // Profile Validation
-  // ---------------------------
-  const validateProfile = () => {
-    const errors = {};
-    
-    if (!profileForm.first_name.trim()) {
-      errors.first_name = 'First name is required';
-    } else if (profileForm.first_name.length < 2) {
-      errors.first_name = 'First name must be at least 2 characters';
-    }
-    
-    if (!profileForm.last_name.trim()) {
-      errors.last_name = 'Last name is required';
-    } else if (profileForm.last_name.length < 2) {
-      errors.last_name = 'Last name must be at least 2 characters';
-    }
-    
-    if (!profileForm.email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileForm.email)) {
-      errors.email = 'Please enter a valid email address';
-    }
-    
-    if (profileForm.phone && !/^[+]?([1-9][\d]{0,15})$/.test(profileForm.phone.replace(/\D/g, ''))) {
-      errors.phone = 'Please enter a valid phone number';
-    }
-    
-    setProfileErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // ---------------------------
-  // Password Validation
-  // ---------------------------
-  const validatePassword = () => {
-    const errors = {};
-    
-    if (!passwordForm.current_password.trim()) {
-      errors.current_password = 'Current password is required';
-    }
-    
-    if (!passwordForm.new_password.trim()) {
-      errors.new_password = 'New password is required';
-    } else if (passwordForm.new_password.length < 8) {
-      errors.new_password = 'Password must be at least 8 characters';
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(passwordForm.new_password)) {
-      errors.new_password = 'Password must contain uppercase, lowercase, and numbers';
-    }
-    
-    if (!passwordForm.confirm_password.trim()) {
-      errors.confirm_password = 'Please confirm your new password';
-    } else if (passwordForm.new_password !== passwordForm.confirm_password) {
-      errors.confirm_password = 'Passwords do not match';
-    }
-    
-    setPasswordErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // ---------------------------
-  // Update Profile Function
-  // ---------------------------
-  const handleUpdateProfile = async (e) => {
-    e.preventDefault();
-    
-    if (!validateProfile()) {
-      setMessage({
-        type: 'error',
-        text: 'Please fix the errors in the form'
-      });
-      return;
-    }
-    
-    setSaving(true);
-    try {
-      const config = getAxiosConfig();
-      const response = await axios.put(
-        `${API_BASE_URL}/accounts/admin/profile`,
-        profileForm,
-        config
-      );
-      
-      if (response.data.success) {
-        // Update admin data with new values
-        setAdminData(prev => ({
-          ...prev,
-          ...profileForm
-        }));
-        
-        setMessage({
-          type: 'success',
-          text: 'Profile updated successfully!'
-        });
-        
-        // Clear message after 3 seconds
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      } else {
-        throw new Error(response.data.message);
-      }
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      setMessage({
-        type: 'error',
-        text: error.response?.data?.message || 'Failed to update profile'
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ---------------------------
-  // Change Password Function
-  // ---------------------------
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-    
-    if (!validatePassword()) {
-      setMessage({
-        type: 'error',
-        text: 'Please fix the password errors'
-      });
-      return;
-    }
-    
-    setSaving(true);
-    try {
-      const config = getAxiosConfig();
-      const response = await axios.put(
-        `${API_BASE_URL}/accounts/admin/change-password`,
-        {
-          current_password: passwordForm.current_password,
-          new_password: passwordForm.new_password
-        },
-        config
-      );
-      
-      if (response.data.success) {
-        setMessage({
-          type: 'success',
-          text: 'Password changed successfully!'
-        });
-        
-        // Clear password form
-        setPasswordForm({
-          current_password: '',
-          new_password: '',
-          confirm_password: ''
-        });
-        
-        setPasswordErrors({});
-        
-        // Clear message after 3 seconds
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      } else {
-        throw new Error(response.data.message);
-      }
-    } catch (error) {
-      console.error("Error changing password:", error);
-      setMessage({
-        type: 'error',
-        text: error.response?.data?.message || 'Failed to change password. Please check your current password.'
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ---------------------------
-  // Delete Account Function
-  // ---------------------------
-  const handleDeleteAccount = async () => {
-    if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      return;
-    }
-    
-    const password = prompt('Please enter your password to confirm account deletion:');
-    if (!password) return;
-    
-    try {
-      const config = getAxiosConfig();
-      const response = await axios.delete(
-        `${API_BASE_URL}/accounts/admin`,
-        {
-          ...config,
-          data: { password }
-        }
-      );
-      
-      if (response.data.success) {
-        alert('Account deleted successfully. You will be logged out.');
-        // Redirect to login or logout
-        window.location.href = '/login';
-      } else {
-        throw new Error(response.data.message);
-      }
-    } catch (error) {
-      console.error("Error deleting account:", error);
-      alert(error.response?.data?.message || 'Failed to delete account');
-    }
-  };
-
-  // ---------------------------
-  // Format Date
-  // ---------------------------
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  // ---------------------------
-  // Form Field Handlers
-  // ---------------------------
-  const handleProfileChange = (field, value) => {
-    setProfileForm(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    
-    // Clear error for this field when user starts typing
-    if (profileErrors[field]) {
-      setProfileErrors(prev => ({
-        ...prev,
-        [field]: undefined
-      }));
-    }
-  };
-
-  const handlePasswordChange = (field, value) => {
-    setPasswordForm(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    
-    // Clear error for this field when user starts typing
-    if (passwordErrors[field]) {
-      setPasswordErrors(prev => ({
-        ...prev,
-        [field]: undefined
-      }));
-    }
-  };
-
-  // ---------------------------
-  // Password Strength Indicator
-  // ---------------------------
-  const getPasswordStrength = (password) => {
-    if (!password) return { strength: 0, label: '', color: 'gray' };
-    
-    let strength = 0;
-    if (password.length >= 8) strength++;
-    if (/[a-z]/.test(password)) strength++;
-    if (/[A-Z]/.test(password)) strength++;
-    if (/[0-9]/.test(password)) strength++;
-    if (/[^A-Za-z0-9]/.test(password)) strength++;
-    
-    const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
-    const colors = ['red', 'orange', 'yellow', 'lightgreen', 'green', 'darkgreen'];
-    
-    return {
-      strength: (strength / 6) * 100,
-      label: labels[strength - 1] || '',
-      color: colors[strength - 1] || 'gray'
-    };
-  };
-
-  if (loading) {
-    return (
-      <div className="p-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading settings...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
-        <p className="text-gray-600">Manage your account settings and preferences</p>
-      </div>
-
-      {/* Message Display */}
-      {message.text && (
-        <div className={`mb-6 p-4 rounded-lg ${
-          message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
-          message.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
-          'bg-blue-50 text-blue-800 border border-blue-200'
-        }`}>
-          {message.text}
-        </div>
-      )}
-
-      <div className="grid lg:grid-cols-4 gap-6">
-        
-        {/* Tabs Sidebar */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id);
-                    setMessage({ type: '', text: '' });
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    activeTab === tab.id
-                      ? "bg-blue-50 text-blue-600"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Content Area */}
-        <div className="lg:col-span-3">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            
-            {/* -------- Profile Tab -------- */}
-            {activeTab === "profile" && (
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-6">Account & Profile</h2>
-                
-                <form onSubmit={handleUpdateProfile}>
-                  <div className="space-y-6">
-                    {/* Profile Info */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-gray-700 mb-2">
-                          First Name <span className="text-red-500">*</span>
-                        </label>
-                        <input 
-                          type="text" 
-                          value={profileForm.first_name}
-                          onChange={(e) => handleProfileChange('first_name', e.target.value)}
-                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-                            profileErrors.first_name ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                          required
-                        />
-                        {profileErrors.first_name && (
-                          <p className="mt-1 text-sm text-red-600">{profileErrors.first_name}</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-gray-700 mb-2">
-                          Last Name <span className="text-red-500">*</span>
-                        </label>
-                        <input 
-                          type="text" 
-                          value={profileForm.last_name}
-                          onChange={(e) => handleProfileChange('last_name', e.target.value)}
-                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-                            profileErrors.last_name ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                          required
-                        />
-                        {profileErrors.last_name && (
-                          <p className="mt-1 text-sm text-red-600">{profileErrors.last_name}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-gray-700 mb-2">
-                        Email Address <span className="text-red-500">*</span>
-                      </label>
-                      <input 
-                        type="email" 
-                        value={profileForm.email}
-                        onChange={(e) => handleProfileChange('email', e.target.value)}
-                        className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-                          profileErrors.email ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                        required
-                      />
-                      {profileErrors.email && (
-                        <p className="mt-1 text-sm text-red-600">{profileErrors.email}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-gray-700 mb-2">Phone Number</label>
-                      <input 
-                        type="tel" 
-                        value={profileForm.phone}
-                        onChange={(e) => handleProfileChange('phone', e.target.value)}
-                        className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-                          profileErrors.phone ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                        placeholder="(123) 456-7890"
-                      />
-                      {profileErrors.phone && (
-                        <p className="mt-1 text-sm text-red-600">{profileErrors.phone}</p>
-                      )}
-                    </div>
-
-                    {/* Admin Information (Read-only) */}
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-medium text-gray-900 mb-3">Administrator Information</h3>
-                      <div className="grid md:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600">Position:</span>
-                          <p className="font-medium">{adminData.position}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Department:</span>
-                          <p className="font-medium">{adminData.department}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Account Created:</span>
-                          <p className="font-medium">{formatDate(adminData.created_at)}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Last Login:</span>
-                          <p className="font-medium">{formatDate(adminData.last_login)}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button 
-                      type="submit"
-                      disabled={saving}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {saving ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Saving...
-                        </>
-                      ) : 'Save Profile Changes'}
-                    </button>
-
-                    {/* Delete Account */}
-                    <div className="pt-6 mt-6 border-t border-gray-200">
-                      <h3 className="text-red-600 font-medium mb-2">Danger Zone</h3>
-                      <p className="text-gray-600 mb-3">
-                        Permanently delete your account and all associated data. This action cannot be undone.
-                      </p>
-                      <button 
-                        type="button"
-                        onClick={handleDeleteAccount}
-                        className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                      >
-                        Delete Account
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* -------- Security Tab -------- */}
-            {activeTab === "security" && (
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-6">Privacy & Security</h2>
-
-                <form onSubmit={handleChangePassword}>
-                  <div className="space-y-6">
-                    
-                    {/* Change Password */}
-                    <div>
-                      <h3 className="font-medium mb-4">Change Password</h3>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-gray-700 mb-2">
-                            Current Password <span className="text-red-500">*</span>
-                          </label>
-                          <input 
-                            type="password" 
-                            value={passwordForm.current_password}
-                            onChange={(e) => handlePasswordChange('current_password', e.target.value)}
-                            placeholder="Enter your current password"
-                            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-                              passwordErrors.current_password ? 'border-red-500' : 'border-gray-300'
-                            }`}
-                          />
-                          {passwordErrors.current_password && (
-                            <p className="mt-1 text-sm text-red-600">{passwordErrors.current_password}</p>
-                          )}
-                        </div>
-                        
-                        <div>
-                          <label className="block text-gray-700 mb-2">
-                            New Password <span className="text-red-500">*</span>
-                          </label>
-                          <input 
-                            type="password" 
-                            value={passwordForm.new_password}
-                            onChange={(e) => handlePasswordChange('new_password', e.target.value)}
-                            placeholder="Enter your new password"
-                            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-                              passwordErrors.new_password ? 'border-red-500' : 'border-gray-300'
-                            }`}
-                          />
-                          {passwordForm.new_password && (
-                            <div className="mt-2">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                  <div 
-                                    className="h-full transition-all duration-300"
-                                    style={{
-                                      width: `${getPasswordStrength(passwordForm.new_password).strength}%`,
-                                      backgroundColor: getPasswordStrength(passwordForm.new_password).color
-                                    }}
-                                  ></div>
-                                </div>
-                                <span className="text-xs text-gray-600">
-                                  {getPasswordStrength(passwordForm.new_password).label}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-500">
-                                Must be at least 8 characters with uppercase, lowercase, and numbers
-                              </p>
-                            </div>
-                          )}
-                          {passwordErrors.new_password && (
-                            <p className="mt-1 text-sm text-red-600">{passwordErrors.new_password}</p>
-                          )}
-                        </div>
-                        
-                        <div>
-                          <label className="block text-gray-700 mb-2">
-                            Confirm New Password <span className="text-red-500">*</span>
-                          </label>
-                          <input 
-                            type="password" 
-                            value={passwordForm.confirm_password}
-                            onChange={(e) => handlePasswordChange('confirm_password', e.target.value)}
-                            placeholder="Confirm your new password"
-                            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-                              passwordErrors.confirm_password ? 'border-red-500' : 'border-gray-300'
-                            }`}
-                          />
-                          {passwordErrors.confirm_password && (
-                            <p className="mt-1 text-sm text-red-600">{passwordErrors.confirm_password}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button 
-                      type="submit"
-                      disabled={saving}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {saving ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Updating Password...
-                        </>
-                      ) : 'Update Password'}
-                    </button>
-
-                    {/* Privacy & Security Links */}
-                    <div className="pt-6 border-t">
-                      <h3 className="font-medium mb-4">Privacy & Security Information</h3>
-                      <div className="space-y-2">
-                        <a 
-                          href="/privacy-policy" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline flex items-center gap-2 hover:text-blue-800"
-                        >
-                          <FileText className="w-4 h-4" />
-                          Privacy Policy
-                        </a>
-                        <a 
-                          href="/terms-of-service" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline flex items-center gap-2 hover:text-blue-800"
-                        >
-                          <FileText className="w-4 h-4" />
-                          Terms of Service
-                        </a>
-                        <a 
-                          href="/security-policy" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline flex items-center gap-2 hover:text-blue-800"
-                        >
-                          <Shield className="w-4 h-4" />
-                          Security Policy
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* -------- Appearance Tab -------- */}
-            {activeTab === "appearance" && (
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-6">Appearance & Display</h2>
-
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <h3 className="font-medium text-gray-900">Dark Mode</h3>
-                      <p className="text-sm text-gray-600">
-                        Switch between light and dark theme
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setDarkMode(!darkMode)}
-                      className={`px-4 py-2 rounded-lg border transition-colors ${
-                        darkMode 
-                          ? "bg-gray-900 text-white border-gray-900 hover:bg-gray-800" 
-                          : "bg-white text-gray-800 border-gray-300 hover:bg-gray-50"
-                      }`}
-                    >
-                      {darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                    </button>
-                  </div>
-
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <h3 className="font-medium text-gray-900 mb-3">Theme Preview</h3>
-                    <div className={`p-4 rounded-lg transition-colors ${
-                      darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900 border'
-                    }`}>
-                      <p className="mb-2">This is how your interface will look:</p>
-                      <div className="flex items-center gap-4 mb-3">
-                        <div className={`w-8 h-8 rounded ${darkMode ? 'bg-blue-600' : 'bg-blue-500'}`}></div>
-                        <div className={`w-8 h-8 rounded ${darkMode ? 'bg-green-600' : 'bg-green-500'}`}></div>
-                        <div className={`w-8 h-8 rounded ${darkMode ? 'bg-yellow-600' : 'bg-yellow-500'}`}></div>
-                      </div>
-                      <p className="text-sm opacity-75">
-                        {darkMode 
-                          ? "Dark theme reduces eye strain in low-light conditions." 
-                          : "Light theme provides better readability in well-lit environments."
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* -------- General Info Tab -------- */}
-            {activeTab === "general" && (
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-6">General Information</h2>
-
-                <div className="space-y-6">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-medium text-gray-900 mb-3">System Information</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Application Version:</span>
-                          <span className="font-medium">2.1.0</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Build Date:</span>
-                          <span className="font-medium">December 2025</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Environment:</span>
-                          <span className="font-medium">Production</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-medium text-gray-900 mb-3">Contact Information</h3>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-gray-500" />
-                          <span>support@healthinsura360.com</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Phone className="w-4 h-4 text-gray-500" />
-                          <span>+1 (800) 123-4567</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Globe className="w-4 h-4 text-gray-500" />
-                          <span>www.healthinsura360.com</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
-                      <HelpCircle className="w-5 h-5" />
-                      Help & Support
-                    </h3>
-                    <p className="text-gray-600 mb-3">
-                      Need assistance? Our support team is available 24/7 to help you.
-                    </p>
-                    <div className="flex gap-3">
-                      <a
-                        href="/support"
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        Contact Support
-                      </a>
-                      <a
-                        href="/documentation"
-                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        View Documentation
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="text-center text-gray-500 text-sm pt-4 border-t">
-                    <p>© 2025 HealthInsura360. All rights reserved.</p>
-                    <p className="mt-1">Built with ❤️ for better healthcare management</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
           </div>
         </div>
       </div>
@@ -3605,25 +2586,34 @@ function PoliciesManagement() {
     </div>
   );
 }
-
 function Reports() {
-  const [selectedReport, setSelectedReport] = useState('monthly');
+  const [selectedReport, setSelectedReport] = useState('user');
   const [dateRange, setDateRange] = useState('last-30-days');
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const reports = [
-    { id: 'monthly', name: 'Monthly Performance', icon: Activity, chartType: 'line' },
-    { id: 'financial', name: 'Financial Summary', icon: DollarSign, chartType: 'bar' },
-    { id: 'claims', name: 'Claims Analysis', icon: FileBarChart, chartType: 'pie' },
-    { id: 'user', name: 'User Growth', icon: TrendingUp, chartType: 'line' },
-    { id: 'agent', name: 'Agent Performance', icon: UsersIcon, chartType: 'bar' },
-    { id: 'hospital', name: 'Hospital Network', icon: Building, chartType: 'doughnut' },
-  ];
+  const reports = useMemo(() => [
+    { id: 'monthly', name: 'Monthly Performance', icon: Activity, chartType: 'line', active: false },
+    { id: 'financial', name: 'Financial Summary', icon: DollarSign, chartType: 'bar', active: false },
+    { id: 'claims', name: 'Claims Analysis', icon: FileBarChart, chartType: 'pie', active: false },
+    { id: 'user', name: 'User Growth', icon: TrendingUp, chartType: 'line', active: true },
+    { id: 'agent', name: 'Agent Performance', icon: UsersIcon, chartType: 'bar', active: false },
+    { id: 'hospital', name: 'Hospital Network', icon: Building, chartType: 'doughnut', active: true },
+  ], []);
 
-  // Fetch report data - useCallback to avoid dependency issues
+  // Fetch report data
   const fetchReport = useCallback(async () => {
+    const currentReport = reports.find(r => r.id === selectedReport);
+    
+    // Only fetch for active reports
+    if (!currentReport?.active) {
+      setError(`${currentReport?.name} report is currently inactive`);
+      setReportData(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -3648,10 +2638,17 @@ function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [selectedReport, dateRange]); // Add dependencies here
+  }, [selectedReport, dateRange, reports]);
 
   // Export report
   const exportReport = async (format = 'pdf') => {
+    const currentReport = reports.find(r => r.id === selectedReport);
+    
+    if (!currentReport?.active) {
+      alert(`${currentReport?.name} report export is currently inactive`);
+      return;
+    }
+
     try {
       const config = getAxiosConfig();
       const response = await axios.get(
@@ -3671,7 +2668,6 @@ function Reports() {
       const link = document.createElement('a');
       link.href = url;
       
-      const currentReport = reports.find(r => r.id === selectedReport);
       const fileName = `${currentReport?.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${format}`;
       link.setAttribute('download', fileName);
       document.body.appendChild(link);
@@ -3685,142 +2681,285 @@ function Reports() {
     }
   };
 
-  // Generate sample data for demonstration
-  const getSampleChartData = () => {
-    const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+  // Generate chart data from API response - updated with better error handling
+  const getChartData = useCallback(() => {
+    if (!reportData) return null;
     
     switch (selectedReport) {
-      case 'monthly':
       case 'user':
+        // Ensure we have valid data arrays
+        const userLabels = reportData.labels || [];
+        const userData = reportData.data || [];
+        const cumulativeData = reportData.cumulativeData || [];
+        
+        // If no data, return null
+        if (userLabels.length === 0 || userData.length === 0) {
+          console.log('⚠️ No user growth data available');
+          return null;
+        }
+        
         return {
-          labels,
+          labels: userLabels,
           datasets: [
             {
-              label: 'Performance',
-              data: [65, 78, 66, 72, 80, 85, 92],
+              label: 'New Users',
+              data: userData,
               borderColor: 'rgb(59, 130, 246)',
               backgroundColor: 'rgba(59, 130, 246, 0.1)',
               tension: 0.4,
-            }
-          ]
-        };
-      case 'financial':
-      case 'agent':
-        return {
-          labels,
-          datasets: [
+              fill: true,
+            },
             {
-              label: 'Revenue ($)',
-              data: [12000, 19000, 15000, 25000, 22000, 30000, 28000],
-              backgroundColor: 'rgba(34, 197, 94, 0.8)',
+              label: 'Total Users',
+              data: cumulativeData.length > 0 ? cumulativeData : userData,
+              borderColor: 'rgb(34, 197, 94)',
+              backgroundColor: 'rgba(34, 197, 94, 0.1)',
+              tension: 0.4,
+              borderDash: [5, 5],
+              fill: false,
             }
           ]
         };
-      case 'claims':
-        return {
-          labels: ['Approved', 'Pending', 'Rejected', 'Under Review'],
-          datasets: [
-            {
-              label: 'Claims Status',
-              data: [65, 15, 10, 10],
-              backgroundColor: [
-                'rgba(34, 197, 94, 0.8)',
-                'rgba(234, 179, 8, 0.8)',
-                'rgba(239, 68, 68, 0.8)',
-                'rgba(59, 130, 246, 0.8)'
-              ],
-            }
-          ]
-        };
+        
       case 'hospital':
+        // Ensure we have valid data arrays
+        const hospitalLabels = reportData.labels || [];
+        const hospitalData = reportData.data || [];
+        
+        // If no data, return null
+        if (hospitalLabels.length === 0 || hospitalData.length === 0) {
+          console.log('⚠️ No hospital network data available');
+          return null;
+        }
+        
+        const backgroundColors = [
+          'rgba(34, 197, 94, 0.8)',    // Green for verified
+          'rgba(59, 130, 246, 0.8)',   // Blue for active
+          'rgba(234, 179, 8, 0.8)',    // Yellow for pending
+          'rgba(239, 68, 68, 0.8)',    // Red for inactive
+          'rgba(168, 85, 247, 0.8)',   // Purple for others
+        ];
+        
         return {
-          labels: ['Verified', 'Pending', 'Active', 'Inactive'],
+          labels: hospitalLabels,
           datasets: [
             {
-              label: 'Hospital Status',
-              data: [45, 20, 25, 10],
-              backgroundColor: [
-                'rgba(34, 197, 94, 0.8)',
-                'rgba(234, 179, 8, 0.8)',
-                'rgba(59, 130, 246, 0.8)',
-                'rgba(107, 114, 128, 0.8)'
-              ],
+              label: 'Hospital Count',
+              data: hospitalData,
+              backgroundColor: backgroundColors.slice(0, hospitalLabels.length),
+              borderColor: backgroundColors.slice(0, hospitalLabels.length).map(color => 
+                color.replace('0.8', '1')
+              ),
+              borderWidth: 2,
+              hoverOffset: 15,
             }
           ]
         };
+        
       default:
         return null;
     }
-  };
+  }, [reportData, selectedReport]);
 
-  // Get chart options
-  const getChartOptions = () => {
-    const currentReport = reports.find(r => r.id === selectedReport); // Get currentReport here
+  // Get chart options - updated with better styling
+  const getChartOptions = useCallback(() => {
+    const currentReport = reports.find(r => r.id === selectedReport);
     
-    return {
+    const baseOptions = {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: {
           position: 'top',
+          labels: {
+            font: {
+              size: 12
+            },
+            padding: 20,
+            usePointStyle: true,
+          }
         },
         title: {
           display: true,
-          text: currentReport?.name, // Use currentReport here
+          text: currentReport?.name || 'Report',
           font: {
-            size: 16
+            size: 16,
+            weight: 'bold'
+          },
+          padding: {
+            top: 10,
+            bottom: 30
           }
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          titleColor: '#111827',
+          bodyColor: '#374151',
+          borderColor: '#e5e7eb',
+          borderWidth: 1,
+          padding: 12,
+          boxPadding: 6,
         },
       },
-      scales: selectedReport === 'claims' || selectedReport === 'hospital' ? {} : {
-        y: {
-          beginAtZero: true,
-          grid: {
-            color: 'rgba(0, 0, 0, 0.05)',
-          }
-        },
-        x: {
-          grid: {
-            color: 'rgba(0, 0, 0, 0.05)',
+      interaction: {
+        mode: 'nearest',
+        axis: 'x',
+        intersect: false
+      },
+    };
+
+    if (selectedReport === 'hospital') {
+      // Doughnut chart options
+      return {
+        ...baseOptions,
+        cutout: '60%',
+        plugins: {
+          ...baseOptions.plugins,
+          legend: {
+            position: 'right',
+            labels: {
+              font: {
+                size: 11
+              },
+              padding: 10,
+              usePointStyle: true,
+            }
+          },
+        }
+      };
+    } else {
+      // Line chart options (for user growth)
+      return {
+        ...baseOptions,
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: selectedReport === 'user' ? 'Number of Users' : 'Count',
+              font: {
+                size: 12,
+                weight: 'bold'
+              }
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)',
+            },
+            ticks: {
+              callback: function(value) {
+                return value.toLocaleString();
+              },
+              font: {
+                size: 11
+              }
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: selectedReport === 'user' ? 'Time Period' : 'Categories',
+              font: {
+                size: 12,
+                weight: 'bold'
+              }
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)',
+            },
+            ticks: {
+              font: {
+                size: 11
+              }
+            }
           }
         }
-      }
-    };
-  };
+      };
+    }
+  }, [reports, selectedReport]);
 
   useEffect(() => {
     fetchReport();
-  }, [fetchReport]); // Now fetchReport is a dependency, properly memoized with useCallback
+  }, [fetchReport]);
 
-  // Render appropriate chart component
+  // Render appropriate chart component - updated with fallback
   const renderChart = () => {
-    if (!reportData) return null;
+    if (!reportData) {
+      console.log('❌ No report data available');
+      return null;
+    }
     
-    const currentReport = reports.find(r => r.id === selectedReport);
-    const chartData = reportData.chartData || getSampleChartData();
+    const chartData = getChartData();
     const options = getChartOptions();
 
-    if (!chartData) return null;
+    if (!chartData) {
+      console.log('❌ Chart data generation failed');
+      return (
+        <div className="h-full flex flex-col items-center justify-center p-4">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <BarChart3 className="h-8 w-8 text-gray-400" />
+          </div>
+          <p className="text-gray-600 mb-2">No chart data available</p>
+          <p className="text-sm text-gray-500 text-center">
+            The report data exists but cannot be displayed as a chart.<br />
+            Check the summary section for details.
+          </p>
+        </div>
+      );
+    }
 
-    switch (currentReport?.chartType) {
-      case 'line':
-        return <LineChart data={chartData} options={options} />;
-      case 'bar':
-        return <Bar data={chartData} options={options} />;
-      case 'pie':
-        return <Pie data={chartData} options={options} />;
-      case 'doughnut':
-        return <Donut data={chartData} options={options} />;
-      default:
-        return <Bar data={chartData} options={options} />;
+    console.log('📊 Rendering chart for:', selectedReport);
+    console.log('📊 Chart data structure:', chartData);
+
+    try {
+      switch (selectedReport) {
+        case 'user':
+          return <LineChart data={chartData} options={options} />;
+        case 'hospital':
+          return <DonutChart data={chartData} options={options} />;
+        default:
+          // For inactive reports, show placeholder
+          return (
+            <div className="h-full flex flex-col items-center justify-center p-4">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <AlertCircle className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="text-gray-600 mb-2">Chart Preview Unavailable</p>
+              <p className="text-sm text-gray-500 text-center">
+                This report type is currently inactive.<br />
+                Only User Growth and Hospital Network reports are active.
+              </p>
+            </div>
+          );
+      }
+    } catch (error) {
+      console.error('❌ Chart rendering error:', error);
+      return (
+        <div className="h-full flex flex-col items-center justify-center p-4">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+            <AlertCircle className="h-8 w-8 text-red-400" />
+          </div>
+          <p className="text-red-600 mb-2">Error rendering chart</p>
+          <p className="text-sm text-red-500 text-center">{error.message}</p>
+        </div>
+      );
     }
   };
 
-  // Get the current report name for the header
-  const getCurrentReportName = () => {
-    const currentReport = reports.find(r => r.id === selectedReport);
-    return currentReport?.name || 'Report';
-  };
+  // Add debug logging to see what data we're receiving
+  useEffect(() => {
+    if (reportData) {
+      console.log('📊 Report Data Structure:', {
+        hasData: !!reportData,
+        labels: reportData.labels,
+        data: reportData.data,
+        cumulativeData: reportData.cumulativeData,
+        summary: reportData.summary,
+        reportType: selectedReport
+      });
+    }
+  }, [reportData, selectedReport]);
 
   return (
     <div className="p-8">
@@ -3829,6 +2968,7 @@ function Reports() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Reports & Analytics</h1>
           <p className="text-gray-600">Generate and view comprehensive system reports</p>
+          <p className="text-sm text-yellow-600 mt-1">⚠️ Only User Growth and Hospital Network reports are active</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <select 
@@ -3840,12 +2980,13 @@ function Reports() {
             <option value="last-30-days">Last 30 Days</option>
             <option value="last-quarter">Last Quarter (90 Days)</option>
             <option value="last-year">Last Year</option>
-            <option value="custom">Custom Range</option>
+            <option value="all-time">All Time</option>
           </select>
 
           <button
             onClick={() => exportReport('pdf')}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            disabled={loading || !reports.find(r => r.id === selectedReport)?.active}
           >
             <Download className="h-5 w-5" />
             Export Report
@@ -3863,23 +3004,34 @@ function Reports() {
               onClick={() => setSelectedReport(report.id)}
               className={`p-4 rounded-xl border transition-all duration-200 ${
                 selectedReport === report.id
-                  ? 'bg-blue-50 border-blue-200 shadow-sm'
-                  : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                  ? report.active 
+                    ? 'bg-blue-50 border-blue-200 shadow-sm' 
+                    : 'bg-gray-100 border-gray-300 shadow-sm'
+                  : report.active
+                    ? 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                    : 'bg-gray-50 border-gray-200 opacity-70 cursor-not-allowed'
               }`}
+              disabled={!report.active}
             >
               <div className="flex items-center gap-4">
                 <div
                   className={`p-3 rounded-lg ${
                     selectedReport === report.id 
-                      ? 'bg-blue-100 text-blue-600' 
-                      : 'bg-gray-100 text-gray-600'
+                      ? report.active 
+                        ? 'bg-blue-100 text-blue-600' 
+                        : 'bg-gray-200 text-gray-600'
+                      : report.active
+                        ? 'bg-gray-100 text-gray-600'
+                        : 'bg-gray-200 text-gray-400'
                   }`}
                 >
                   <Icon className="h-6 w-6" />
                 </div>
                 <div className="text-left">
                   <h3 className="font-medium text-gray-900">{report.name}</h3>
-                  <p className="text-sm text-gray-600 mt-1">View detailed analytics</p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {report.active ? 'View detailed analytics' : 'Currently inactive'}
+                  </p>
                 </div>
               </div>
             </button>
@@ -3901,7 +3053,7 @@ function Reports() {
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <h3 className="text-lg font-semibold text-gray-900">
-            {getCurrentReportName()} Report
+            {reports.find(r => r.id === selectedReport)?.name || 'Report'} Report
             {dateRange && (
               <span className="text-sm font-normal text-gray-600 ml-2">
                 ({dateRange.replace(/-/g, ' ')})
@@ -3913,9 +3065,11 @@ function Reports() {
             <span className={`px-2 py-1 text-xs rounded-full ${
               loading 
                 ? 'bg-yellow-100 text-yellow-800' 
-                : 'bg-green-100 text-green-800'
+                : reports.find(r => r.id === selectedReport)?.active
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-gray-100 text-gray-800'
             }`}>
-              {loading ? 'Loading...' : 'Live Data'}
+              {loading ? 'Loading...' : reports.find(r => r.id === selectedReport)?.active ? 'Active Report' : 'Inactive Report'}
             </span>
           </div>
         </div>
@@ -3935,8 +3089,16 @@ function Reports() {
           <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center">
             <div className="text-center">
               <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 mb-2">No report data available</p>
-              <p className="text-sm text-gray-500">Select a report type to generate data</p>
+              <p className="text-gray-600 mb-2">
+                {reports.find(r => r.id === selectedReport)?.active 
+                  ? 'No report data available' 
+                  : 'This report is currently inactive'}
+              </p>
+              <p className="text-sm text-gray-500">
+                {reports.find(r => r.id === selectedReport)?.active 
+                  ? 'Select an active report type to generate data' 
+                  : 'Please select User Growth or Hospital Network for active reports'}
+              </p>
             </div>
           </div>
         )}
@@ -3957,241 +3119,86 @@ function Reports() {
         )}
 
         {/* Actions */}
-        <div className="flex flex-wrap gap-3 mt-6 pt-6 border-t">
-          <button
-            onClick={fetchReport}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Refreshing...' : 'Refresh Data'}
-          </button>
+        {reports.find(r => r.id === selectedReport)?.active && (
+          <div className="flex flex-wrap gap-3 mt-6 pt-6 border-t">
+            <button
+              onClick={fetchReport}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Refreshing...' : 'Refresh Data'}
+            </button>
 
-          <button
-            onClick={() => exportReport('pdf')}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <FileText className="h-5 w-5" />
-            Download PDF
-          </button>
+            <button
+              onClick={() => exportReport('pdf')}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <FileText className="h-5 w-5" />
+              Download PDF
+            </button>
 
-          <button
-            onClick={() => exportReport('csv')}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Table className="h-5 w-5" />
-            Export CSV
-          </button>
+            <button
+              onClick={() => exportReport('csv')}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Table className="h-5 w-5" />
+              Export CSV
+            </button>
 
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Printer className="h-5 w-5" />
-            Print Report
-          </button>
-        </div>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Printer className="h-5 w-5" />
+              Print Report
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-        <div className="bg-white p-4 rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Report Generated</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {reportData?.generatedAt ? new Date(reportData.generatedAt).toLocaleDateString() : 'N/A'}
-            </p>
-            </div>
-            <Calendar className="h-8 w-8 text-blue-600" />
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Data Points</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {reportData?.dataPoints || '0'}
-              </p>
-            </div>
-            <Database className="h-8 w-8 text-green-600" />
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Export Formats</p>
-              <p className="text-2xl font-bold text-gray-900">3</p>
-            </div>
-            <Download className="h-8 w-8 text-purple-600" />
-          </div>
-        </div>
-      </div>
+      {/* Debug button - only shows in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <button
+          onClick={() => {
+            // Test with sample data to verify charts work
+            const sampleData = selectedReport === 'user' ? {
+              labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+              data: [65, 59, 80, 81, 56, 55],
+              cumulativeData: [65, 124, 204, 285, 341, 396],
+              summary: {
+                total_customers: 396,
+                new_last_30_days: 55,
+                active_customers: 350,
+                male_customers: 210,
+                female_customers: 186,
+                senior_customers: 45,
+                top_city: 'New York'
+              }
+            } : {
+              labels: ['Verified', 'Active', 'Pending', 'Inactive'],
+              data: [45, 38, 12, 5],
+              summary: {
+                total_hospitals: 100,
+                verified_hospitals: 45,
+                active_hospitals: 38,
+                new_last_30_days: 8,
+                cities_covered: 25,
+                states_covered: 12,
+                top_city: 'New York'
+              }
+            };
+            setReportData(sampleData);
+            console.log('✅ Test data loaded for:', selectedReport);
+          }}
+          className="fixed bottom-4 right-4 px-3 py-2 bg-purple-600 text-white text-sm rounded-lg shadow-lg z-50 hover:bg-purple-700"
+        >
+          Load Test Data
+        </button>
+      )}
     </div>
   );
 }
-
-// // 4. Analytics Dashboard Component
-// function AnalyticsDashboard() {
-//   const [timeRange, setTimeRange] = useState('monthly');
-  
-//   const analyticsData = {
-//     monthly: [
-//       { month: 'Jan', users: 4000, revenue: 2400, claims: 240 },
-//       { month: 'Feb', users: 3000, revenue: 1398, claims: 221 },
-//       { month: 'Mar', users: 2000, revenue: 9800, claims: 229 },
-//       { month: 'Apr', users: 2780, revenue: 3908, claims: 200 },
-//       { month: 'May', users: 1890, revenue: 4800, claims: 218 },
-//       { month: 'Jun', users: 2390, revenue: 3800, claims: 250 },
-//     ],
-//     weekly: [
-//       { week: 'Week 1', users: 1000, revenue: 800, claims: 60 },
-//       { week: 'Week 2', users: 1200, revenue: 900, claims: 70 },
-//       { week: 'Week 3', users: 800, revenue: 600, claims: 50 },
-//       { week: 'Week 4', users: 1500, revenue: 1100, claims: 80 },
-//     ]
-//   };
-
-//   const metrics = [
-//     { label: 'Total Users', value: '45,892', change: '+12.5%', isPositive: true, icon: Users },
-//     { label: 'Monthly Revenue', value: '$2.4M', change: '+8.2%', isPositive: true, icon: DollarSign },
-//     { label: 'Active Claims', value: '1,247', change: '-3.1%', isPositive: false, icon: FileText },
-//     { label: 'Avg. Claim Time', value: '2.4 days', change: '-0.5%', isPositive: true, icon: Clock },
-//   ];
-
-//   const distributionData = [
-//     { name: 'Basic Plan', value: 400, color: '#3b82f6' },
-//     { name: 'Standard Plan', value: 300, color: '#10b981' },
-//     { name: 'Premium Plan', value: 200, color: '#8b5cf6' },
-//     { name: 'Custom Plan', value: 100, color: '#f59e0b' },
-//   ];
-
-//   return (
-//     <div className="p-8">
-//       <div className="flex items-center justify-between mb-8">
-//         <div>
-//           <h1 className="text-2xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
-//           <p className="text-gray-600">Real-time insights and performance metrics</p>
-//         </div>
-//         <select 
-//           className="px-4 py-2 border border-gray-300 rounded-lg"
-//           value={timeRange}
-//           onChange={(e) => setTimeRange(e.target.value)}
-//         >
-//           <option value="weekly">Weekly</option>
-//           <option value="monthly">Monthly</option>
-//           <option value="quarterly">Quarterly</option>
-//           <option value="yearly">Yearly</option>
-//         </select>
-//       </div>
-
-//       {/* Metrics Grid */}
-//       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-//         {metrics.map((metric, index) => {
-//           const Icon = metric.icon;
-//           return (
-//             <div key={index} className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-//               <div className="flex items-center justify-between mb-4">
-//                 <div className={`w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center`}>
-//                   <Icon className="h-6 w-6 text-blue-600" />
-//                 </div>
-//                 <div className={`flex items-center gap-1 ${metric.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-//                   {metric.isPositive ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-//                   <span className="text-sm">{metric.change}</span>
-//                 </div>
-//               </div>
-//               <div className="text-gray-600 text-sm mb-1">{metric.label}</div>
-//               <div className="text-2xl font-bold text-gray-900">{metric.value}</div>
-//             </div>
-//           );
-//         })}
-//       </div>
-
-//       {/* Charts */}
-//       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-//         {/* User Growth Chart */}
-//         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-//           <h3 className="text-lg font-semibold text-gray-900 mb-4">User Growth Trend</h3>
-//           <ResponsiveContainer width="100%" height={300}>
-//             <AreaChart data={analyticsData[timeRange]}>
-//               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//               <XAxis dataKey={timeRange === 'monthly' ? 'month' : 'week'} stroke="#6b7280" />
-//               <YAxis stroke="#6b7280" />
-//               <Tooltip />
-//               <Area type="monotone" dataKey="users" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
-//             </AreaChart>
-//           </ResponsiveContainer>
-//         </div>
-
-//         {/* Revenue Chart */}
-//         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-//           <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Overview</h3>
-//           <ResponsiveContainer width="100%" height={300}>
-//             <BarChart data={analyticsData[timeRange]}>
-//               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//               <XAxis dataKey={timeRange === 'monthly' ? 'month' : 'week'} stroke="#6b7280" />
-//               <YAxis stroke="#6b7280" />
-//               <Tooltip />
-//               <Bar dataKey="revenue" fill="#10b981" />
-//             </BarChart>
-//           </ResponsiveContainer>
-//         </div>
-//       </div>
-
-//       {/* Distribution & Activity */}
-//       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-//         {/* Plan Distribution */}
-//         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-//           <h3 className="text-lg font-semibold text-gray-900 mb-4">Plan Distribution</h3>
-//           <ResponsiveContainer width="100%" height={250}>
-//             <PieChart>
-//               <Pie
-//                 data={distributionData}
-//                 cx="50%"
-//                 cy="50%"
-//                 labelLine={false}
-//                 label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-//                 outerRadius={80}
-//                 fill="#8884d8"
-//                 dataKey="value"
-//               >
-//                 {distributionData.map((entry, index) => (
-//                   <Cell key={`cell-${index}`} fill={entry.color} />
-//                 ))}
-//               </Pie>
-//               <Tooltip />
-//             </PieChart>
-//           </ResponsiveContainer>
-//         </div>
-
-//         {/* Recent Activity */}
-//         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-//           <h3 className="text-lg font-semibold text-gray-900 mb-4">System Activity</h3>
-//           <div className="space-y-4">
-//             {[
-//               { action: 'New user registered', time: '5 min ago', user: 'John Smith' },
-//               { action: 'Claim approved', time: '15 min ago', user: 'Sarah Johnson' },
-//               { action: 'Payment processed', time: '30 min ago', user: 'Mike Chen' },
-//               { action: 'Agent commission updated', time: '1 hour ago', user: 'David Wilson' },
-//               { action: 'Hospital verified', time: '2 hours ago', user: 'City General' },
-//             ].map((activity, index) => (
-//               <div key={index} className="flex items-start gap-3 pb-3 border-b border-gray-100 last:border-0">
-//                 <div className="w-2 h-2 bg-blue-600 rounded-full mt-2"></div>
-//                 <div className="flex-1">
-//                   <p className="text-gray-900 font-medium">{activity.action}</p>
-//                   <p className="text-gray-600 text-sm">{activity.user}</p>
-//                   <p className="text-gray-500 text-xs">{activity.time}</p>
-//                 </div>
-//               </div>
-//             ))}
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
 
 function AnalyticsDashboard() {
   const [timeRange, setTimeRange] = useState('monthly');
@@ -4390,213 +3397,6 @@ function AnalyticsDashboard() {
 
   // Add colors for pie chart
   const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'];
-
-//   // Main content
-//   const mainContent = useMemo(() => {
-//     if (loading) return loadingContent;
-    
-//     return (
-//       <div className="p-4 md:p-8">
-//         {/* Header */}
-//         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
-//           <div>
-//             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
-//             <p className="text-gray-600">Insurance platform performance metrics</p>
-//           </div>
-//           {error && (
-//             <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
-//               <p className="text-yellow-700 text-sm">⚠️ Using sample data: {error}</p>
-//             </div>
-//           )}
-//         </div>
-
-//         {/* Date Range Picker */}
-//         <div className="mb-6">
-//           <DateRangePicker 
-//             onDateChange={handleDateRangeChange}
-//             defaultRange={timeRange}
-//           />
-//         </div>
-
-//         {/* Metrics Grid */}
-//         <div className="mb-8">
-//           <div className="flex items-center justify-between mb-4">
-//             <h2 className="text-lg font-semibold text-gray-900">Key Metrics</h2>
-//             <span className="text-sm text-gray-500">
-//               {analyticsData ? 'Real-time data' : 'Sample data'}
-//             </span>
-//           </div>
-//           <MetricsGrid metrics={getMetrics()} />
-//         </div>
-
-//         {/* Charts Section */}
-//         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-//           {/* User Growth Chart */}
-//           <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm border border-gray-200">
-//             <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Growth</h3>
-//             {analyticsData?.trends?.userGrowth && analyticsData.trends.userGrowth.length > 0 ? (
-//               <ResponsiveContainer width="100%" height={300}>
-//                 <AreaChart data={analyticsData.trends.userGrowth}>
-//                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//                   <XAxis dataKey="period" stroke="#6b7280" fontSize={12} />
-//                   <YAxis stroke="#6b7280" fontSize={12} />
-//                   <Tooltip 
-//                     formatter={(value) => [value, 'Customers']}
-//                     labelStyle={{ color: '#374151' }}
-//                   />
-//                   <Area 
-//                     type="monotone" 
-//                     dataKey="count" 
-//                     stroke="#3b82f6" 
-//                     fill="#3b82f6" 
-//                     fillOpacity={0.2}
-//                     name="Customers"
-//                   />
-//                 </AreaChart>
-//               </ResponsiveContainer>
-//             ) : (
-//               <div className="h-[300px] flex items-center justify-center text-gray-500">
-//                 No customer growth data available
-//               </div>
-//             )}
-//           </div>
-
-//           {/* Revenue Chart */}
-//           <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm border border-gray-200">
-//             <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Trends</h3>
-//             {analyticsData?.trends?.revenueData && analyticsData.trends.revenueData.length > 0 ? (
-//               <ResponsiveContainer width="100%" height={300}>
-//                 <BarChart data={analyticsData.trends.revenueData}>
-//                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//                   <XAxis dataKey="period" stroke="#6b7280" fontSize={12} />
-//                   <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(value) => formatCurrency(value)} />
-//                   <Tooltip 
-//                     formatter={(value) => [formatCurrency(value), 'Revenue']}
-//                     labelStyle={{ color: '#374151' }}
-//                   />
-//                   <Bar dataKey="revenue" fill="#10b981" name="Revenue" radius={[4, 4, 0, 0]} />
-//                 </BarChart>
-//               </ResponsiveContainer>
-//             ) : (
-//               <div className="h-[300px] flex items-center justify-center text-gray-500">
-//                 No revenue data available
-//               </div>
-//             )}
-//           </div>
-//         </div>
-
-//         {/* Bottom Section */}
-//         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-//           {/* Plan Distribution */}
-//           <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm border border-gray-200">
-//             <div className="flex items-center justify-between mb-4">
-//               <h3 className="text-lg font-semibold text-gray-900">Plan Distribution</h3>
-//               <span className="text-sm text-gray-500">
-//                 {analyticsData?.distribution?.length || 0} plans
-//               </span>
-//             </div>
-//             {analyticsData?.distribution && analyticsData.distribution.length > 0 ? (
-//               <ResponsiveContainer width="100%" height={250}>
-//                 <PieChart>
-//                   <Pie
-//                     data={analyticsData.distribution}
-//                     cx="50%"
-//                     cy="50%"
-//                     labelLine={false}
-//                     label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-//                     outerRadius={80}
-//                     fill="#8884d8"
-//                     dataKey="value"
-//                   >
-//                     {analyticsData.distribution.map((entry, index) => (
-//                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-//                     ))}
-//                   </Pie>
-//                   <Tooltip formatter={(value) => [value, 'Policies']} />
-//                 </PieChart>
-//               </ResponsiveContainer>
-//             ) : (
-//               <div className="h-[250px] flex flex-col items-center justify-center text-gray-500">
-//                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-//                   <Shield className="h-8 w-8 text-gray-400" />
-//                 </div>
-//                 <p>No policy distribution data</p>
-//                 <p className="text-sm mt-1">Add policies to see distribution</p>
-//               </div>
-//             )}
-//           </div>
-
-//           {/* Recent Activity */}
-//           <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm border border-gray-200">
-//             <div className="flex items-center justify-between mb-4">
-//               <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
-//               <span className="text-sm text-gray-500">
-//                 Last {analyticsData?.activity?.length || 0} activities
-//               </span>
-//             </div>
-//             <div className="space-y-4 max-h-[250px] overflow-y-auto pr-2">
-//               {analyticsData?.activity && analyticsData.activity.length > 0 ? (
-//                 analyticsData.activity.map((activity, index) => (
-//                   <div key={index} className="flex items-start gap-3 pb-3 border-b border-gray-100 last:border-0">
-//                     <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-//                       activity.entity_type === 'customer' ? 'bg-blue-500' :
-//                       activity.entity_type === 'policy' ? 'bg-green-500' :
-//                       activity.entity_type === 'claim' ? 'bg-yellow-500' :
-//                       'bg-gray-500'
-//                     }`}></div>
-//                     <div className="flex-1 min-w-0">
-//                       <p className="text-gray-900 font-medium truncate">{activity.description}</p>
-//                       <div className="flex items-center gap-2 text-sm">
-//                         <span className="text-gray-600 truncate">{activity.user_name}</span>
-//                         <span className="text-gray-500">•</span>
-//                         <span className="text-gray-500 capitalize">{activity.entity_type}</span>
-//                       </div>
-//                       <p className="text-gray-500 text-xs">
-//                         {new Date(activity.created_at).toLocaleDateString()} •{' '}
-//                         {new Date(activity.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-//                       </p>
-//                     </div>
-//                   </div>
-//                 ))
-//               ) : (
-//                 <div className="h-[200px] flex flex-col items-center justify-center text-gray-500">
-//                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-//                     <FileText className="h-8 w-8 text-gray-400" />
-//                   </div>
-//                   <p>No recent activity</p>
-//                   <p className="text-sm mt-1">Activities will appear here</p>
-//                 </div>
-//               )}
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Data Last Updated & Status */}
-//         <div className="mt-6 flex flex-col md:flex-row items-center justify-between text-gray-500 text-sm">
-//           <div>
-//             Data last updated: {new Date().toLocaleString()}
-//           </div>
-//           <div className="flex items-center gap-4 mt-2 md:mt-0">
-//             <div className="flex items-center gap-2">
-//               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-//               <span>Real data: {analyticsData ? '✓' : '✗'}</span>
-//             </div>
-//             <div className="flex items-center gap-2">
-//               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-//               <span>Time range: {timeRange}</span>
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-//     );
-//   }, [
-//     loading, error, loadingContent, errorContent, 
-//     handleDateRangeChange, timeRange, getMetrics, 
-//     analyticsData, formatCurrency, COLORS
-//   ]);
-
-//   return mainContent;
-// }
   // Main content
   const mainContent = useMemo(() => {
     if (loading) return loadingContent;
@@ -4727,7 +3527,6 @@ function AnalyticsDashboard() {
                   <Shield className="h-8 w-8 text-gray-400" />
                 </div>
                 <p>No policy distribution data</p>
-                <p className="text-sm mt-1">Add policies to see distribution</p>
               </div>
             )}
           </div>
@@ -4796,9 +3595,9 @@ function AnalyticsDashboard() {
       </div>
     );
   }, [
-    loading, error, loadingContent, errorContent, 
+    loading, error, loadingContent, 
     handleDateRangeChange, timeRange, getMetrics, 
-    analyticsData, COLORS,formatCurrency
+    analyticsData, COLORS,formatCurrency,
   ]);
 
   return mainContent;
@@ -6746,7 +5545,6 @@ function DashboardSidebar({
     { id: 'payments', label: 'Payments', icon: CreditCardIcon },
     { id: 'commissions', label: 'Commissions', icon: Percent },
     { id: 'hospitals', label: 'Hospitals', icon: Hospital },
-    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const handleLogout = () => {
@@ -6865,7 +5663,8 @@ export function AdminDashboard() {
       case 'hospitals':
         return <HospitalNetwork />;
       case 'settings':
-        return <SettingsPanel />;
+      //  return <SettingsPanel />;
+      break;
       default:
         return <DashboardOverview />;
     }
