@@ -1,6 +1,6 @@
 // utils/auditlogger.js
 import axios from 'axios';
-import { API_BASE_URL, getAxiosConfig } from './config';
+import { API_BASE_URL, getAxiosConfig } from '../config';
 
 export const logAuditAction = async (action, entity, entity_id) => { // ✅ Only 3 parameters
   try {

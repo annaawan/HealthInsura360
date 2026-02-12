@@ -1,5 +1,5 @@
 import React from 'react';
-import Logo from "../assets/HealthInsura360.png";
+import Logo from "../../assets/HealthInsura360.png"; 
 import { LayoutDashboard, Users, Shield, FileBarChart, Activity, Archive, CreditCard as CreditCardIcon, Percent, Hospital, LogOut, Menu } from 'lucide-react';
 
 function DashboardSidebar({ currentView, onViewChange, isOpen, onToggle }) {

@@ -1,9 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect} from 'react';
 import axios from 'axios';
-import { RefreshCw, Download, Search, Filter, User, FileText, Calendar, XCircle, AlertCircle } from 'lucide-react';
 import { API_BASE_URL, getAxiosConfig } from '../../config';
 
-// 5. Audit Logs Component
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
+// Icons from lucide-react
+import { 
+  FileText, 
+  Search,
+  Filter,
+  Download,
+  RefreshCw,
+  User,
+  XCircle,
+ Calendar
+} from 'lucide-react';
+
+
+// Register Chart.js plugins
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
+
+
+
 function AuditLogs() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);

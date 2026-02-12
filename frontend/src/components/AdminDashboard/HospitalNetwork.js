@@ -1,8 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Plus, Building, Mail, Check, Clock, Eye, Edit, Trash2, XCircle, Save } from 'lucide-react';
+
+import React, { useState, useEffect} from 'react';
 import { API_BASE_URL, getAxiosConfig } from '../../config';
-// Hospital Network Component with Validations
+import axios from 'axios';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
+// Icons from lucide-react
+import { 
+  Plus,
+  Check, 
+  Edit, 
+  Building, 
+  Mail,
+  Trash2,
+  Clock,
+  Eye,
+  XCircle,
+  Save
+
+} from 'lucide-react';
+
+
+// Register Chart.js plugins
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
+
+
 function HospitalNetwork() {
   const [hospitals, setHospitals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -927,5 +947,4 @@ function HospitalNetwork() {
     </div>
   );
 }
-
 export default HospitalNetwork;

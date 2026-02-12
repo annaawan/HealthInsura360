@@ -1,6 +1,19 @@
-import React, { useState } from 'react';
-import { Download, CreditCard as CreditCardIcon, Eye, Check } from 'lucide-react';
-// 7. Payment Transactions Component
+import React, { useState} from 'react';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
+// Icons from lucide-react
+import { 
+  Check, 
+  Download,
+  CreditCard as CreditCardIcon,
+ Eye
+} from 'lucide-react';
+
+
+// Register Chart.js plugins
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
+
+
+
 function PaymentTransactions() {
   const [transactions] = useState([
     { id: 'TXN001', user: 'John Smith', amount: 199, type: 'Premium Payment', status: 'Completed', date: '2024-01-15', method: 'Credit Card' },
@@ -124,6 +137,4 @@ function PaymentTransactions() {
     </div>
   );
 }
-
-
 export default PaymentTransactions;

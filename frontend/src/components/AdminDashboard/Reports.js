@@ -1,8 +1,31 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo} from 'react';
 import axios from 'axios';
-import { Activity, DollarSign, FileBarChart, TrendingUp, Users as UsersIcon, Building, BarChart3, AlertCircle, Download, FileText, Table, Printer, RefreshCw, Calendar } from 'lucide-react';
-import { Line as LineChart, Doughnut as DonutChart } from 'react-chartjs-2';
 import { API_BASE_URL, getAxiosConfig } from '../../config';
+
+import { Line as LineChart, Doughnut as DonutChart } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
+// Icons from lucide-react
+import { 
+  
+  Building, 
+  FileText, 
+  DollarSign,
+  TrendingUp,
+  Download,
+  FileBarChart,
+  Activity,
+  RefreshCw,
+  BarChart3,
+  Table,
+  Printer,
+  Users as UsersIcon,
+  AlertCircle,
+} from 'lucide-react';
+
+// Register Chart.js plugins
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
+
+
 function Reports() {
   const [selectedReport, setSelectedReport] = useState('user');
   const [dateRange, setDateRange] = useState('last-30-days');
@@ -616,5 +639,4 @@ function Reports() {
     </div>
   );
 }
-
 export default Reports;

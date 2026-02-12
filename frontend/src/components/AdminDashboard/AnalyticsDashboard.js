@@ -1,9 +1,37 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo} from 'react';
 import { fetchAnalyticsData } from '../../services/analyticsServices.js';
 import DateRangePicker from '../analytics/DateRangePicker.jsx';
 import MetricsGrid from '../charts/MetricsGrid.jsx';
-import { Users, DollarSign, FileText, Clock, Shield, Percent } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, Area, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
+// Icons from lucide-react
+import { 
+  Users, 
+  FileText, 
+  Shield,
+  DollarSign,
+  Percent,
+  Clock,
+} from 'lucide-react';
+
+// Chart components from recharts
+import {
+  PieChart,
+  BarChart,
+  AreaChart,
+  Area,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell,
+  ResponsiveContainer,
+  Pie
+} from 'recharts';
+
+// Register Chart.js plugins
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
+
 
 
 function AnalyticsDashboard() {
@@ -54,6 +82,51 @@ function AnalyticsDashboard() {
       setLoading(false);
     }
   }, [dateParams]);
+// Demo data fallback function
+const getDemoData = () => ({
+  metrics: {
+    total_customers: 45892,
+    total_revenue: 2400000,
+    active_claims: 1247,
+    avg_claim_time: 2.4,
+    total_policies: 32845,
+    total_commission: 456200,
+    total_agents: 150,
+    total_admins: 10
+  },
+  trends: {
+    userGrowth: [
+      { period: 'Jan', count: 4000 },
+      { period: 'Feb', count: 3000 },
+      { period: 'Mar', count: 2000 },
+      { period: 'Apr', count: 2780 },
+      { period: 'May', count: 1890 },
+      { period: 'Jun', count: 2390 },
+    ],
+    revenueData: [
+      { period: 'Jan', revenue: 2400 },
+      { period: 'Feb', revenue: 1398 },
+      { period: 'Mar', revenue: 9800 },
+      { period: 'Apr', revenue: 3908 },
+      { period: 'May', revenue: 4800 },
+      { period: 'Jun', revenue: 3800 },
+    ]
+  },
+  distribution: [
+    { name: 'Basic Health Guard', value: 400 },
+    { name: 'Premium Family Shield', value: 300 },
+    { name: 'Senior Care Plus', value: 200 },
+    { name: 'Critical Illness Protect', value: 100 },
+  ],
+  activity: [
+    { description: 'New customer registration', user_name: 'John Smith', entity_type: 'customer', created_at: new Date().toISOString() },
+    { description: 'Policy purchased', user_name: 'Sarah Johnson', entity_type: 'policy', created_at: new Date(Date.now() - 900000).toISOString() },
+    { description: 'Claim submitted', user_name: 'Mike Chen', entity_type: 'claim', created_at: new Date(Date.now() - 1800000).toISOString() },
+    { description: 'Agent commission paid', user_name: 'David Wilson', entity_type: 'agent', created_at: new Date(Date.now() - 2700000).toISOString() },
+    { description: 'Payment received', user_name: 'Emma Brown', entity_type: 'payment', created_at: new Date(Date.now() - 3600000).toISOString() },
+  ]
+});
+
 
   // Fetch analytics data
   useEffect(() => {
@@ -202,9 +275,11 @@ function AnalyticsDashboard() {
   ), [error, loadAnalyticsData]);
 
   // Add colors for pie chart
-  const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'];
+    const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'];
+
   // Main content
   const mainContent = useMemo(() => {
+
     if (loading) return loadingContent;
     
     return (
@@ -215,11 +290,11 @@ function AnalyticsDashboard() {
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
             <p className="text-gray-600">Insurance platform performance metrics</p>
           </div>
-          {error && (
+          {error && errorContent} (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
               <p className="text-yellow-700 text-sm">⚠️ Using sample data: {error}</p>
             </div>
-          )}
+          )
         </div>
 
         {/* Date Range Picker */}
@@ -402,55 +477,12 @@ function AnalyticsDashboard() {
     );
   }, [
     loading, error, loadingContent, 
-    handleDateRangeChange, timeRange, getMetrics, 
+    handleDateRangeChange, timeRange, getMetrics, errorContent,
     analyticsData, COLORS,formatCurrency,
   ]);
 
   return mainContent;
+  
 }
 
-// Demo data fallback function
-const getDemoData = () => ({
-  metrics: {
-    total_customers: 45892,
-    total_revenue: 2400000,
-    active_claims: 1247,
-    avg_claim_time: 2.4,
-    total_policies: 32845,
-    total_commission: 456200,
-    total_agents: 150,
-    total_admins: 10
-  },
-  trends: {
-    userGrowth: [
-      { period: 'Jan', count: 4000 },
-      { period: 'Feb', count: 3000 },
-      { period: 'Mar', count: 2000 },
-      { period: 'Apr', count: 2780 },
-      { period: 'May', count: 1890 },
-      { period: 'Jun', count: 2390 },
-    ],
-    revenueData: [
-      { period: 'Jan', revenue: 2400 },
-      { period: 'Feb', revenue: 1398 },
-      { period: 'Mar', revenue: 9800 },
-      { period: 'Apr', revenue: 3908 },
-      { period: 'May', revenue: 4800 },
-      { period: 'Jun', revenue: 3800 },
-    ]
-  },
-  distribution: [
-    { name: 'Basic Health Guard', value: 400 },
-    { name: 'Premium Family Shield', value: 300 },
-    { name: 'Senior Care Plus', value: 200 },
-    { name: 'Critical Illness Protect', value: 100 },
-  ],
-  activity: [
-    { description: 'New customer registration', user_name: 'John Smith', entity_type: 'customer', created_at: new Date().toISOString() },
-    { description: 'Policy purchased', user_name: 'Sarah Johnson', entity_type: 'policy', created_at: new Date(Date.now() - 900000).toISOString() },
-    { description: 'Claim submitted', user_name: 'Mike Chen', entity_type: 'claim', created_at: new Date(Date.now() - 1800000).toISOString() },
-    { description: 'Agent commission paid', user_name: 'David Wilson', entity_type: 'agent', created_at: new Date(Date.now() - 2700000).toISOString() },
-    { description: 'Payment received', user_name: 'Emma Brown', entity_type: 'payment', created_at: new Date(Date.now() - 3600000).toISOString() },
-  ]
-});
 export default AnalyticsDashboard;

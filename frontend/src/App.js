@@ -7,7 +7,7 @@ import RegisterHospital from './pages/RegisterHospital';
 import LandingPage from './pages/LandingPage';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import AdminDashboard from './components/AdminDashboard';
+import AdminDashboard from './components/AdminDashboard/AdminDashboard';
 import { CustomerDashboard } from './components/CustomerDashboard';
 
 function App() {

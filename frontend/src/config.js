@@ -1,14 +1,32 @@
-// src/config.js
-export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
+export const API_BASE_URL = 'http://localhost:5000/api';
 
 export const getAxiosConfig = () => {
-  const token = localStorage.getItem('token');
+  // Get token from localStorage
+  const token = localStorage.getItem('healthinsura360_token');
   
-  return {
+  // Default config
+  const config = {
     headers: {
-      'Authorization': token ? `Bearer ${token}` : '',
       'Content-Type': 'application/json'
-    },
-    withCredentials: true
+    }
   };
+  
+  // Add token if it exists - EXACT FORMAT REQUIRED!
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return config;
+};
+
+// Helper to check if user is authenticated
+export const isAuthenticated = () => {
+  const token = localStorage.getItem('healthinsura360_token');
+  const accountType = localStorage.getItem('accountType');
+  return !!(token && accountType);
+};
+
+// Helper to check if user is admin
+export const isAdmin = () => {
+  return localStorage.getItem('accountType') === 'admin';
 };

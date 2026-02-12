@@ -1,7 +1,14 @@
+// src/components/AdminDashboard/PoliciesManagement.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Edit, Trash2, AlertCircle, Search, Tag, Activity, RefreshCw, FileText, Clock, Save, XCircle } from 'lucide-react';
+import {
+  Plus, FileText, Edit, Trash2, AlertCircle, Search,
+ RefreshCw, XCircle, Save, Tag, Activity, Clock
+} from 'lucide-react';
 import { API_BASE_URL, getAxiosConfig } from '../../config';
+
+
+
 function PoliciesManagement() {
   const [plans, setPlans] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -917,5 +924,4 @@ function PoliciesManagement() {
     </div>
   );
 }
-
 export default PoliciesManagement;

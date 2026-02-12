@@ -84,16 +84,19 @@ exports.registerCustomer = async (req, res) => {
 
     const customerId = result.rows[0].customer_id;
 
-    // Create JWT token
-    const token = jwt.sign(
-      {
-        userId: customerId,
-        email: result.rows[0].email,
-        userType: 'customer'
-      },
-      process.env.JWT_SECRET || 'Allahuakbar786',
-      { expiresIn: '7d' }
-    );
+  // After getting customerId, ADD THIS:
+const tokenData = {
+  userId: customerId,
+  email: result.rows[0].email,
+  userType: 'customer'
+};
+
+const token = jwt.sign(
+  tokenData,
+  process.env.JWT_SECRET || 'Allahuakbar786',
+  { expiresIn: '7d' }
+);
+
 
     // Log audit with TIMESTAMP column
     await db.query(
@@ -234,17 +237,18 @@ exports.registerAgent = async (req, res) => {
     );
 
     const agentId = result.rows[0].agent_id;
+// After getting agentId, ADD THIS:
+const tokenData = {
+  userId: agentId,
+  email: result.rows[0].email,
+  userType: 'agent'
+};
 
-    // Create JWT token
-    const token = jwt.sign(
-      {
-        userId: agentId,
-        email: result.rows[0].email,
-        userType: 'agent'
-      },
-      process.env.JWT_SECRET || 'Allahuakbar786',
-      { expiresIn: '7d' }
-    );
+const token = jwt.sign(
+  tokenData,
+  process.env.JWT_SECRET || 'Allahuakbar786',
+  { expiresIn: '7d' }
+);
 
     // Log audit WITH TIMESTAMP
     await db.query(
@@ -480,18 +484,19 @@ exports.registerAdmin = async (req, res) => {
     );
 
     const adminId = result.rows[0].admin_id;
+// After getting adminId, ADD THIS:
+const tokenData = {
+  userId: adminId,
+  email: result.rows[0].email,
+  userType: 'admin',
+  role: result.rows[0].role
+};
 
-    // Create JWT token
-    const token = jwt.sign(
-      {
-        userId: adminId,
-        email: result.rows[0].email,
-        userType: 'admin',
-        role: result.rows[0].role
-      },
-      process.env.JWT_SECRET || 'Allahuakbar786',
-      { expiresIn: '7d' }
-    );
+const token = jwt.sign(
+  tokenData,
+  process.env.JWT_SECRET || 'Allahuakbar786',
+  { expiresIn: '7d' }
+);
 
     // Log audit WITH TIMESTAMP
     await db.query(
@@ -540,22 +545,24 @@ exports.login = async (req, res) => {
   const { email, password, userType } = req.body;
 
   try {
-    // ADD THESE DEBUG LOGS:
-    console.log('=== LOGIN ATTEMPT ===');
-    console.log('Email:', email);
-    console.log('User Type:', userType);
-    console.log('Password provided:', password ? '[PROVIDED]' : '[MISSING]');
+    // ============= STEP 1: REQUEST RECEIVED =============
+    console.log('\n🔵 ============ LOGIN ATTEMPT ============');
+    console.log('📧 Email:', email);
+    console.log('👤 User Type:', userType);
+    console.log('🔑 Password provided:', password ? '✅ YES' : '❌ NO');
+    console.log('📦 Full request body:', { email, password: password ? '***' : undefined, userType });
+    
     // Validate inputs
     if (!email || !password || !userType) {
+      console.log('❌ Missing required fields');
       return res.status(400).json({
         success: false,
         message: 'Please provide email, password, and user type'
       });
     }
 
+    // ============= STEP 2: DETERMINE TABLE =============
     let tableName, idField;
-
-    // Determine which table to query based on userType
     switch (userType) {
       case 'customer':
         tableName = 'customer';
@@ -570,19 +577,27 @@ exports.login = async (req, res) => {
         idField = 'admin_id';
         break;
       default:
+        console.log('❌ Invalid user type:', userType);
         return res.status(400).json({
           success: false,
           message: 'Invalid user type'
         });
     }
+    console.log('📋 Table selected:', tableName);
+    console.log('🔑 ID field:', idField);
 
-    // Find user
+    // ============= STEP 3: SEARCH FOR USER =============
+    console.log(`🔍 Searching for user in ${tableName} with email:`, email.toLowerCase());
+    
     const result = await db.query(
       `SELECT * FROM ${tableName} WHERE email = $1`,
       [email.toLowerCase()]
     );
 
+    console.log(`📊 Query returned ${result.rows.length} rows`);
+
     if (result.rows.length === 0) {
+      console.log('❌ User NOT FOUND in database');
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -590,43 +605,105 @@ exports.login = async (req, res) => {
     }
 
     const dbUser = result.rows[0];
+    console.log('✅ User FOUND in database');
+    console.log('  User ID:', dbUser[idField]);
+    console.log('  Email:', dbUser.email);
+    
+    // Show user-specific fields
+    if (userType === 'admin') {
+      console.log('  Full Name:', dbUser.full_name);
+      console.log('  Role:', dbUser.role);
+    } else if (userType === 'customer' || userType === 'agent') {
+      console.log('  First Name:', dbUser.first_name);
+      console.log('  Last Name:', dbUser.last_name);
+    }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+    // ============= STEP 4: PASSWORD HASH DEBUG =============
+    console.log('\n🔐 ============ PASSWORD DEBUG ============');
+    console.log('Stored password hash:', dbUser.password_hash);
+    console.log('Hash algorithm:', dbUser.password_hash?.substring(0, 4));
+    console.log('Hash length:', dbUser.password_hash?.length);
+    console.log('Hash format valid:', dbUser.password_hash?.startsWith('$2a$') || dbUser.password_hash?.startsWith('$2b$') ? '✅' : '❌');
+    
+    console.log('\nInput password:', password);
+    console.log('Input password length:', password.length);
+    console.log('Input password type:', typeof password);
+
+    // ============= STEP 5: TEST PASSWORD COMPARISON =============
+    console.log('\n🔄 Attempting bcrypt.compare...');
+    
+    let isValidPassword = false;
+    try {
+      isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+      console.log('✅ bcrypt.compare executed successfully');
+    } catch (compareError) {
+      console.log('❌ bcrypt.compare threw error:', compareError.message);
+      throw compareError;
+    }
+    
+    console.log('🔐 Password valid:', isValidPassword ? '✅ YES' : '❌ NO');
+
     if (!isValidPassword) {
+      console.log('❌ Password mismatch!');
+      
+      // ============= STEP 6: EXTRA DEBUG FOR PASSWORD MISMATCH =============
+      console.log('\n🔧 PASSWORD MISMATCH DEBUG:');
+      
+      // Test if the hash is from a different password
+      const commonPasswords = ['admin123', 'password', '123456', 'Admin@123', 'admin'];
+      console.log('Testing common passwords:');
+      
+      for (const testPwd of commonPasswords) {
+        try {
+          const testResult = await bcrypt.compare(testPwd, dbUser.password_hash);
+          console.log(`  Password "${testPwd}": ${testResult ? '✅ MATCH' : '❌ no match'}`);
+        } catch (e) {
+          console.log(`  Password "${testPwd}": ❌ error - ${e.message}`);
+        }
+      }
+      
+      // Generate a new hash for the attempted password to see what it would look like
+      const testSalt = await bcrypt.genSalt(10);
+      const newHashForAttempt = await bcrypt.hash(password, testSalt);
+      console.log('\n📝 New hash for your attempted password:', newHashForAttempt);
+      console.log('Note: This will be different every time due to salt');
+      
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
       });
     }
 
-    // Prepare user data for token
+    // ============= STEP 7: PASSWORD CORRECT - GENERATE TOKEN =============
+    console.log('\n🎟️ Password correct! Generating JWT token...');
+    
     const tokenData = {
       userId: dbUser[idField],
       email: dbUser.email,
       userType: userType
     };
 
-    // Add role for admin
     if (userType === 'admin') {
       tokenData.role = dbUser.role;
     }
 
-    // Create JWT token
     const token = jwt.sign(
-      tokenData,
-      process.env.JWT_SECRET || 'Allahuakbar786',
-      { expiresIn: '7d' }
-    );
+  tokenData,
+  process.env.JWT_SECRET || 'Allahuakbar786',
+  { expiresIn: '7d' }
+);
 
-    // Prepare user data for response
+    
+    console.log('✅ Token generated successfully');
+    console.log('Token preview:', token.substring(0, 20) + '...');
+
+    // ============= STEP 8: PREPARE USER DATA =============
     const userData = {
       id: dbUser[idField],
       email: dbUser.email,
       userType: userType
     };
 
-    // Add user-specific fields
     if (userType === 'customer' || userType === 'agent') {
       userData.firstName = dbUser.first_name;
       userData.lastName = dbUser.last_name;
@@ -640,12 +717,25 @@ exports.login = async (req, res) => {
       userData.role = dbUser.role;
     }
 
-    // Log audit with timestamp column
-    await db.query(
-      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
-       VALUES ($1, $2, 'login', $1, $2, NOW())`,
-      [userType, dbUser[idField]]
-    );
+    // ============= STEP 9: LOG AUDIT =============
+    try {
+      await db.query(
+        `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+         VALUES ($1, $2, 'login', $1, $2, NOW())`,
+        [userType, dbUser[idField]]
+      );
+      console.log('📝 Audit log created');
+    } catch (auditError) {
+      console.log('⚠️ Audit log failed (non-critical):', auditError.message);
+    }
+
+    // ============= STEP 10: SUCCESS =============
+    console.log('\n✅ ============ LOGIN SUCCESSFUL ============');
+    console.log('👤 User:', userData.email);
+    console.log('🎭 Type:', userData.userType);
+    console.log('🆔 ID:', userData.id);
+    if (userData.fullName) console.log('📛 Name:', userData.fullName);
+    console.log('=====================================\n');
 
     res.json({
       success: true,
@@ -655,13 +745,145 @@ exports.login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('\n💥 ============ LOGIN ERROR ============');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('=====================================\n');
+    
     res.status(500).json({
       success: false,
       message: 'Server error during login'
     });
   }
 };
+// // Login for Customers, Agents, and Admins
+// exports.login = async (req, res) => {
+//   const { email, password, userType } = req.body;
+
+//   try {
+//     // ADD THESE DEBUG LOGS:
+//     console.log('=== LOGIN ATTEMPT ===');
+//     console.log('Email:', email);
+//     console.log('User Type:', userType);
+//     console.log('Password provided:', password ? '[PROVIDED]' : '[MISSING]');
+//     // Validate inputs
+//     if (!email || !password || !userType) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Please provide email, password, and user type'
+//       });
+//     }
+
+//     let tableName, idField;
+
+//     // Determine which table to query based on userType
+//     switch (userType) {
+//       case 'customer':
+//         tableName = 'customer';
+//         idField = 'customer_id';
+//         break;
+//       case 'agent':
+//         tableName = 'agent';
+//         idField = 'agent_id';
+//         break;
+//       case 'admin':
+//         tableName = 'admin';
+//         idField = 'admin_id';
+//         break;
+//       default:
+//         return res.status(400).json({
+//           success: false,
+//           message: 'Invalid user type'
+//         });
+//     }
+
+//     // Find user
+//     const result = await db.query(
+//       `SELECT * FROM ${tableName} WHERE email = $1`,
+//       [email.toLowerCase()]
+//     );
+
+//     if (result.rows.length === 0) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Invalid credentials'
+//       });
+//     }
+
+//     const dbUser = result.rows[0];
+
+//     // Verify password
+//     const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+//     if (!isValidPassword) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Invalid credentials'
+//       });
+//     }
+
+//     // Prepare user data for token
+//     const tokenData = {
+//       userId: dbUser[idField],
+//       email: dbUser.email,
+//       userType: userType
+//     };
+
+//     // Add role for admin
+//     if (userType === 'admin') {
+//       tokenData.role = dbUser.role;
+//     }
+
+//     // Create JWT token
+//     const token = jwt.sign(
+//       tokenData,
+//       process.env.JWT_SECRET || 'Allahuakbar786',
+//       { expiresIn: '7d' }
+//     );
+
+//     // Prepare user data for response
+//     const userData = {
+//       id: dbUser[idField],
+//       email: dbUser.email,
+//       userType: userType
+//     };
+
+//     // Add user-specific fields
+//     if (userType === 'customer' || userType === 'agent') {
+//       userData.firstName = dbUser.first_name;
+//       userData.lastName = dbUser.last_name;
+//       userData.fullName = `${dbUser.first_name} ${dbUser.last_name}`;
+      
+//       if (userType === 'agent') {
+//         userData.licenseNumber = dbUser.license_number;
+//       }
+//     } else if (userType === 'admin') {
+//       userData.fullName = dbUser.full_name;
+//       userData.role = dbUser.role;
+//     }
+
+//     // Log audit with timestamp column
+//     await db.query(
+//       `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+//        VALUES ($1, $2, 'login', $1, $2, NOW())`,
+//       [userType, dbUser[idField]]
+//     );
+
+//     res.json({
+//       success: true,
+//       message: 'Login successful',
+//       token,
+//       user: userData
+//     });
+
+//   } catch (error) {
+//     console.error('Login error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Server error during login'
+//     });
+//   }
+// };
 
 // SEPARATE HOSPITAL LOGIN (no password, uses registration number)
 exports.loginHospital = async (req, res) => {
@@ -751,78 +973,21 @@ exports.loginHospital = async (req, res) => {
   }
 };
 
-// Verify Token (for protected routes)
 exports.verifyToken = async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: 'No token provided'
-    });
+    return res.status(401).json({ success: false, message: 'No token provided' });
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Allahuakbar786');
+    // USE THE SAME SECRET AS LOGIN AND MIDDLEWARE!
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Allahuakbar786');  // ← MUST MATCH
     
-    // Check if user still exists in database
-    let tableName, idField;
-    
-    switch (decoded.userType) {
-      case 'customer':
-        tableName = 'customer';
-        idField = 'customer_id';
-        break;
-      case 'agent':
-        tableName = 'agent';
-        idField = 'agent_id';
-        break;
-      case 'admin':
-        tableName = 'admin';
-        idField = 'admin_id';
-        break;
-      case 'hospital':
-        tableName = 'hospital';
-        idField = 'hospital_id';
-        break;
-      default:
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid user type'
-        });
-    }
-
-    const result = await db.query(
-      `SELECT ${idField}, email FROM ${tableName} WHERE ${idField} = $1`,
-      [decoded.userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      user: decoded
-    });
-
+    // ... rest of your code
   } catch (error) {
     console.error('Token verification error:', error);
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expired'
-      });
-    }
-    
-    res.status(401).json({
-      success: false,
-      message: 'Invalid token'
-    });
+    res.status(401).json({ success: false, message: 'Invalid token' });
   }
 };
 
@@ -994,17 +1159,16 @@ exports.requestPasswordReset = async (req, res) => {
     const userId = user[idField];
     const userName = user[nameField] || 'User';
 
-    // Generate reset token (expires in 1 hour)
     const resetToken = jwt.sign(
-      {
-        userId: userId,
-        email: user.email,
-        userType: userType,
-        purpose: 'password_reset'
-      },
-      process.env.JWT_SECRET || 'Allahuakbar786',
-      { expiresIn: '1h' }
-    );
+  {
+    userId: userId,
+    email: user.email,
+    userType: userType,
+    purpose: 'password_reset'
+  },
+  process.env.JWT_SECRET || 'Allahuakbar786',  // ✅ CORRECT SECRET
+  { expiresIn: '1h' }
+);
 
     // Send password reset email
     const { sendPasswordResetEmail } = require('../utils/emailService');

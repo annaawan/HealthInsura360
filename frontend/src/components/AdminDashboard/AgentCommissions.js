@@ -1,7 +1,17 @@
-import React, { useState } from 'react';
-import { Check, Edit, Eye } from 'lucide-react';
+import React, { useState} from 'react';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
+// Icons from lucide-react
+import { 
+  Check, 
+  Edit, 
+  Eye
+} from 'lucide-react';
 
-// 8. Agent Commission Component
+// Register Chart.js plugins
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
+
+
+
 function AgentCommissions() {
   const [commissions, setCommissions] = useState([
     { agent: 'David Wilson', totalSales: 45000, commissionRate: '15%', commissionAmount: 6750, pending: 1200, paid: 5550, lastPayment: '2024-01-10' },
@@ -158,6 +168,4 @@ function AgentCommissions() {
     </div>
   );
 }
-
-
 export default AgentCommissions;
