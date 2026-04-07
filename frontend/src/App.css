@@ -1,0 +1,229 @@
+/* App.css */
+
+.App {
+  text-align: center;
+}
+
+body {
+  background-color: white;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* ========== GLOBAL CENTERING RULES ========== */
+/* Force ALL containers to center */
+.container, .MuiContainer-root {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 100vh !important;
+  width: 100% !important;
+}
+
+/* Force ALL boxes to center */
+.MuiBox-root {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+/* Force ALL papers to center */
+.MuiPaper-root {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  padding: 32px !important;
+  margin: auto !important;
+}
+
+/* ========== FORM CENTERING ========== */
+/* Target ALL forms */
+form {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+  gap: 16px !important;
+}
+
+/* Force center all form elements in register forms */
+.register-form .MuiGrid-container {
+  justify-content: center !important;
+}
+
+.register-form .MuiGrid-item {
+  display: flex !important;
+  justify-content: center !important;
+}
+
+.register-form .MuiTextField-root {
+  width: 100% !important;
+  max-width: 300px !important;
+  margin: 8px auto !important;
+  display: block !important;
+}
+
+/* Center the entire form */
+.MuiPaper-root form {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+/* Target ALL text fields in forms */
+form .MuiTextField-root,
+form .MuiFormControl-root {
+  width: 100% !important;
+  max-width: 500px !important;
+  margin: 8px 0 !important;
+}
+
+/* Center ALL text field inputs */
+.MuiOutlinedInput-root,
+.MuiInputBase-root {
+  width: 100% !important;
+}
+
+.MuiInputBase-input {
+  text-align: center !important;
+}
+
+/* Center ALL labels */
+.MuiInputLabel-root {
+  width: 100% !important;
+  text-align: center !important;
+}
+
+.MuiInputLabel-shrink {
+  transform: translate(0, -1.5px) scale(0.75) !important;
+  transform-origin: center !important;
+}
+
+/* ========== SPECIFIC PAGE CENTERING ========== */
+/* Registration forms */
+.registerCustomer,
+.registerAgent,
+.registerHospital,
+.loginPage,
+.register-form {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-height: 100vh !important;
+}
+
+/* Center grid items */
+.MuiGrid-container {
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+.MuiGrid-item {
+  display: flex !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+/* Center buttons */
+.MuiButton-root {
+  margin: 8px auto !important;
+  display: block !important;
+}
+
+.button-center {
+  display: flex !important;
+  justify-content: center !important;
+  gap: 16px !important;
+  margin: 24px auto !important;
+  width: 100% !important;
+  max-width: 500px !important;
+}
+
+/* ========== UTILITY CLASSES ========== */
+/* Add these classes to your components if needed */
+.center-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 100vh !important;
+  width: 100% !important;
+}
+
+.center-form {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  margin: auto !important;
+}
+
+.center-field {
+  width: 100% !important;
+  max-width: 500px !important;
+  margin: 12px auto !important;
+}
+
+.center-text {
+  text-align: center !important;
+}
+
+/* ========== MEDIA QUERIES ========== */
+@media (max-width: 600px) {
+  .MuiPaper-root {
+    padding: 16px !important;
+    margin: 16px !important;
+    box-shadow: none !important;
+  }
+  
+  form .MuiTextField-root,
+  form .MuiFormControl-root {
+    max-width: 100% !important;
+  }
+}
+
+/* Keep existing App styles */
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
