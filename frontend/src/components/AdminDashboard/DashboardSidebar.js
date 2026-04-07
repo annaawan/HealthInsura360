@@ -1,10 +1,9 @@
 import React from 'react';
 import Logo from "../../assets/HealthInsura360.png"; 
-import { LayoutDashboard, Users, Shield, FileBarChart, Activity, Archive, CreditCard as CreditCardIcon, Percent, Hospital, LogOut, Menu } from 'lucide-react';
+import { Users, Shield, FileBarChart, Activity, Archive, CreditCard as CreditCardIcon, Percent, Hospital, LogOut, Menu } from 'lucide-react';
 
 function DashboardSidebar({ currentView, onViewChange, isOpen, onToggle }) {
   const menuItems = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'accounts', label: 'Accounts', icon: Users },
     { id: 'policies', label: 'Policies', icon: Shield },
     { id: 'reports', label: 'Reports', icon: FileBarChart },

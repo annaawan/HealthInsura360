@@ -12,13 +12,15 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
+    "exceljs": "^4.4.0",
     "express": "^4.22.1",
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.0",
-    "mysql2": "^3.15.3",
+    "mysql2": "^3.20.0",
     "nodemailer": "^7.0.11",
     "pdfkit": "^0.17.2",
-    "pg": "^8.11.0"
+    "pg": "^8.11.0",
+    "stripe": "^22.0.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.22"

@@ -1,13 +1,13 @@
 // src/components/AdminDashboard/PoliciesManagement.jsx
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   Plus, FileText, Edit, Trash2, AlertCircle, Search,
- RefreshCw, XCircle, Save, Tag, Activity, Clock
+  RefreshCw, XCircle, Save, Tag, Activity, Clock
 } from 'lucide-react';
 import { API_BASE_URL, getAxiosConfig } from '../../config';
-
-
+import webhookService from '../../services/webhookServices';
 
 function PoliciesManagement() {
   const [plans, setPlans] = useState([]);
@@ -21,12 +21,13 @@ function PoliciesManagement() {
   const [editingPlan, setEditingPlan] = useState(null);
   const [viewingPlan, setViewingPlan] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [webhookStatus, setWebhookStatus] = useState(null); // Track webhook status
   
   // Form state for create/edit policy plan
   const [formData, setFormData] = useState({
     plan_name: '',
     description: '',
-    policy_type: 'health', // Only health insurance
+    policy_type: 'health',
     category: 'basic',
     premium_amount: '',
     coverage_amount: '',
@@ -59,8 +60,6 @@ function PoliciesManagement() {
     } catch (err) {
       console.error('❌ Error fetching policy plans:', err);
       setError(`Error: ${err.response?.data?.message || err.message}`);
-      
-      // Use mock data as fallback
       setPlans(getMockPolicyPlans());
     } finally {
       setIsLoading(false);
@@ -69,10 +68,8 @@ function PoliciesManagement() {
 
   useEffect(() => {
     fetchPolicyPlans();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mock data
   const getMockPolicyPlans = () => [
     { 
       plan_id: 1, 
@@ -116,7 +113,6 @@ function PoliciesManagement() {
     }
   ];
 
-  // Filter plans
   const filteredPlans = plans.filter(plan => {
     const matchesSearch = 
       plan.plan_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -133,7 +129,6 @@ function PoliciesManagement() {
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  // Get unique values for filters
   const categories = [...new Set(plans.map(p => p.category).filter(Boolean))];
 
   const handleCreatePlan = () => {
@@ -141,7 +136,7 @@ function PoliciesManagement() {
     setFormData({
       plan_name: '',
       description: '',
-      policy_type: 'health', // Only health
+      policy_type: 'health',
       category: 'basic',
       premium_amount: '',
       coverage_amount: '',
@@ -164,7 +159,7 @@ function PoliciesManagement() {
     setFormData({
       plan_name: plan.plan_name || '',
       description: plan.description || '',
-      policy_type: plan.policy_type || 'health', // Only health
+      policy_type: plan.policy_type || 'health',
       category: plan.category || 'basic',
       premium_amount: plan.premium_amount || '',
       coverage_amount: plan.coverage_amount || '',
@@ -199,17 +194,12 @@ function PoliciesManagement() {
         throw new Error(response.data.message);
       }
       
-      // Update local state immediately
       setPlans(prev => prev.filter(plan => plan.plan_id !== id));
-      
       alert(response.data.message || 'Policy plan deleted successfully!');
-      
-      // Refresh data to ensure consistency
       fetchPolicyPlans();
     } catch (err) {
       console.error('Error deleting policy plan:', err);
       
-      // Specific error handling
       if (err.response?.status === 400) {
         alert(err.response.data.message || 'Cannot delete plan that is in use by existing policies');
       } else if (err.response?.status === 404) {
@@ -218,13 +208,13 @@ function PoliciesManagement() {
         alert(err.response?.data?.message || err.message || 'Failed to delete policy plan');
       }
       
-      // Refresh to get current state
       fetchPolicyPlans();
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setWebhookStatus('processing');
     
     try {
       const config = getAxiosConfig();
@@ -232,7 +222,7 @@ function PoliciesManagement() {
       const apiData = {
         plan_name: formData.plan_name,
         description: formData.description,
-        policy_type: 'health', // Always health
+        policy_type: 'health',
         category: formData.category,
         premium_amount: parseFloat(formData.premium_amount),
         coverage_amount: parseFloat(formData.coverage_amount),
@@ -247,17 +237,40 @@ function PoliciesManagement() {
         status: formData.status
       };
       
+      let savedPlan;
+      
       if (modalType === 'create') {
         const response = await axios.post(`${API_BASE_URL}/policy-plans`, apiData, config);
         
         if (response.data.success) {
+          savedPlan = response.data.data;
           alert('Policy plan created successfully!');
+          
+          // 🔥 TRIGGER WEBHOOK for commission calculation
+          if (savedPlan && savedPlan.plan_id) {
+            setWebhookStatus('triggering');
+            
+            // Trigger webhook for commission calculation
+            await webhookService.triggerPolicyCreated({
+              policy_id: savedPlan.plan_id,
+              agent_id: null, // Will be assigned when policy is sold to customer
+              premium_amount: parseFloat(formData.premium_amount),
+              policy_type: 'health',
+              plan_name: formData.plan_name,
+              start_date: new Date().toISOString().split('T')[0]
+            });
+            
+            setWebhookStatus('success');
+            console.log('✅ Webhook triggered for commission calculation');
+          }
+          
           setShowModal(false);
-          fetchPolicyPlans(); // Refresh data
+          fetchPolicyPlans();
         } else {
           throw new Error(response.data.message || 'Creation failed');
         }
       } else {
+        // Edit mode - don't trigger webhook for edits
         const response = await axios.put(
           `${API_BASE_URL}/policy-plans/${editingPlan.plan_id}`,
           apiData,
@@ -267,14 +280,17 @@ function PoliciesManagement() {
         if (response.data.success) {
           alert('Policy plan updated successfully!');
           setShowModal(false);
-          fetchPolicyPlans(); // Refresh data
+          fetchPolicyPlans();
         } else {
           throw new Error(response.data.message || 'Update failed');
         }
       }
     } catch (err) {
       console.error('❌ Error:', err);
+      setWebhookStatus('error');
       alert(`Failed to save policy plan: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setTimeout(() => setWebhookStatus(null), 3000);
     }
   };
 
@@ -348,7 +364,28 @@ function PoliciesManagement() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Webhook Status Indicator */}
+      {webhookStatus && (
+        <div className={`mb-6 p-3 rounded-lg flex items-center gap-3 ${
+          webhookStatus === 'processing' ? 'bg-yellow-50 border border-yellow-200' :
+          webhookStatus === 'triggering' ? 'bg-blue-50 border border-blue-200' :
+          webhookStatus === 'success' ? 'bg-green-50 border border-green-200' :
+          'bg-red-50 border border-red-200'
+        }`}>
+          <div className={`w-2 h-2 rounded-full animate-pulse ${
+            webhookStatus === 'processing' || webhookStatus === 'triggering' ? 'bg-blue-600' :
+            webhookStatus === 'success' ? 'bg-green-600' : 'bg-red-600'
+          }`}></div>
+          <p className="text-sm">
+            {webhookStatus === 'processing' && 'Processing policy plan...'}
+            {webhookStatus === 'triggering' && 'Triggering commission calculation webhook...'}
+            {webhookStatus === 'success' && '✓ Commission calculation triggered successfully!'}
+            {webhookStatus === 'error' && '✗ Failed to trigger commission calculation'}
+          </p>
+        </div>
+      )}
+
+      {/* Filters - Same as your existing code */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
@@ -402,7 +439,7 @@ function PoliciesManagement() {
         </div>
       </div>
 
-      {/* Policy Plans Grid */}
+      {/* Policy Plans Grid - Same as your existing code */}
       {filteredPlans.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -523,7 +560,7 @@ function PoliciesManagement() {
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create/Edit Modal - Same as your existing code */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -541,8 +578,8 @@ function PoliciesManagement() {
               </div>
 
               <form onSubmit={handleSubmit}>
+                {/* Form fields - Same as your existing code */}
                 <div className="space-y-6 mb-6">
-                  {/* Basic Information */}
                   <div className="space-y-4">
                     <h3 className="font-medium text-gray-900 border-b pb-2">Basic Information</h3>
                     
@@ -753,7 +790,7 @@ function PoliciesManagement() {
         </div>
       )}
 
-      {/* View Details Modal */}
+      {/* View Details Modal - Same as your existing code */}
       {showViewModal && viewingPlan && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -769,7 +806,6 @@ function PoliciesManagement() {
               </div>
 
               <div className="space-y-6">
-                {/* Header */}
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <div className="flex items-center gap-3">
                     <FileText className="h-6 w-6 text-blue-600" />
@@ -787,13 +823,11 @@ function PoliciesManagement() {
                   </div>
                 </div>
 
-                {/* Description */}
                 <div>
                   <h4 className="font-medium text-gray-900 mb-2">Description</h4>
                   <p className="text-gray-600">{viewingPlan.description}</p>
                 </div>
 
-                {/* Financial Details */}
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <h4 className="font-medium text-gray-900 border-b pb-2">Financial Details</h4>
@@ -856,7 +890,6 @@ function PoliciesManagement() {
                   </div>
                 </div>
 
-                {/* Coverage Details */}
                 {viewingPlan.coverage_details && (
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Coverage Details</h4>
@@ -866,7 +899,6 @@ function PoliciesManagement() {
                   </div>
                 )}
 
-                {/* Eligibility Criteria */}
                 {viewingPlan.eligibility_criteria && (
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Eligibility Criteria</h4>
@@ -876,7 +908,6 @@ function PoliciesManagement() {
                   </div>
                 )}
 
-                {/* Exclusions */}
                 {viewingPlan.exclusions && (
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Exclusions</h4>
@@ -886,7 +917,6 @@ function PoliciesManagement() {
                   </div>
                 )}
 
-                {/* Benefits */}
                 {viewingPlan.benefits && (
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Benefits</h4>
@@ -896,7 +926,6 @@ function PoliciesManagement() {
                   </div>
                 )}
 
-                {/* Actions */}
                 <div className="flex justify-end gap-3 pt-6 border-t">
                   <button
                     type="button"
@@ -924,4 +953,5 @@ function PoliciesManagement() {
     </div>
   );
 }
+
 export default PoliciesManagement;

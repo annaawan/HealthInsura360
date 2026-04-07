@@ -1,33 +1,24 @@
-import React, { useState, useEffect, useCallback, useMemo} from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
+import { Activity, DollarSign, FileBarChart, TrendingUp, Users as UsersIcon, Building, BarChart3, AlertCircle, Download, FileText, Table, Printer, RefreshCw} from 'lucide-react';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BarElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
+import { Line as LineChart, Doughnut as DonutChart, Bar as BarChart } from 'react-chartjs-2';
 import { API_BASE_URL, getAxiosConfig } from '../../config';
 
-import { Line as LineChart, Doughnut as DonutChart } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
-// Icons from lucide-react
-import { 
-  
-  Building, 
-  FileText, 
-  DollarSign,
-  TrendingUp,
-  Download,
-  FileBarChart,
-  Activity,
-  RefreshCw,
-  BarChart3,
-  Table,
-  Printer,
-  Users as UsersIcon,
-  AlertCircle,
-} from 'lucide-react';
-
-// Register Chart.js plugins
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
-
-
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  BarElement,
+  ChartTooltip,
+  Legend,
+  Filler
+);
 function Reports() {
-  const [selectedReport, setSelectedReport] = useState('user');
+  const [selectedReport, setSelectedReport] = useState('commission-summary');
   const [dateRange, setDateRange] = useState('last-30-days');
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -35,18 +26,47 @@ function Reports() {
 
   const reports = useMemo(() => [
     { id: 'monthly', name: 'Monthly Performance', icon: Activity, chartType: 'line', active: false },
-    { id: 'financial', name: 'Financial Summary', icon: DollarSign, chartType: 'bar', active: false },
+    { id: 'commission-summary', name: 'Commission Summary', icon: DollarSign, chartType: 'bar', active: true },
     { id: 'claims', name: 'Claims Analysis', icon: FileBarChart, chartType: 'pie', active: false },
     { id: 'user', name: 'User Growth', icon: TrendingUp, chartType: 'line', active: true },
-    { id: 'agent', name: 'Agent Performance', icon: UsersIcon, chartType: 'bar', active: false },
+    { id: 'agent', name: 'Agent Performance', icon: UsersIcon, chartType: 'bar', active: true },
     { id: 'hospital', name: 'Hospital Network', icon: Building, chartType: 'doughnut', active: true },
   ], []);
 
+  // Helper function to get date range values - FIXED (removed unused endDate variable)
+const getDateRangeValues = useCallback(() => {
+  const today = new Date();
+  let startDate;
+  
+  switch (dateRange) {
+    case 'last-7-days':
+      startDate = new Date(today.setDate(today.getDate() - 7)).toISOString().split('T')[0];
+      break;
+    case 'last-30-days':
+      startDate = new Date(today.setDate(today.getDate() - 30)).toISOString().split('T')[0];
+      break;
+    case 'last-quarter':
+      startDate = new Date(today.setMonth(today.getMonth() - 3)).toISOString().split('T')[0];
+      break;
+    case 'last-year':
+      startDate = new Date(today.setFullYear(today.getFullYear() - 1)).toISOString().split('T')[0];
+      break;
+    case 'all-time':
+      startDate = '2020-01-01';
+      break;
+    default:
+      startDate = new Date(today.setDate(today.getDate() - 30)).toISOString().split('T')[0];
+  }
+  
+  return { 
+    start_date: startDate, 
+    end_date: new Date().toISOString().split('T')[0] 
+  };
+}, [dateRange]);
   // Fetch report data
   const fetchReport = useCallback(async () => {
     const currentReport = reports.find(r => r.id === selectedReport);
     
-    // Only fetch for active reports
     if (!currentReport?.active) {
       setError(`${currentReport?.name} report is currently inactive`);
       setReportData(null);
@@ -56,29 +76,137 @@ function Reports() {
 
     setLoading(true);
     setError(null);
+    
     try {
       const config = getAxiosConfig();
-      const res = await axios.get(
-        `${API_BASE_URL}/reports/${selectedReport}`,
-        {
-          ...config,
-          params: { range: dateRange }
-        }
-      );
       
-      if (res.data.success) {
-        setReportData(res.data.data);
-      } else {
-        throw new Error(res.data.message || 'Failed to fetch report data');
+      // For commission summary, use the commission API
+      if (selectedReport === 'commission-summary') {
+        const dateValues = getDateRangeValues();
+        const response = await axios.get(
+          `${API_BASE_URL}/commissions/report/summary`,
+          {
+            ...config,
+            params: { 
+              start_date: dateValues.start_date,
+              end_date: dateValues.end_date
+            }
+          }
+        );
+        
+        if (response.data) {
+          setReportData(response.data);
+        } else {
+          throw new Error('Failed to fetch commission summary');
+        }
+      } 
+      else if (selectedReport === 'agent') {
+        const dateValues = getDateRangeValues();
+        const response = await axios.get(
+          `${API_BASE_URL}/commissions/report/agent-performance`,
+          {
+            ...config,
+            params: { 
+              start_date: dateValues.start_date,
+              end_date: dateValues.end_date
+            }
+          }
+        );
+        
+        if (response.data) {
+          setReportData(response.data);
+        } else {
+          throw new Error('Failed to fetch agent performance');
+        }
+      }
+      else {
+        // Handle other reports
+        const res = await axios.get(
+          `${API_BASE_URL}/reports/${selectedReport}`,
+          {
+            ...config,
+            params: { range: dateRange }
+          }
+        );
+        
+        if (res.data.success) {
+          setReportData(res.data.data);
+        } else {
+          throw new Error(res.data.message || 'Failed to fetch report data');
+        }
       }
     } catch (err) {
       console.error("Error loading report:", err);
       setError(err.response?.data?.message || err.message || 'Failed to load report');
       setReportData(null);
+      
+      // Load mock data for commission summary if API fails
+      if (selectedReport === 'commission-summary') {
+        loadMockCommissionData();
+      } else if (selectedReport === 'agent') {
+        loadMockAgentPerformanceData();
+      }
     } finally {
       setLoading(false);
     }
-  }, [selectedReport, dateRange, reports]);
+  }, [selectedReport, dateRange, reports, getDateRangeValues]);
+
+  // Mock data for commission summary
+  const loadMockCommissionData = () => {
+    const mockData = {
+      summary: {
+        total_commissions: 12500,
+        paid_commissions: 8750,
+        pending_commissions: 3750,
+        total_agents: 15,
+        active_agents: 12,
+        avg_commission_rate: 12.5,
+        total_policies: 48
+      },
+      chartData: {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        commission_amounts: [1250, 1800, 2200, 1900, 2500, 2850],
+        paid_amounts: [1000, 1500, 2000, 1800, 1500, 950],
+        pending_amounts: [250, 300, 200, 100, 1000, 1900]
+      },
+      topAgents: [
+        { name: 'David Wilson', commission: 3250, policies: 8, rate: 15 },
+        { name: 'Lisa Brown', commission: 2840, policies: 6, rate: 12 },
+        { name: 'Tom Harris', commission: 1800, policies: 4, rate: 10 },
+        { name: 'Sarah Johnson', commission: 1650, policies: 5, rate: 11 },
+        { name: 'Michael Lee', commission: 1400, policies: 3, rate: 9 }
+      ],
+      period: { start_date: '2024-01-01', end_date: '2024-06-30' }
+    };
+    setReportData(mockData);
+  };
+
+  const loadMockAgentPerformanceData = () => {
+    const mockData = {
+      summary: {
+        total_agents: 15,
+        active_agents: 12,
+        total_commissions: 12500,
+        avg_commission_per_agent: 1042,
+        top_performer: 'David Wilson',
+        top_performer_commission: 3250
+      },
+      chartData: {
+        labels: ['David Wilson', 'Lisa Brown', 'Tom Harris', 'Sarah Johnson', 'Michael Lee', 'Others'],
+        commission_amounts: [3250, 2840, 1800, 1650, 1400, 1560],
+        policy_counts: [8, 6, 4, 5, 3, 22]
+      },
+      agents: [
+        { name: 'David Wilson', commission: 3250, policies: 8, rate: 15, status: 'active' },
+        { name: 'Lisa Brown', commission: 2840, policies: 6, rate: 12, status: 'active' },
+        { name: 'Tom Harris', commission: 1800, policies: 4, rate: 10, status: 'active' },
+        { name: 'Sarah Johnson', commission: 1650, policies: 5, rate: 11, status: 'active' },
+        { name: 'Michael Lee', commission: 1400, policies: 3, rate: 9, status: 'pending' }
+      ],
+      period: { start_date: '2024-01-01', end_date: '2024-06-30' }
+    };
+    setReportData(mockData);
+  };
 
   // Export report
   const exportReport = async (format = 'pdf') => {
@@ -91,50 +219,120 @@ function Reports() {
 
     try {
       const config = getAxiosConfig();
-      const response = await axios.get(
-        `${API_BASE_URL}/reports/export/${selectedReport}`,
-        {
-          ...config,
-          params: { 
-            range: dateRange,
-            format: format 
-          },
-          responseType: 'blob'
-        }
-      );
+      
+      if (selectedReport === 'commission-summary') {
+        const dateValues = getDateRangeValues();
+        const response = await axios.get(
+          `${API_BASE_URL}/commissions/report/export`,
+          {
+            ...config,
+            params: { 
+              start_date: dateValues.start_date,
+              end_date: dateValues.end_date,
+              format: format 
+            },
+            responseType: 'blob'
+          }
+        );
+        
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        const fileName = `Commission_Summary_${new Date().toISOString().split('T')[0]}.${format}`;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        
+        alert(`Report exported successfully as ${fileName}`);
+      } else {
+        const response = await axios.get(
+          `${API_BASE_URL}/reports/export/${selectedReport}`,
+          {
+            ...config,
+            params: { 
+              range: dateRange,
+              format: format 
+            },
+            responseType: 'blob'
+          }
+        );
 
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      
-      const fileName = `${currentReport?.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${format}`;
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      
-      alert(`Report exported successfully as ${fileName}`);
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        const fileName = `${currentReport?.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${format}`;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        
+        alert(`Report exported successfully as ${fileName}`);
+      }
     } catch (err) {
       console.error("Error exporting report:", err);
       alert(err.response?.data?.message || 'Failed to export report');
     }
   };
 
-  // Generate chart data from API response - updated with better error handling
+  // Generate chart data
   const getChartData = useCallback(() => {
     if (!reportData) return null;
     
     switch (selectedReport) {
+      case 'commission-summary':
+        if (!reportData.chartData) return null;
+        return {
+          labels: reportData.chartData.labels || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+          datasets: [
+            {
+              label: 'Commission Earned',
+              data: reportData.chartData.commission_amounts || [],
+              backgroundColor: 'rgba(59, 130, 246, 0.6)',
+              borderColor: 'rgb(59, 130, 246)',
+              borderWidth: 2,
+              borderRadius: 6,
+            },
+            {
+              label: 'Paid Amount',
+              data: reportData.chartData.paid_amounts || [],
+              backgroundColor: 'rgba(34, 197, 94, 0.6)',
+              borderColor: 'rgb(34, 197, 94)',
+              borderWidth: 2,
+              borderRadius: 6,
+            },
+            {
+              label: 'Pending Amount',
+              data: reportData.chartData.pending_amounts || [],
+              backgroundColor: 'rgba(234, 179, 8, 0.6)',
+              borderColor: 'rgb(234, 179, 8)',
+              borderWidth: 2,
+              borderRadius: 6,
+            }
+          ]
+        };
+        
+      case 'agent':
+        if (!reportData.chartData) return null;
+        return {
+          labels: reportData.chartData.labels || [],
+          datasets: [
+            {
+              label: 'Commission Amount ($)',
+              data: reportData.chartData.commission_amounts || [],
+              backgroundColor: 'rgba(59, 130, 246, 0.6)',
+              borderColor: 'rgb(59, 130, 246)',
+              borderWidth: 2,
+            }
+          ]
+        };
+        
       case 'user':
-        // Ensure we have valid data arrays
         const userLabels = reportData.labels || [];
         const userData = reportData.data || [];
         const cumulativeData = reportData.cumulativeData || [];
         
-        // If no data, return null
         if (userLabels.length === 0 || userData.length === 0) {
-          console.log('⚠️ No user growth data available');
           return null;
         }
         
@@ -162,22 +360,19 @@ function Reports() {
         };
         
       case 'hospital':
-        // Ensure we have valid data arrays
         const hospitalLabels = reportData.labels || [];
         const hospitalData = reportData.data || [];
         
-        // If no data, return null
         if (hospitalLabels.length === 0 || hospitalData.length === 0) {
-          console.log('⚠️ No hospital network data available');
           return null;
         }
         
         const backgroundColors = [
-          'rgba(34, 197, 94, 0.8)',    // Green for verified
-          'rgba(59, 130, 246, 0.8)',   // Blue for active
-          'rgba(234, 179, 8, 0.8)',    // Yellow for pending
-          'rgba(239, 68, 68, 0.8)',    // Red for inactive
-          'rgba(168, 85, 247, 0.8)',   // Purple for others
+          'rgba(34, 197, 94, 0.8)',
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(234, 179, 8, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+          'rgba(168, 85, 247, 0.8)',
         ];
         
         return {
@@ -187,9 +382,7 @@ function Reports() {
               label: 'Hospital Count',
               data: hospitalData,
               backgroundColor: backgroundColors.slice(0, hospitalLabels.length),
-              borderColor: backgroundColors.slice(0, hospitalLabels.length).map(color => 
-                color.replace('0.8', '1')
-              ),
+              borderColor: backgroundColors.slice(0, hospitalLabels.length).map(color => color.replace('0.8', '1')),
               borderWidth: 2,
               hoverOffset: 15,
             }
@@ -201,7 +394,7 @@ function Reports() {
     }
   }, [reportData, selectedReport]);
 
-  // Get chart options - updated with better styling
+  // Get chart options
   const getChartOptions = useCallback(() => {
     const currentReport = reports.find(r => r.id === selectedReport);
     
@@ -212,9 +405,7 @@ function Reports() {
         legend: {
           position: 'top',
           labels: {
-            font: {
-              size: 12
-            },
+            font: { size: 12 },
             padding: 20,
             usePointStyle: true,
           }
@@ -222,14 +413,8 @@ function Reports() {
         title: {
           display: true,
           text: currentReport?.name || 'Report',
-          font: {
-            size: 16,
-            weight: 'bold'
-          },
-          padding: {
-            top: 10,
-            bottom: 30
-          }
+          font: { size: 16, weight: 'bold' },
+          padding: { top: 10, bottom: 30 }
         },
         tooltip: {
           mode: 'index',
@@ -240,18 +425,23 @@ function Reports() {
           borderColor: '#e5e7eb',
           borderWidth: 1,
           padding: 12,
-          boxPadding: 6,
+          callbacks: {
+            label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) label += ': ';
+              if (context.parsed.y !== undefined) {
+                label += '$' + context.parsed.y.toLocaleString();
+              } else if (context.parsed !== undefined) {
+                label += context.parsed.toLocaleString();
+              }
+              return label;
+            }
+          }
         },
-      },
-      interaction: {
-        mode: 'nearest',
-        axis: 'x',
-        intersect: false
       },
     };
 
     if (selectedReport === 'hospital') {
-      // Doughnut chart options
       return {
         ...baseOptions,
         cutout: '60%',
@@ -259,18 +449,37 @@ function Reports() {
           ...baseOptions.plugins,
           legend: {
             position: 'right',
-            labels: {
-              font: {
-                size: 11
-              },
-              padding: 10,
-              usePointStyle: true,
-            }
+            labels: { font: { size: 11 }, padding: 10, usePointStyle: true }
           },
         }
       };
+    } else if (selectedReport === 'commission-summary' || selectedReport === 'agent') {
+      return {
+        ...baseOptions,
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: selectedReport === 'commission-summary' ? 'Amount ($)' : 'Commission Amount ($)',
+              font: { size: 12, weight: 'bold' }
+            },
+            ticks: {
+              callback: function(value) {
+                return '$' + value.toLocaleString();
+              }
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: selectedReport === 'commission-summary' ? 'Month' : 'Agent',
+              font: { size: 12, weight: 'bold' }
+            }
+          }
+        }
+      };
     } else {
-      // Line chart options (for user growth)
       return {
         ...baseOptions,
         scales: {
@@ -279,38 +488,11 @@ function Reports() {
             title: {
               display: true,
               text: selectedReport === 'user' ? 'Number of Users' : 'Count',
-              font: {
-                size: 12,
-                weight: 'bold'
-              }
-            },
-            grid: {
-              color: 'rgba(0, 0, 0, 0.05)',
+              font: { size: 12, weight: 'bold' }
             },
             ticks: {
               callback: function(value) {
                 return value.toLocaleString();
-              },
-              font: {
-                size: 11
-              }
-            }
-          },
-          x: {
-            title: {
-              display: true,
-              text: selectedReport === 'user' ? 'Time Period' : 'Categories',
-              font: {
-                size: 12,
-                weight: 'bold'
-              }
-            },
-            grid: {
-              color: 'rgba(0, 0, 0, 0.05)',
-            },
-            ticks: {
-              font: {
-                size: 11
               }
             }
           }
@@ -323,10 +505,9 @@ function Reports() {
     fetchReport();
   }, [fetchReport]);
 
-  // Render appropriate chart component - updated with fallback
+  // Render appropriate chart component
   const renderChart = () => {
     if (!reportData) {
-      console.log('❌ No report data available');
       return null;
     }
     
@@ -334,7 +515,6 @@ function Reports() {
     const options = getChartOptions();
 
     if (!chartData) {
-      console.log('❌ Chart data generation failed');
       return (
         <div className="h-full flex flex-col items-center justify-center p-4">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -342,24 +522,22 @@ function Reports() {
           </div>
           <p className="text-gray-600 mb-2">No chart data available</p>
           <p className="text-sm text-gray-500 text-center">
-            The report data exists but cannot be displayed as a chart.<br />
-            Check the summary section for details.
+            Check the summary section below for details.
           </p>
         </div>
       );
     }
 
-    console.log('📊 Rendering chart for:', selectedReport);
-    console.log('📊 Chart data structure:', chartData);
-
     try {
       switch (selectedReport) {
+        case 'commission-summary':
+        case 'agent':
+          return <BarChart data={chartData} options={options} />;
         case 'user':
           return <LineChart data={chartData} options={options} />;
         case 'hospital':
           return <DonutChart data={chartData} options={options} />;
         default:
-          // For inactive reports, show placeholder
           return (
             <div className="h-full flex flex-col items-center justify-center p-4">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -367,14 +545,13 @@ function Reports() {
               </div>
               <p className="text-gray-600 mb-2">Chart Preview Unavailable</p>
               <p className="text-sm text-gray-500 text-center">
-                This report type is currently inactive.<br />
-                Only User Growth and Hospital Network reports are active.
+                This report type is currently inactive.
               </p>
             </div>
           );
       }
     } catch (error) {
-      console.error('❌ Chart rendering error:', error);
+      console.error('Chart rendering error:', error);
       return (
         <div className="h-full flex flex-col items-center justify-center p-4">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
@@ -387,20 +564,6 @@ function Reports() {
     }
   };
 
-  // Add debug logging to see what data we're receiving
-  useEffect(() => {
-    if (reportData) {
-      console.log('📊 Report Data Structure:', {
-        hasData: !!reportData,
-        labels: reportData.labels,
-        data: reportData.data,
-        cumulativeData: reportData.cumulativeData,
-        summary: reportData.summary,
-        reportType: selectedReport
-      });
-    }
-  }, [reportData, selectedReport]);
-
   return (
     <div className="p-8">
       {/* Header */}
@@ -408,7 +571,6 @@ function Reports() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Reports & Analytics</h1>
           <p className="text-gray-600">Generate and view comprehensive system reports</p>
-          <p className="text-sm text-yellow-600 mt-1">⚠️ Only User Growth and Hospital Network reports are active</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <select 
@@ -537,23 +699,64 @@ function Reports() {
               <p className="text-sm text-gray-500">
                 {reports.find(r => r.id === selectedReport)?.active 
                   ? 'Select an active report type to generate data' 
-                  : 'Please select User Growth or Hospital Network for active reports'}
+                  : 'Please select Commission Summary, User Growth, Agent Performance, or Hospital Network for active reports'}
               </p>
             </div>
           </div>
         )}
 
-        {/* Report Summary */}
+        {/* Report Summary - Enhanced for commission summary */}
         {reportData && reportData.summary && (
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <h4 className="font-medium text-gray-900 mb-3">Report Summary</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {Object.entries(reportData.summary).map(([key, value]) => (
                 <div key={key} className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{value}</div>
-                  <div className="text-sm text-gray-600 capitalize">{key.replace(/_/g, ' ')}</div>
+                  <div className={`text-2xl font-bold ${
+                    key.includes('commission') ? 'text-blue-600' : 
+                    key.includes('paid') ? 'text-green-600' : 
+                    key.includes('pending') ? 'text-yellow-600' : 'text-gray-900'
+                  }`}>
+                    {key.includes('commission') || key.includes('paid') || key.includes('pending') 
+                      ? `$${typeof value === 'number' ? value.toLocaleString() : value}` 
+                      : value}
+                  </div>
+                  <div className="text-sm text-gray-600 capitalize">
+                    {key.replace(/_/g, ' ')}
+                  </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Top Agents Section for Commission Summary */}
+        {selectedReport === 'commission-summary' && reportData && reportData.topAgents && (
+          <div className="mt-6">
+            <h4 className="font-medium text-gray-900 mb-3">Top Performing Agents</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-sm font-medium">Agent Name</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium">Commission</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium">Policies Sold</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium">Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportData.topAgents.map((agent, idx) => (
+                    <tr key={idx} className="border-t">
+                      <td className="px-4 py-2 text-sm">{agent.name}</td>
+                      <td className="px-4 py-2 text-sm font-semibold text-green-600">
+                        ${agent.commission.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2 text-sm">{agent.policies}</td>
+                      <td className="px-4 py-2 text-sm">{agent.rate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -596,47 +799,8 @@ function Reports() {
           </div>
         )}
       </div>
-
-      {/* Debug button - only shows in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <button
-          onClick={() => {
-            // Test with sample data to verify charts work
-            const sampleData = selectedReport === 'user' ? {
-              labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-              data: [65, 59, 80, 81, 56, 55],
-              cumulativeData: [65, 124, 204, 285, 341, 396],
-              summary: {
-                total_customers: 396,
-                new_last_30_days: 55,
-                active_customers: 350,
-                male_customers: 210,
-                female_customers: 186,
-                senior_customers: 45,
-                top_city: 'New York'
-              }
-            } : {
-              labels: ['Verified', 'Active', 'Pending', 'Inactive'],
-              data: [45, 38, 12, 5],
-              summary: {
-                total_hospitals: 100,
-                verified_hospitals: 45,
-                active_hospitals: 38,
-                new_last_30_days: 8,
-                cities_covered: 25,
-                states_covered: 12,
-                top_city: 'New York'
-              }
-            };
-            setReportData(sampleData);
-            console.log('✅ Test data loaded for:', selectedReport);
-          }}
-          className="fixed bottom-4 right-4 px-3 py-2 bg-purple-600 text-white text-sm rounded-lg shadow-lg z-50 hover:bg-purple-700"
-        >
-          Load Test Data
-        </button>
-      )}
     </div>
   );
 }
+
 export default Reports;

@@ -19,8 +19,7 @@ router.get('/', async (req, res) => {
         action,
         entity,
         entity_id,
-        TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp,
-        details
+        TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp
       FROM audit_log 
       ORDER BY timestamp DESC
     `);
@@ -53,9 +52,8 @@ router.get('/:id', async (req, res) => {
         action,
         entity,
         entity_id,
-        TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp,
-        details
-      FROM audit_log 
+        TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp
+        FROM audit_log 
       WHERE audit_id = $1`,
       [id]
     );
@@ -94,8 +92,7 @@ router.get('/user/:user_type/:user_id', async (req, res) => {
         entity,
         entity_id,
         TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp,
-        details
-      FROM audit_log 
+        FROM audit_log 
       WHERE user_type = $1 AND user_id = $2
       ORDER BY timestamp DESC`,
       [user_type, user_id]
@@ -128,8 +125,8 @@ router.get('/entity/:entity/:entity_id', async (req, res) => {
         action,
         entity,
         entity_id,
-        TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp,
-        details
+        TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') as timestamp
+      
       FROM audit_log 
       WHERE entity = $1 AND entity_id = $2
       ORDER BY timestamp DESC`,
@@ -186,10 +183,10 @@ router.post('/', async (req, res) => {
     const { user_type, user_id, action, entity, entity_id, details } = req.body;
     
     const result = await db.query(
-      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, details, timestamp)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+       VALUES ($1, $2, $3, $4, $5, NOW())
        RETURNING *`,
-      [user_type, user_id, action, entity, entity_id, details || null]
+      [user_type, user_id, action, entity, entity_id]
     );
     
     res.status(201).json({
@@ -218,7 +215,6 @@ router.get('/export/csv', async (req, res) => {
         entity,
         entity_id,
         timestamp,
-        details
       FROM audit_log 
       ORDER BY timestamp DESC
     `);
