@@ -51,37 +51,36 @@ function AnalyticsDashboard() {
     endDate: dateRange.endDate.toISOString()
   }), [timeRange, dateRange]);
 
-  // Memoized loadAnalyticsData function
-  const loadAnalyticsData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+ const loadAnalyticsData = useCallback(async () => {
+  setLoading(true);
+  setError(null);
+  
+  console.log('🟢 Loading analytics data...');
+  console.log('🟢 Date params:', dateParams);
+  
+  try {
+    const response = await fetchAnalyticsData(dateParams);
     
-    try {
-      console.log('📱 Calling fetchAnalyticsData with params:', dateParams);
-      const response = await fetchAnalyticsData(dateParams);
-      
-      console.log('📡 API Response:', response);
-      
-      if (response.success) {
-        console.log('✅ Setting real analytics data');
-        setAnalyticsData(response.data);
-      } else {
-        console.log('⚠️ API returned error:', response.error);
-        // Still use the data if available (fallback data from backend)
-        if (response.data) {
-          setAnalyticsData(response.data);
-        }
-        setError(response.error || 'Failed to load analytics');
-      }
-    } catch (err) {
-      console.error('💥 Error loading analytics:', err);
-      setError(err.message);
-      // Use demo data as fallback
-      setAnalyticsData(getDemoData());
-    } finally {
-      setLoading(false);
+    console.log('🟢 Response from service:', response);
+    
+    if (response.success && response.data) {
+      console.log('🟢 Data received:', response.data);
+      console.log('🟢 Metrics:', response.data.metrics);
+      setAnalyticsData(response.data);
+      setError(null);
+    } else {
+      console.log('🔴 Response not successful:', response.error);
+      setError(response.error || 'Failed to load analytics data');
+      setAnalyticsData(null);
     }
-  }, [dateParams]);
+  } catch (err) {
+    console.error('🔴 Exception in loadAnalyticsData:', err);
+    setError(err.message);
+    setAnalyticsData(null);
+  } finally {
+    setLoading(false);
+  }
+}, [dateParams]);
 // Demo data fallback function
 const getDemoData = () => ({
   metrics: {
@@ -254,8 +253,12 @@ const getDemoData = () => ({
     </div>
   ), []);
 
-  // Memoized error state JSX
-  const errorContent = useMemo(() => (
+  // Memoized error state JSX - Only show when there's an error AND no data
+const errorContent = useMemo(() => {
+  // Don't show error if we have data
+  if (analyticsData) return null;
+  
+  return (
     <div className="p-8">
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
         <div className="flex items-center gap-2 mb-2">
@@ -269,11 +272,10 @@ const getDemoData = () => ({
         >
           Retry Loading
         </button>
-        <p className="text-gray-500 text-xs mt-3">Using sample data for demonstration</p>
       </div>
     </div>
-  ), [error, loadAnalyticsData]);
-
+  );
+}, [error, loadAnalyticsData, analyticsData]);
   // Add colors for pie chart
     const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'];
 
@@ -285,17 +287,19 @@ const getDemoData = () => ({
     return (
       <div className="p-4 md:p-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
-            <p className="text-gray-600">Insurance platform performance metrics</p>
-          </div>
-          {error && errorContent} (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
-              <p className="text-yellow-700 text-sm">⚠️ Using sample data: {error}</p>
-            </div>
-          )
-        </div>
+<div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+  <div>
+    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
+    <p className="text-gray-600">Insurance platform performance metrics</p>
+  </div>
+  
+  {/* Only show error if there's an error AND no data */}
+  {error && !analyticsData && (
+    <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
+      <p className="text-yellow-700 text-sm">⚠️ {error}</p>
+    </div>
+  )}
+</div>
 
         {/* Date Range Picker */}
         <div className="mb-6">

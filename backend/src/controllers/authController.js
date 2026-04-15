@@ -2,6 +2,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
+const { getNextAgentRoundRobin } = require('../utils/agentAssignment');
 
 // Helper function to generate random registration number
 const generateRegistrationNumber = () => {
@@ -11,7 +12,7 @@ const generateRegistrationNumber = () => {
   return `${prefix}${timestamp}${random}`;
 };
 
-// Customer Registration
+// Customer Registration with Round-Robin Agent Assignment
 exports.registerCustomer = async (req, res) => {
   const {
     firstName,
@@ -48,7 +49,31 @@ exports.registerCustomer = async (req, res) => {
         message: 'Email already registered'
       });
     }
+    
     console.log('Registration - Original password:', password);
+
+    // ========== ROUND-ROBIN AGENT ASSIGNMENT ==========
+    let assignedAgentId = null;
+    
+    // Get all active agents ordered by current customer count (lowest first)
+    const agents = await db.query(
+      `SELECT 
+         agent_id, 
+         first_name, 
+         last_name,
+         COALESCE(total_sales, 0) as total_sales
+       FROM agent 
+       WHERE status = 'active'
+       ORDER BY COALESCE(total_sales, 0) ASC, agent_id ASC`
+    );
+
+    if (agents.rows.length > 0) {
+      // Select the agent with the fewest customers
+      assignedAgentId = agents.rows[0].agent_id;
+      console.log(`✅ Round-robin assigned agent ID: ${assignedAgentId} (${agents.rows[0].first_name} ${agents.rows[0].last_name}) - Current customers: ${agents.rows[0].total_sales}`);
+    } else {
+      console.log('⚠️ No active agents available for assignment');
+    }
 
     // Hash password
     const salt = await bcrypt.genSalt(10);
@@ -59,14 +84,14 @@ exports.registerCustomer = async (req, res) => {
     // Start transaction
     await db.query('BEGIN');
 
-    // Insert into customer table WITH CREATED_AT AND UPDATED_AT
+    // Insert into customer table WITH agent_id
     const result = await db.query(
       `INSERT INTO customer (
         first_name, last_name, gender, email, phone, dob, 
         password_hash, street, city, state, zipcode,
-        created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
-      RETURNING customer_id, first_name, last_name, email, created_at, updated_at`,
+        agent_id, created_at, updated_at, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), 'active')
+      RETURNING customer_id, first_name, last_name, email, created_at, updated_at, agent_id`,
       [
         firstName,
         lastName,
@@ -78,27 +103,40 @@ exports.registerCustomer = async (req, res) => {
         street || null,
         city || null,
         state || null,
-        zipcode || null
+        zipcode || null,
+        assignedAgentId
       ]
     );
 
     const customerId = result.rows[0].customer_id;
 
-  // After getting customerId, ADD THIS:
-const tokenData = {
-  userId: customerId,
-  email: result.rows[0].email,
-  userType: 'customer'
-};
+    // Update agent's total_sales count if assigned
+    if (assignedAgentId) {
+      await db.query(
+        `UPDATE agent 
+         SET total_sales = COALESCE(total_sales, 0) + 1,
+             updated_at = NOW()
+         WHERE agent_id = $1`,
+        [assignedAgentId]
+      );
+      
+      console.log(`✅ Agent ${assignedAgentId} total_sales updated to +1`);
+    }
 
-const token = jwt.sign(
-  tokenData,
-  process.env.JWT_SECRET || 'Allahuakbar786',
-  { expiresIn: '7d' }
-);
+    // Generate token
+    const tokenData = {
+      userId: customerId,
+      email: result.rows[0].email,
+      userType: 'customer'
+    };
 
+    const token = jwt.sign(
+      tokenData,
+      process.env.JWT_SECRET || 'Allahuakbar786',
+      { expiresIn: '7d' }
+    );
 
-    // Log audit with TIMESTAMP column
+    // Log audit
     await db.query(
       `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
        VALUES ('customer', $1, 'register', 'customer', $1, NOW())`,
@@ -109,7 +147,7 @@ const token = jwt.sign(
 
     res.status(201).json({
       success: true,
-      message: 'Customer registered successfully',
+      message: assignedAgentId ? 'Customer registered successfully and assigned to agent' : 'Customer registered successfully (agent assignment pending)',
       token,
       user: {
         id: customerId,
@@ -117,6 +155,7 @@ const token = jwt.sign(
         lastName: result.rows[0].last_name,
         email: result.rows[0].email,
         userType: 'customer',
+        assignedAgentId: result.rows[0].agent_id,
         createdAt: result.rows[0].created_at,
         updatedAt: result.rows[0].updated_at
       }
@@ -540,7 +579,6 @@ const token = jwt.sign(
   }
 };
 
-// Login for Customers, Agents, and Admins
 exports.login = async (req, res) => {
   const { email, password, userType } = req.body;
 
@@ -586,17 +624,39 @@ exports.login = async (req, res) => {
     console.log('📋 Table selected:', tableName);
     console.log('🔑 ID field:', idField);
 
-    // ============= STEP 3: SEARCH FOR USER =============
-    console.log(`🔍 Searching for user in ${tableName} with email:`, email.toLowerCase());
+    // ============= STEP 3: SEARCH FOR USER WITH STATUS CHECK =============
+    console.log(`🔍 Searching for active user in ${tableName} with email:`, email.toLowerCase());
     
-    const result = await db.query(
-      `SELECT * FROM ${tableName} WHERE email = $1`,
-      [email.toLowerCase()]
-    );
+    // For customers and agents, check if status is active
+    // For admins, no status check (admins don't have status column)
+    let query;
+    if (userType === 'admin') {
+      query = `SELECT * FROM ${tableName} WHERE email = $1`;
+    } else {
+      query = `SELECT * FROM ${tableName} WHERE email = $1 AND status = 'active'`;
+    }
+    
+    const result = await db.query(query, [email.toLowerCase()]);
 
     console.log(`📊 Query returned ${result.rows.length} rows`);
 
     if (result.rows.length === 0) {
+      // Check if user exists but is inactive (for better error message)
+      if (userType !== 'admin') {
+        const inactiveCheck = await db.query(
+          `SELECT status FROM ${tableName} WHERE email = $1`,
+          [email.toLowerCase()]
+        );
+        
+        if (inactiveCheck.rows.length > 0 && inactiveCheck.rows[0].status !== 'active') {
+          console.log('❌ User account is inactive');
+          return res.status(403).json({
+            success: false,
+            message: 'Your account is inactive. Please contact support for assistance.'
+          });
+        }
+      }
+      
       console.log('❌ User NOT FOUND in database');
       return res.status(401).json({
         success: false,
@@ -616,6 +676,7 @@ exports.login = async (req, res) => {
     } else if (userType === 'customer' || userType === 'agent') {
       console.log('  First Name:', dbUser.first_name);
       console.log('  Last Name:', dbUser.last_name);
+      console.log('  Status:', dbUser.status);
     }
 
     // ============= STEP 4: PASSWORD HASH DEBUG =============
@@ -685,13 +746,15 @@ exports.login = async (req, res) => {
 
     if (userType === 'admin') {
       tokenData.role = dbUser.role;
+    } else if (userType === 'agent' || userType === 'customer') {
+      tokenData.status = dbUser.status;
     }
 
     const token = jwt.sign(
-  tokenData,
-  process.env.JWT_SECRET || 'Allahuakbar786',
-  { expiresIn: '7d' }
-);
+      tokenData,
+      process.env.JWT_SECRET || 'Allahuakbar786',
+      { expiresIn: '7d' }
+    );
 
     
     console.log('✅ Token generated successfully');
@@ -708,6 +771,7 @@ exports.login = async (req, res) => {
       userData.firstName = dbUser.first_name;
       userData.lastName = dbUser.last_name;
       userData.fullName = `${dbUser.first_name} ${dbUser.last_name}`;
+      userData.status = dbUser.status;
       
       if (userType === 'agent') {
         userData.licenseNumber = dbUser.license_number;
@@ -735,6 +799,7 @@ exports.login = async (req, res) => {
     console.log('🎭 Type:', userData.userType);
     console.log('🆔 ID:', userData.id);
     if (userData.fullName) console.log('📛 Name:', userData.fullName);
+    if (userData.status) console.log('📊 Status:', userData.status);
     console.log('=====================================\n');
 
     res.json({
@@ -757,8 +822,7 @@ exports.login = async (req, res) => {
     });
   }
 };
-// // Login for Customers, Agents, and Admins
-// exports.login = async (req, res) => {
+
 //   const { email, password, userType } = req.body;
 
 //   try {

@@ -1,3 +1,5 @@
+// backend/src/middleware/auth.js
+
 const jwt = require('jsonwebtoken');
 
 // Authentication middleware - verifies JWT token
@@ -7,36 +9,43 @@ const authenticate = (req, res, next) => {
   if (!authHeader) {
     return res.status(401).json({ 
       success: false, 
-      message: 'No token provided' 
+      message: 'Authentication required' 
     });
   }
   
   if (!authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ 
       success: false, 
-      message: 'Invalid token format' 
+      message: 'Invalid token format. Use Bearer token' 
     });
   }
   
   const token = authHeader.split(' ')[1];
+  
+  if (!token || token === 'null' || token === 'undefined' || token === '') {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'No token provided' 
+    });
+  }
   
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Allahuakbar786');
     req.user = decoded;
     next();
   } catch (error) {
-    console.error('JWT verification error:', error);
+    console.error('JWT verification error:', error.message);
     
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ 
         success: false, 
-        message: 'Token expired' 
+        message: 'Token expired. Please login again.' 
       });
     }
     
     return res.status(401).json({ 
       success: false, 
-      message: 'Invalid token' 
+      message: 'Invalid token. Please login again.' 
     });
   }
 };
@@ -47,7 +56,7 @@ const authorize = (...allowedRoles) => {
     if (!req.user) {
       return res.status(401).json({ 
         success: false, 
-        message: 'Not authenticated' 
+        message: 'Authentication required' 
       });
     }
     
@@ -67,10 +76,14 @@ const authorize = (...allowedRoles) => {
 // Alias for backward compatibility
 const authMiddleware = authenticate;
 const adminMiddleware = authorize('admin');
+const authenticateToken = authenticate;
+const isAdmin = adminMiddleware;
 
 module.exports = {
   authenticate,
   authorize,
   authMiddleware,
-  adminMiddleware
+  adminMiddleware,
+  authenticateToken,
+  isAdmin
 };

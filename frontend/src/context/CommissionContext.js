@@ -10,21 +10,32 @@ const CommissionContext = createContext();
 const commissionReducer = (state, action) => {
   switch (action.type) {
     case 'SET_COMMISSIONS':
-      const pending = action.payload.filter(c => c.status === 'pending').reduce((sum, c) => sum + c.amount, 0);
-      const paid = action.payload.filter(c => c.status === 'paid').reduce((sum, c) => sum + c.amount, 0);
-      
-      return {
-        ...state,
-        commissions: action.payload,
-        totalPending: pending,
-        totalPaid: paid,
-        summary: {
-          totalCommissions: pending + paid,
-          pendingCount: action.payload.filter(c => c.status === 'pending').length,
-          paidCount: action.payload.filter(c => c.status === 'paid').length,
-          cancelledCount: action.payload.filter(c => c.status === 'cancelled').length
-        }
-      };
+  // Convert amount to number for each commission
+  const commissionsWithNumbers = action.payload.map(c => ({
+    ...c,
+    amount: parseFloat(c.amount) || 0,
+    premium_amount: parseFloat(c.premium_amount) || 0
+  }));
+  
+  const pending = commissionsWithNumbers
+    .filter(c => c.status === 'pending')
+    .reduce((sum, c) => sum + c.amount, 0);
+  const paid = commissionsWithNumbers
+    .filter(c => c.status === 'paid')
+    .reduce((sum, c) => sum + c.amount, 0);
+  
+  return {
+    ...state,
+    commissions: commissionsWithNumbers,
+    totalPending: pending,
+    totalPaid: paid,
+    summary: {
+      totalCommissions: pending + paid,
+      pendingCount: commissionsWithNumbers.filter(c => c.status === 'pending').length,
+      paidCount: commissionsWithNumbers.filter(c => c.status === 'paid').length,
+      cancelledCount: commissionsWithNumbers.filter(c => c.status === 'cancelled').length
+    }
+  };
       
     case 'ADD_COMMISSION':
       const newPending = state.totalPending + action.payload.amount;
@@ -140,6 +151,7 @@ export function CommissionProvider({ children }) {
   const [state, dispatch] = useReducer(commissionReducer, initialState);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const accountType = localStorage.getItem('accountType');
   
   // Define loadMockData first (before it's used)
   const loadMockData = useCallback(() => {
@@ -215,8 +227,12 @@ const fetchCommissions = useCallback(async () => {
 }, []); // Remove loadMockData dependency
   // useEffect with proper dependency
   useEffect(() => {
-    fetchCommissions();
-  }, [fetchCommissions]);
+    if (accountType === 'admin') {
+      fetchCommissions();
+    } else {
+      setLoading(false);
+    }
+  }, [fetchCommissions, accountType]);
   
   const addCommission = async (commissionData) => {
     try {
@@ -240,27 +256,47 @@ const fetchCommissions = useCallback(async () => {
     }
   };
   
-  const payCommission = async (commissionId, paymentReference) => {
+ const payCommission = async (commissionId, paymentReference, paymentMethod, paymentDate, notes) => {
     try {
-      const response = await commissionAPI.payCommission(commissionId, paymentReference);
-      dispatch({ type: 'UPDATE_COMMISSION_STATUS', payload: response });
-      return response;
+        const config = getAxiosConfig();
+        const response = await axios.put(
+            `${API_BASE_URL}/commissions/${commissionId}/pay`,
+            { 
+                payment_reference: paymentReference,
+                payment_method: paymentMethod,
+                payment_date: paymentDate,
+                notes: notes
+            },
+            config
+        );
+        dispatch({ type: 'UPDATE_COMMISSION_STATUS', payload: response.data.commission });
+        return response.data;
     } catch (error) {
-      console.error('Error paying commission:', error);
-      throw error;
+        console.error('Error paying commission:', error);
+        throw error;
     }
-  };
+};
   
-  const cancelCommission = async (commissionId) => {
+ const cancelCommission = async (commissionId, reason) => {
     try {
-      const response = await commissionAPI.cancelCommission(commissionId);
-      dispatch({ type: 'UPDATE_COMMISSION_STATUS', payload: response });
-      return response;
+        const config = getAxiosConfig();
+        const response = await axios.put(
+            `${API_BASE_URL}/commissions/${commissionId}/cancel`,
+            { reason },
+            config
+        );
+        
+        console.log('Cancel response:', response.data);
+        
+        // Refresh commissions after cancellation to get updated data
+        await fetchCommissions();
+        
+        return response.data;
     } catch (error) {
-      console.error('Error cancelling commission:', error);
-      throw error;
+        console.error('Error cancelling commission:', error.response?.data || error.message);
+        throw error;
     }
-  };
+};
   
   const updateCommissionRate = async (commissionId, newRate) => {
     try {
@@ -282,7 +318,67 @@ const fetchCommissions = useCallback(async () => {
       throw error;
     }
   };
-  
+  // Add to CommissionContext.js inside CommissionProvider component
+// Add this function to fetch commissions with filters
+const fetchCommissionsWithFilters = useCallback(async (filters = {}) => {
+    try {
+        setLoading(true);
+        const params = new URLSearchParams(filters).toString();
+        const url = `${API_BASE_URL}/commissions${params ? '?' + params : ''}`;
+        const config = getAxiosConfig();
+        const response = await axios.get(url, config);
+        
+        if (response.data && Array.isArray(response.data)) {
+            dispatch({ type: 'SET_COMMISSIONS', payload: response.data });
+        } else {
+            dispatch({ type: 'SET_COMMISSIONS', payload: [] });
+        }
+    } catch (error) {
+        console.error('Error fetching commissions:', error);
+        dispatch({ type: 'SET_COMMISSIONS', payload: [] });
+    } finally {
+        setLoading(false);
+    }
+}, []);
+// Approve commission (process payment)
+const approveCommission = async (commissionId, paymentMethod = 'stripe', notes = '') => {
+    try {
+        const config = getAxiosConfig();
+        const response = await axios.post(
+            `${API_BASE_URL}/commissions/${commissionId}/approve`,
+            { payment_method: paymentMethod, notes },
+            config
+        );
+        
+        // Refresh commissions after approval
+        await fetchCommissions();
+        
+        return response.data;
+    } catch (error) {
+        console.error('Error approving commission:', error);
+        throw error;
+    }
+};
+
+// Disapprove commission (reject with reason)
+const disapproveCommission = async (commissionId, reason, notes = '') => {
+    try {
+        const config = getAxiosConfig();
+        const response = await axios.post(
+            `${API_BASE_URL}/commissions/${commissionId}/disapprove`,
+            { reason, notes },
+            config
+        );
+        
+        // Refresh commissions after disapproval
+        await fetchCommissions();
+        
+        return response.data;
+    } catch (error) {
+        console.error('Error disapproving commission:', error);
+        throw error;
+    }
+};
   const exportReport = async (filters = {}) => {
     try {
       const blob = await commissionAPI.exportCommissionsReport(filters);
@@ -378,11 +474,14 @@ const fetchCommissions = useCallback(async () => {
       cancelCommission,
       updateCommissionRate,
       deleteCommission,
+      fetchCommissionsWithFilters,
       exportReport,
       refreshData,
       // Audit log functions
       getCommissionAuditLogs,
-      getAllAuditLogs
+      getAllAuditLogs,
+      approveCommission,
+      disapproveCommission
     }}>
       {children}
     </CommissionContext.Provider>

@@ -114,8 +114,8 @@ const PaymentForm = ({ commission, onSuccess, onClose }) => {
                 <div className="flex justify-between mb-2">
                     <span className="text-gray-600">Commission Amount:</span>
                     <span className="text-xl font-bold text-green-600">
-                        ${commission.amount.toFixed(2)}
-                    </span>
+    ${parseFloat(commission.amount).toFixed(2)}
+</span>
                 </div>
                 <div className="flex justify-between mb-2">
                     <span className="text-gray-600">Agent:</span>
@@ -162,7 +162,7 @@ const PaymentForm = ({ commission, onSuccess, onClose }) => {
                     ) : (
                         <>
                             <Lock className="h-4 w-4" />
-                            Pay ${commission.amount.toFixed(2)}
+                            Pay ${parseFloat(commission.amount).toFixed(2)}
                         </>
                     )}
                 </button>

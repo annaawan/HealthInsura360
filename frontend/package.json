@@ -17,6 +17,8 @@
     "chart.js": "^4.5.1",
     "date-fns": "^4.1.0",
     "json2csv": "^6.0.0-alpha.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.556.0",
     "pdfkit": "^0.17.2",
     "react": "^18.2.0",

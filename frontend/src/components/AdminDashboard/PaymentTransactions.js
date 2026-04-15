@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
-import { Check, Download, CreditCard as CreditCardIcon, Eye, AlertCircle, RefreshCw, FileText, FileSpreadsheet } from 'lucide-react';
+import { Check, Download, CreditCard as CreditCardIcon, Eye, AlertCircle, RefreshCw, FileText, FileSpreadsheet, X } from 'lucide-react';
 import axios from 'axios';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
@@ -12,6 +12,7 @@ function PaymentTransactions() {
   const [usingDummyData, setUsingDummyData] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(null);
 
   // Dummy data as fallback
   const dummyTransactions = [
@@ -24,12 +25,10 @@ function PaymentTransactions() {
       type: 'Premium Payment', 
       status: 'Completed', 
       created_at: '2024-01-15T10:30:00Z',
-      payment_details: {
-        method: 'Credit Card',
-        card_holder_name: 'John Smith',
-        masked_card: '**** **** **** 4242',
-        card_type: 'visa'
-      }
+      customer_name: 'John Smith',
+      payment_method: 'Credit Card',
+      agent_name: null,
+      hospital_name: null
     },
     { 
       transaction_id: 'TXN002', 
@@ -40,12 +39,10 @@ function PaymentTransactions() {
       type: 'Basic Payment', 
       status: 'Completed', 
       created_at: '2024-01-14T14:20:00Z',
-      payment_details: {
-        method: 'Bank Transfer',
-        card_holder_name: 'Sarah Johnson',
-        masked_card: null,
-        card_type: null
-      }
+      customer_name: 'Sarah Johnson',
+      payment_method: 'Bank Transfer',
+      agent_name: 'Agent Smith',
+      hospital_name: null
     },
     { 
       transaction_id: 'TXN003', 
@@ -56,12 +53,10 @@ function PaymentTransactions() {
       type: 'Premium Payment', 
       status: 'Pending', 
       created_at: '2024-01-14T09:15:00Z',
-      payment_details: {
-        method: 'Credit Card',
-        card_holder_name: 'Mike Chen',
-        masked_card: '**** **** **** 1234',
-        card_type: 'mastercard'
-      }
+      customer_name: 'Mike Chen',
+      payment_method: 'Credit Card',
+      agent_name: null,
+      hospital_name: null
     },
     { 
       transaction_id: 'TXN004', 
@@ -72,12 +67,10 @@ function PaymentTransactions() {
       type: 'Commission Payment', 
       status: 'Completed', 
       created_at: '2024-01-13T16:45:00Z',
-      payment_details: {
-        method: 'Bank Transfer',
-        card_holder_name: 'David Wilson',
-        masked_card: null,
-        card_type: null
-      }
+      customer_name: null,
+      payment_method: 'Bank Transfer',
+      agent_name: 'David Wilson',
+      hospital_name: null
     },
     { 
       transaction_id: 'TXN005', 
@@ -88,82 +81,135 @@ function PaymentTransactions() {
       type: 'Hospital Payment', 
       status: 'Failed', 
       created_at: '2024-01-12T11:00:00Z',
-      payment_details: {
-        method: 'Wire Transfer',
-        card_holder_name: 'City General',
-        masked_card: null,
-        card_type: null
-      }
+      customer_name: null,
+      payment_method: 'Wire Transfer',
+      agent_name: null,
+      hospital_name: 'City General Hospital'
     },
   ];
 
- const fetchTransactions = async () => {
-  setLoading(true);
-  setError(null);
-  setUsingDummyData(false);
-  
-  try {
-    // No token needed for now
-    const response = await axios.get('/api/payments/transactions');
+  const fetchTransactions = async () => {
+    setLoading(true);
+    setError(null);
+    setUsingDummyData(false);
     
-    console.log('Response:', response.data);
-    
-    if (response.data.success && response.data.data.length > 0) {
-      const formattedTransactions = response.data.data.map(txn => ({
+    try {
+      const response = await axios.get('http://localhost:5000/api/payments/transactions');
+      
+      console.log('Response:', response.data);
+      
+      if (response.data.success && response.data.data && response.data.data.length > 0) {
+        const formattedTransactions = response.data.data.map(txn => {
+          // Determine the user name based on transaction type
+          let userName = 'Unknown';
+          if (txn.customer?.name) {
+            userName = txn.customer.name;
+          } else if (txn.agent_name) {
+            userName = txn.agent_name;
+          } else if (txn.hospital_name) {
+            userName = txn.hospital_name;
+          }
+          
+          // Get payment method
+          let paymentMethod = txn.payment?.method || 'Unknown';
+          
+          return {
+            id: txn.transaction_id,
+            user: userName,
+            amount: txn.amount,
+            type: txn.type,
+            status: txn.status,
+            date: formatDate(txn.created_at),
+            method: paymentMethod,
+            transaction_id: txn.transaction_id,
+            related_payment_id: txn.related_payment_id,
+            related_claim_id: txn.related_claim_id,
+            related_commission_id: txn.related_commission_id,
+            created_at: txn.created_at,
+            customer: txn.customer,
+            payment: txn.payment,
+            agent_name: txn.agent_name,
+            hospital_name: txn.hospital_name
+          };
+        });
+        
+        setTransactions(formattedTransactions);
+        setError(null);
+      } else if (response.data.scenario === 'no_data') {
+        setTransactions([]);
+        setError('No transactions found in the database');
+      } else if (response.data.scenario === 'mock_data') {
+        const mockFormatted = response.data.data.map(txn => ({
+          id: txn.transaction_id,
+          user: txn.customer?.name || txn.agent_name || txn.hospital_name || 'Unknown',
+          amount: txn.amount,
+          type: txn.type,
+          status: txn.status,
+          date: formatDate(txn.created_at),
+          method: txn.payment?.method || 'Unknown'
+        }));
+        setTransactions(mockFormatted);
+        setError(`⚠️ ${response.data.message}`);
+        setUsingDummyData(true);
+      } else {
+        setTransactions([]);
+        setError('No transactions found');
+      }
+    } catch (err) {
+      console.error('Failed to fetch transactions:', err);
+      setError(`Error: ${err.message}`);
+      
+      const formattedDummy = dummyTransactions.map(txn => ({
         id: txn.transaction_id,
-        user: txn.customer?.name || txn.payment_details?.card_holder_name || 'Unknown User',
+        user: txn.customer_name || txn.agent_name || txn.hospital_name || 'Unknown',
         amount: txn.amount,
         type: txn.type,
         status: txn.status,
         date: formatDate(txn.created_at),
-        datetime: txn.created_at,
-        method: txn.payment?.method || txn.payment_details?.card_type || 'Unknown',
+        method: txn.payment_method || 'Unknown',
         transaction_id: txn.transaction_id,
         related_payment_id: txn.related_payment_id,
         related_claim_id: txn.related_claim_id,
         related_commission_id: txn.related_commission_id,
         created_at: txn.created_at,
-        payment_details: txn.payment_details,
-        customer: txn.customer,
-        payment: txn.payment
+        agent_name: txn.agent_name,
+        hospital_name: txn.hospital_name,
+        customer_name: txn.customer_name
       }));
-      
-      setTransactions(formattedTransactions);
-      setError(null);
-    } else if (response.data.data && response.data.data.length === 0) {
-      setTransactions([]);
-      setError('No transactions found in the database');
-    } else {
-      setTransactions([]);
-      setError('No transactions found');
+      setTransactions(formattedDummy);
+      setUsingDummyData(true);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error('Failed to fetch transactions:', err);
-    setError(`Error: ${err.message}`);
+  };
+
+  // Update transaction status function
+  const updateTransactionStatus = async (transactionId, newStatus) => {
+    const action = newStatus === 'Completed' ? 'approve' : 'reject';
+    if (!window.confirm(`Are you sure you want to ${action} transaction ${transactionId}?`)) {
+      return;
+    }
     
-    // Show dummy data for now
-    const formattedDummy = dummyTransactions.map(txn => ({
-      id: txn.transaction_id,
-      user: txn.payment_details?.card_holder_name || 'Unknown User',
-      amount: txn.amount,
-      type: txn.type,
-      status: txn.status,
-      date: formatDate(txn.created_at),
-      datetime: txn.created_at,
-      method: txn.payment_details?.method || 'Unknown',
-      transaction_id: txn.transaction_id,
-      related_payment_id: txn.related_payment_id,
-      related_claim_id: txn.related_claim_id,
-      related_commission_id: txn.related_commission_id,
-      created_at: txn.created_at,
-      payment_details: txn.payment_details
-    }));
-    setTransactions(formattedDummy);
-    setUsingDummyData(true);
-  } finally {
-    setLoading(false);
-  }
-};
+    setUpdatingStatus(transactionId);
+    
+    try {
+      const response = await axios.put(`http://localhost:5000/api/payments/transactions/${transactionId}/status`, {
+        status: newStatus
+      });
+      
+      if (response.data.success) {
+        alert(`Transaction ${transactionId} has been ${newStatus.toLowerCase()} successfully!`);
+        await fetchTransactions();
+      } else {
+        alert(`Failed to update transaction: ${response.data.message}`);
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      alert(`Error: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -182,10 +228,9 @@ function PaymentTransactions() {
     setExporting(true);
     
     try {
-      // Define CSV headers
       const headers = [
         'Transaction ID',
-        'User',
+        'User/Payee',
         'Type',
         'Amount',
         'Payment Method',
@@ -197,7 +242,6 @@ function PaymentTransactions() {
         'Related Commission ID'
       ];
       
-      // Prepare data rows
       const rows = transactions.map(txn => [
         txn.id,
         txn.user,
@@ -212,7 +256,6 @@ function PaymentTransactions() {
         txn.related_commission_id || 'N/A'
       ]);
       
-      // Combine headers and rows
       const csvContent = [
         headers.join(','),
         ...rows.map(row => row.map(cell => 
@@ -222,7 +265,6 @@ function PaymentTransactions() {
         ).join(','))
       ].join('\n');
       
-      // Add BOM for UTF-8 encoding
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -236,7 +278,6 @@ function PaymentTransactions() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       
-      // Show success message (optional)
       alert(`Successfully exported ${transactions.length} transactions to CSV`);
     } catch (err) {
       console.error('Export failed:', err);
@@ -247,13 +288,13 @@ function PaymentTransactions() {
     }
   };
   
-  // Export to Excel (XLSX format using CSV but with .xlsx extension - many systems accept this)
+  // Export to Excel
   const exportToExcel = () => {
     setExporting(true);
     
     try {
       const headers = [
-        'Transaction ID', 'User', 'Type', 'Amount', 'Payment Method', 
+        'Transaction ID', 'User/Payee', 'Type', 'Amount', 'Payment Method', 
         'Status', 'Date', 'Time', 'Related Payment ID', 'Related Claim ID', 'Related Commission ID'
       ];
       
@@ -364,7 +405,7 @@ function PaymentTransactions() {
     
     try {
       const printWindow = window.open('', '_blank');
-      const headers = ['Transaction ID', 'User', 'Type', 'Amount', 'Payment Method', 'Status', 'Date'];
+      const headers = ['Transaction ID', 'User/Payee', 'Type', 'Amount', 'Payment Method', 'Status', 'Date'];
       
       const rows = transactions.map(txn => [
         txn.id, txn.user, txn.type, `$${txn.amount.toLocaleString()}`, txn.method, txn.status, formatDate(txn.datetime || txn.created_at)
@@ -448,7 +489,6 @@ function PaymentTransactions() {
     fetchTransactions();
   };
 
-  // Close export menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (showExportMenu && !event.target.closest('.export-menu-container')) {
@@ -509,7 +549,6 @@ function PaymentTransactions() {
             <div className="text-2xl font-bold text-green-600">${totalRevenue.toLocaleString()}</div>
           </div>
           
-          {/* Export Button with Dropdown Menu */}
           <div className="relative export-menu-container">
             <button 
               onClick={() => setShowExportMenu(!showExportMenu)}
@@ -531,34 +570,18 @@ function PaymentTransactions() {
             
             {showExportMenu && !exporting && transactions.length > 0 && (
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
-                <button
-                  onClick={exportToCSV}
-                  className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                >
-                  <FileText className="h-4 w-4" />
-                  Export as CSV
+                <button onClick={exportToCSV} className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3">
+                  <FileText className="h-4 w-4" /> Export as CSV
                 </button>
-                <button
-                  onClick={exportToExcel}
-                  className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                >
-                  <FileSpreadsheet className="h-4 w-4" />
-                  Export as Excel
+                <button onClick={exportToExcel} className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3">
+                  <FileSpreadsheet className="h-4 w-4" /> Export as Excel
                 </button>
-                <button
-                  onClick={exportToJSON}
-                  className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                >
-                  <Download className="h-4 w-4" />
-                  Export as JSON
+                <button onClick={exportToJSON} className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3">
+                  <Download className="h-4 w-4" /> Export as JSON
                 </button>
                 <div className="border-t border-gray-200 my-1"></div>
-                <button
-                  onClick={printTransactions}
-                  className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                >
-                  <Download className="h-4 w-4" />
-                  Print Report
+                <button onClick={printTransactions} className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3">
+                  <Download className="h-4 w-4" /> Print Report
                 </button>
               </div>
             )}
@@ -566,7 +589,7 @@ function PaymentTransactions() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats Cards */}
       <div className="grid md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <div className="text-gray-600 text-sm mb-2">Total Transactions</div>
@@ -592,7 +615,7 @@ function PaymentTransactions() {
         </div>
       </div>
 
-      {/* Transactions Table */}
+      {/* Transactions Table - No Tabs, Just the Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {transactions.length === 0 ? (
           <div className="text-center py-12">
@@ -608,7 +631,7 @@ function PaymentTransactions() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-gray-700 font-medium">Transaction ID</th>
-                  <th className="px-6 py-3 text-left text-gray-700 font-medium">User</th>
+                  <th className="px-6 py-3 text-left text-gray-700 font-medium">User/Payee</th>
                   <th className="px-6 py-3 text-left text-gray-700 font-medium">Type</th>
                   <th className="px-6 py-3 text-left text-gray-700 font-medium">Amount</th>
                   <th className="px-6 py-3 text-left text-gray-700 font-medium">Payment Method</th>
@@ -622,7 +645,16 @@ function PaymentTransactions() {
                   <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 font-mono text-gray-600">{transaction.id}</td>
                     <td className="px-6 py-4 font-medium text-gray-900">{transaction.user}</td>
-                    <td className="px-6 py-4 text-gray-700">{transaction.type}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                        transaction.type === 'Premium Payment' ? 'bg-blue-100 text-blue-800' :
+                        transaction.type === 'Commission Payment' ? 'bg-green-100 text-green-800' :
+                        transaction.type === 'Hospital Payment' ? 'bg-purple-100 text-purple-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {transaction.type}
+                      </span>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="font-bold text-gray-900">${(transaction.amount || 0).toLocaleString()}</div>
                     </td>
@@ -642,26 +674,50 @@ function PaymentTransactions() {
                       <div className="flex items-center gap-2">
                         <button 
                           onClick={() => {
-                            // View transaction details
-                            alert(`Transaction Details:\nID: ${transaction.id}\nAmount: $${transaction.amount}\nStatus: ${transaction.status}\nMethod: ${transaction.method}`);
+                            let details = `Transaction Details:\n`;
+                            details += `ID: ${transaction.id}\n`;
+                            details += `Amount: $${transaction.amount}\n`;
+                            details += `Status: ${transaction.status}\n`;
+                            details += `Method: ${transaction.method}\n`;
+                            details += `User/Payee: ${transaction.user}\n`;
+                            details += `Type: ${transaction.type}\n`;
+                            details += `Date: ${transaction.date}\n`;
+                            if (transaction.agent_name) details += `Agent: ${transaction.agent_name}\n`;
+                            if (transaction.hospital_name) details += `Hospital: ${transaction.hospital_name}\n`;
+                            alert(details);
                           }}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="View Details"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         {transaction.status === 'Pending' && (
-                          <button 
-                            onClick={() => {
-                              // Approve transaction
-                              if (window.confirm(`Approve transaction ${transaction.id}?`)) {
-                                // Handle approval
-                                alert(`Transaction ${transaction.id} has been approved`);
-                              }
-                            }}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
+                          <>
+                            <button 
+                              onClick={() => updateTransactionStatus(transaction.id, 'Completed')}
+                              disabled={updatingStatus === transaction.id}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Approve Transaction"
+                            >
+                              {updatingStatus === transaction.id ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-green-600 border-t-transparent"></div>
+                              ) : (
+                                <Check className="h-4 w-4" />
+                              )}
+                            </button>
+                            <button 
+                              onClick={() => updateTransactionStatus(transaction.id, 'Failed')}
+                              disabled={updatingStatus === transaction.id}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Mark as Failed"
+                            >
+                              {updatingStatus === transaction.id ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-600 border-t-transparent"></div>
+                              ) : (
+                                <X className="h-4 w-4" />
+                              )}
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>

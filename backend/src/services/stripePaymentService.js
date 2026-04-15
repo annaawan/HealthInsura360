@@ -13,12 +13,12 @@ class StripePaymentService {
         try {
             console.log('🔍 Looking for commission:', commissionId);
             
-            // PostgreSQL query - NO destructuring, just get rows
+            // PostgreSQL query - Fixed: changed 'ending' to 'pending'
             const commissionResult = await db.query(
                 `SELECT c.*, a.email, a.first_name, a.last_name 
                  FROM commission c
                  JOIN agent a ON c.agent_id = a.agent_id
-                 WHERE c.commission_id = $1 AND c.status = 'pending'`,
+                 WHERE c.commission_id = $1 AND LOWER(c.status) = 'pending'`,
                 [commissionId]
             );
             
@@ -89,15 +89,18 @@ class StripePaymentService {
             await db.query('BEGIN');
             
             // Update commission status
-            await db.query(
+            const updateResult = await db.query(
                 `UPDATE commission 
                  SET status = 'paid', 
                      paid_at = CURRENT_DATE,
                      payment_reference = $1,
                      updated_at = NOW()
-                 WHERE commission_id = $2`,
+                 WHERE commission_id = $2
+                 RETURNING *`,
                 [paymentIntentId, commissionId]
             );
+            
+            console.log('📊 Update result:', updateResult.rows ? updateResult.rows[0] : updateResult);
             
             // Update transaction status
             await db.query(
@@ -128,13 +131,13 @@ class StripePaymentService {
                     payment_reference: paymentIntentId
                 };
                 
-                // Send email notification
-                await emailService.sendCommissionPaymentNotification(
+                // Send email notification (don't await - let it run in background)
+                emailService.sendCommissionPaymentNotification(
                     commissionId,
                     agent.email,
                     `${agent.first_name} ${agent.last_name}`,
                     commissionDetails
-                );
+                ).catch(err => console.error('Email error:', err.message));
             }
             
             await db.query('COMMIT');

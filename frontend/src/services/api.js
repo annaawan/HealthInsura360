@@ -4,13 +4,18 @@ const API_BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to get auth headers
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Authorization': `Bearer ${token}`,
+  const token = localStorage.getItem('healthinsura360_token');
+  const headers = {
     'Content-Type': 'application/json'
   };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
 };
- 
+
 
 export const hospitalAPI = {
   // Upload documents for a hospital
@@ -21,7 +26,7 @@ export const hospitalAPI = {
     });
     formData.append('document_type', documentType);
 
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('healthinsura360_token');
     
     const response = await fetch(`${API_BASE_URL}/hospitals/${hospitalId}/documents`, {
       method: 'POST',
@@ -239,14 +244,12 @@ export const commissionAPI = {
   exportCommissionsReport: async (filters = {}) => {
     const queryParams = new URLSearchParams(filters).toString();
     const url = queryParams 
-      ? `${API_BASE_URL}/commissions/export?${queryParams}`
-      : `${API_BASE_URL}/commissions/export`;
+      ? `${API_BASE_URL}/commissions/report/export?${queryParams}`
+      : `${API_BASE_URL}/commissions/report/export`;
     
     const response = await fetch(url, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
+      headers: getAuthHeaders()
     });
     
     if (!response.ok) {
@@ -254,10 +257,9 @@ export const commissionAPI = {
       throw new Error(error.message || 'Failed to export report');
     }
     
-    // Return blob for file download
     return response.blob();
   }
-};// Add at the very end of api.js
+};
 
 // Export the base URL for use in other files
 export { API_BASE_URL };

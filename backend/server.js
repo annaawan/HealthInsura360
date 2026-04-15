@@ -152,7 +152,16 @@ try {
 } catch (err) {
   console.error('❌ Error loading commission:', err.message);
 }
-
+// Agent Commission Routes (separate from admin)
+// In server.js, add this with other route mountings
+try {
+  console.log('🔵 Mounting /api/agent');
+  const agentRoutes = require('./src/routes/agentRoutes');
+  app.use('/api/agent', agentRoutes);
+  console.log('✅ Agent routes mounted');
+} catch (err) {
+  console.error('❌ Error mounting agent routes:', err.message);
+}
 console.log('🔵 All imports attempted, now mounting routes...');
 
 // Routes
@@ -269,150 +278,3 @@ app.listen(PORT, () => {
   console.log(`📊 Transactions: http://localhost:${PORT}/api/payments/transactions`);
   console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}\n`);
 });
-// const express = require('express');
-// const cors = require('cors');
-// const dotenv = require('dotenv');
-// const path = require('path');
-
-// // Load environment variables
-// dotenv.config();
-
-// const app = express();
-
-// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// // Middleware
-// app.use(cors({
-//   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-//   credentials: true,
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization']
-// }));
-
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
-
-// // Test route
-// app.get('/api/test', (req, res) => {
-//   res.json({ 
-//     success: true, 
-//     message: 'Backend is running!',
-//     timestamp: new Date().toISOString(),
-//     availableRoutes: [
-//       'POST /api/auth/login',
-//       'POST /api/auth/register',
-//       'POST /api/auth/verify',
-//       'GET /api/auth/profile',
-//       'POST /api/auth/logout',
-
-//       // Accounts
-//       'GET /api/accounts/customers',
-//       'GET /api/accounts/agents',
-//       'GET /api/accounts/hospitals',
-//       'POST /api/accounts',
-//       'PUT /api/accounts/:type/:id',
-//       'DELETE /api/accounts/:type/:id',
-//       'GET /api/accounts/:type/:id',
-
-//       // Hospitals
-//       'GET /api/hospitals', 
-//       'PUT /api/hospitals/:id/status'
-//     ]
-//   });
-// });
-
-// // Import routes
-// const accounts = require('./src/routes/accounts');
-// const authRoutes = require('./src/routes/authRoutes');
-// const hospitalsRoutes = require('./src/routes/hospitalRoutes');   // ✅ NEW
-// const auditRoutes = require('./src/routes/auditRoutes');
-// const policyPlansRoutes = require('./src/routes/policyPlans');
-// const analyticsRoutes = require('./src/routes/analyticsRoutes');
-// const reportsRoutes = require('./src/routes/reportsRoutes');
-// const webhookRoutes = require('./src/routes/webhookRoutes');
-// const paymentRoutes = require('./src/routes/paymentRoutes');
-// const stripeWebhookRoutes = require('./src/routes/stripeWebhookRoutes');
-// const commissionRoutes = require('./src/routes/commissionRoutes');
-
-// // Routes
-// app.use('/api/webhooks/stripe', stripeWebhookRoutes);
-
-// app.use('/api/accounts', accounts);
-// app.use('/api/auth', authRoutes);
-// app.use('/api/hospitals', hospitalsRoutes);   // ✅ NEW
-// app.use('/api/audit-logs', auditRoutes);
-// app.use('/api/policy-plans', policyPlansRoutes);
-// app.use('/api/analytics', analyticsRoutes);
-// app.use('/api/reports', reportsRoutes);
-// app.use('/api/webhooks', webhookRoutes);
-// app.use('/api/payments', paymentRoutes);
-// app.use('/api/reports', reportsRoutes);
-// app.use('/api/commissions', commissionRoutes);
-
-// // Health check
-// app.get('/health', (req, res) => {
-//   res.json({
-//     success: true,
-//     status: 'healthy',
-//     timestamp: new Date().toISOString(),
-//     uptime: process.uptime()
-//   });
-// });
-// // Debug middleware to log all requests
-// app.use((req, res, next) => {
-//   console.log(`${req.method} ${req.url}`);
-//   next();
-// });
-// // Error handling middleware
-// app.use((err, req, res, next) => {
-//   console.error('Server Error:', err.stack);
-//   res.status(err.status || 500).json({
-//     success: false,
-//     message: err.message || 'Internal Server Error',
-//     error: process.env.NODE_ENV === 'development' ? err.stack : undefined
-//   });
-// });
-
-// // 404 handler
-// app.use('*', (req, res) => {
-//   res.status(404).json({
-//     success: false,
-//     message: `Route not found: ${req.originalUrl}`,
-//     method: req.method,
-//     availableEndpoints: [
-//       'GET    /api/test',
-//       'GET    /health',
-
-//       // Auth
-//       'POST   /api/auth/login',
-//       'POST   /api/auth/register',
-//       'POST   /api/auth/verify',
-//       'GET    /api/auth/profile',
-//       'POST   /api/auth/logout',
-
-//       // Accounts
-//       'GET    /api/accounts/customers',
-//       'GET    /api/accounts/agents',
-//       'GET    /api/accounts/hospitals',
-//       'POST   /api/accounts',
-//       'PUT    /api/accounts/:type/:id',
-//       'DELETE /api/accounts/:type/:id',
-//       'GET    /api/accounts/:type/:id',
-
-//       // Hospitals
-//       'GET    /api/hospitals',
-//       'PUT    /api/hospitals/:id/status'
-//     ]
-//   });
-// });
-
-// const PORT = process.env.PORT || 5000;
-
-// app.listen(PORT, () => {
-//   console.log(`🚀 Server running on port ${PORT}`);
-//   console.log(`📝 Test endpoint: http://localhost:${PORT}/api/test`);
-//   console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
-//   console.log(`🏥 Hospitals API: http://localhost:${PORT}/api/hospitals`);
-//   console.log(`👥 Accounts API: http://localhost:${PORT}/api/accounts`);
-//   console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
-// });
