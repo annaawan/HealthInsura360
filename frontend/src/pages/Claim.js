@@ -112,7 +112,7 @@ const Claims = () => {
     setError('');
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('healthinsura360_token');
       const claimsFormData = new FormData();
 
       // Add all text fields
@@ -704,7 +704,6 @@ const Claims = () => {
       </Grid>
     </Box>
   );
-};
 };
 
 export default Claims;

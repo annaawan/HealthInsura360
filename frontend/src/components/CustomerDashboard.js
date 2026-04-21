@@ -27,6 +27,7 @@ import {
   ClipboardList,
   Calendar,
   Zap,
+  Trash2
 } from 'lucide-react';
 import {
   BarChart,
@@ -92,7 +93,6 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
     } catch (err) {
       console.error('Error fetching policies:', err);
       setError('Failed to fetch policies');
-      // Mock data for demo
       setPolicies([
         {
           id: 1,
@@ -192,81 +192,81 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
             <p className="text-green-700 text-sm">These are the policies you have purchased and own</p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {policies.map((policy) => (
-            <div key={policy.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-              <div className="p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
-                  <div className="min-w-0">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words">{policy.plan_name}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600">{policy.policy_number}</p>
+            {policies.map((policy) => (
+              <div key={policy.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                <div className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                    <div className="min-w-0">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words">{policy.plan_name}</h3>
+                      <p className="text-xs sm:text-sm text-gray-600">{policy.policy_number}</p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${
+                      policy.status === 'active' 
+                        ? 'bg-green-100 text-green-800' 
+                        : policy.status === 'expiring_soon'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {policy.status.replace('_', ' ')}
+                    </span>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${
-                    policy.status === 'active' 
-                      ? 'bg-green-100 text-green-800' 
-                      : policy.status === 'expiring_soon'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {policy.status.replace('_', ' ')}
-                  </span>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <p className="text-xs text-gray-600">Coverage Amount</p>
-                    <p className="text-base sm:text-lg font-bold text-burgundy-600">{formatCurrency(policy.coverage_amount)}</p>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-xs text-gray-600">Coverage Amount</p>
+                      <p className="text-base sm:text-lg font-bold text-burgundy-600">{formatCurrency(policy.coverage_amount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Annual Premium</p>
+                      <p className="text-base sm:text-lg font-bold text-gray-900">{formatCurrency(policy.premium)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Valid From</p>
+                      <p className="text-xs sm:text-sm text-gray-900">{new Date(policy.start_date).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Valid Till</p>
+                      <p className="text-xs sm:text-sm text-gray-900">{new Date(policy.end_date).toLocaleDateString()}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-600">Annual Premium</p>
-                    <p className="text-base sm:text-lg font-bold text-gray-900">{formatCurrency(policy.premium)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600">Valid From</p>
-                    <p className="text-xs sm:text-sm text-gray-900">{new Date(policy.start_date).toLocaleDateString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600">Valid Till</p>
-                    <p className="text-xs sm:text-sm text-gray-900">{new Date(policy.end_date).toLocaleDateString()}</p>
-                  </div>
-                </div>
 
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                  <button
-                    onClick={() => {
-                      setSelectedPolicy(policy);
-                      setShowPolicyDetail(true);
-                    }}
-                    className="flex-1 px-3 py-2 border border-burgundy-600 text-burgundy-600 rounded-lg hover:bg-burgundy-50 transition-colors flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Eye className="h-4 w-4" />
-                    <span>View</span>
-                  </button>
-                  <button
-                    onClick={() => downloadPolicyDoc(policy.id)}
-                    className="flex-1 px-3 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>Download</span>
-                  </button>
-                  {(policy.status === 'active' || policy.status === 'expiring_soon') && (
-                    <button 
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    <button
                       onClick={() => {
-                        setSelectedRenewalPolicy(policy);
-                        setRenewalData({
-                          startDate: policy.end_date,
-                          endDate: ''
-                        });
-                        setShowRenewalModal(true);
+                        setSelectedPolicy(policy);
+                        setShowPolicyDetail(true);
                       }}
-                      className="flex-1 px-3 py-2 bg-burgundy-100 text-burgundy-600 rounded-lg hover:bg-burgundy-200 transition-colors flex items-center justify-center gap-2 text-sm">
-                      <RefreshCw className="h-4 w-4" />
-                      <span>Renew</span>
+                      className="flex-1 px-3 py-2 border border-burgundy-600 text-burgundy-600 rounded-lg hover:bg-burgundy-50 transition-colors flex items-center justify-center gap-2 text-sm"
+                    >
+                      <Eye className="h-4 w-4" />
+                      <span>View</span>
                     </button>
-                  )}
+                    <button
+                      onClick={() => downloadPolicyDoc(policy.id)}
+                      className="flex-1 px-3 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors flex items-center justify-center gap-2 text-sm"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Download</span>
+                    </button>
+                    {(policy.status === 'active' || policy.status === 'expiring_soon') && (
+                      <button 
+                        onClick={() => {
+                          setSelectedRenewalPolicy(policy);
+                          setRenewalData({
+                            startDate: policy.end_date,
+                            endDate: ''
+                          });
+                          setShowRenewalModal(true);
+                        }}
+                        className="flex-1 px-3 py-2 bg-burgundy-100 text-burgundy-600 rounded-lg hover:bg-burgundy-200 transition-colors flex items-center justify-center gap-2 text-sm">
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Renew</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
           </div>
         </>
       )}
@@ -402,16 +402,13 @@ function BuyPoliciesSection({ onBack }) {
     try {
       const config = getAxiosConfig();
       
-      // Fetch all available plans
-      const plansResponse = await axios.get(`${API_BASE_URL}/policies/plans`, config);
+      const plansResponse = await axios.get(`${API_BASE_URL}/insurance-plans`, config);
       const allPlans = plansResponse.data.plans || [];
 
-      // Fetch customer's current policies
       const customerResponse = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
       const customerPolicyList = customerResponse.data.policies || [];
       setCustomerPolicies(customerPolicyList);
 
-      // Filter out plans the customer already has
       const purchasedPlanIds = new Set(customerPolicyList.map(p => p.plan_id));
       const available = allPlans.filter(plan => !purchasedPlanIds.has(plan.plan_id));
 
@@ -425,27 +422,23 @@ function BuyPoliciesSection({ onBack }) {
     }
   };
 
-const handlePurchaseClick = (plan) => {
-  // Get today's date
-  const today = new Date();
-  const startDate = today.toISOString().split('T')[0];
-  
-  // Calculate end date (1 year from today)
-  const endDate = new Date(today);
-  endDate.setFullYear(endDate.getFullYear() + 1);
-  const endDateStr = endDate.toISOString().split('T')[0];
-  
-  console.log('📅 Setting dates:', { startDate, endDate: endDateStr });
-  
-  setSelectedPlan(plan);
-  setPurchaseData({
-    startDate: startDate,
-    endDate: endDateStr  // ✅ Now this has a value!
-  });
-  setShowPurchaseForm(true);
-};
-
-  // Remove the old handlePurchase function - we'll use Stripe now
+  const handlePurchaseClick = (plan) => {
+    const today = new Date();
+    const startDate = today.toISOString().split('T')[0];
+    
+    const endDate = new Date(today);
+    endDate.setFullYear(endDate.getFullYear() + 1);
+    const endDateStr = endDate.toISOString().split('T')[0];
+    
+    console.log('📅 Setting dates:', { startDate, endDate: endDateStr });
+    
+    setSelectedPlan(plan);
+    setPurchaseData({
+      startDate: startDate,
+      endDate: endDateStr
+    });
+    setShowPurchaseForm(true);
+  };
 
   if (loading) {
     return (
@@ -526,63 +519,54 @@ const handlePurchaseClick = (plan) => {
             
             <Elements stripe={stripePromise}>
               <StripePayment
-  policyId={selectedPlan.plan_id}
-  amount={selectedPlan.premium_amount}
-  policyName={selectedPlan.plan_name}
- onSuccess={async (paymentIntent) => {
-  console.log('='.repeat(50));
-  console.log('✅ PAYMENT SUCCEEDED');
-  console.log('='.repeat(50));
-  
-  try {
-    const config = getAxiosConfig();
-    
-    // Make sure config has proper JSON headers
-    config.headers = {
-      ...config.headers,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    };
-    
-    // Create payload with EXPLICIT field names
-    const payload = {
-      planId: selectedPlan.plan_id,        // Make sure this is a number
-      startDate: purchaseData.startDate,    // Make sure this is a string
-      endDate: purchaseData.endDate         // Make sure this is a string
-    };
-    
-    console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
-    console.log('📤 Headers:', config.headers);
-    
-    // Log each field individually to verify they exist
-    console.log('🔍 planId value:', selectedPlan.plan_id);
-    console.log('🔍 startDate value:', purchaseData.startDate);
-    console.log('🔍 endDate value:', purchaseData.endDate);
-    
-    const response = await axios.post(
-      `${API_BASE_URL}/policies/purchase`, 
-      payload, 
-      config
-    );
-    
-    console.log('✅ Policy activated:', response.data);
-    alert('Payment successful! Your policy has been activated.');
-    setShowPurchaseForm(false);
-    setSelectedPlan(null);
-    onBack();
-    
-  } catch (err) {
-    console.error('❌ Activation error:', err);
-    console.error('❌ Response data:', err.response?.data);
-    alert(`Payment succeeded but policy activation failed: ${err.response?.data?.error}`);
-  }
-}}
-  onCancel={() => {
-    setShowPurchaseForm(false);
-    setSelectedPlan(null);
-  }}
-/>
-          </Elements>
+                policyId={selectedPlan.plan_id}
+                amount={selectedPlan.premium_amount}
+                policyName={selectedPlan.plan_name}
+                onSuccess={async (paymentIntent) => {
+                  console.log('='.repeat(50));
+                  console.log('✅ PAYMENT SUCCEEDED');
+                  console.log('='.repeat(50));
+                  
+                  try {
+                    const config = getAxiosConfig();
+                    
+                    config.headers = {
+                      ...config.headers,
+                      'Content-Type': 'application/json',
+                      'Accept': 'application/json'
+                    };
+                    
+                    const payload = {
+                      planId: selectedPlan.plan_id,
+                      startDate: purchaseData.startDate,
+                      endDate: purchaseData.endDate
+                    };
+                    
+                    console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
+                    
+                    const response = await axios.post(
+                      `${API_BASE_URL}/policies/purchase`, 
+                      payload, 
+                      config
+                    );
+                    
+                    console.log('✅ Policy activated:', response.data);
+                    alert('Payment successful! Your policy has been activated.');
+                    setShowPurchaseForm(false);
+                    setSelectedPlan(null);
+                    onBack();
+                    
+                  } catch (err) {
+                    console.error('❌ Activation error:', err);
+                    alert(`Payment succeeded but policy activation failed: ${err.response?.data?.error}`);
+                  }
+                }}
+                onCancel={() => {
+                  setShowPurchaseForm(false);
+                  setSelectedPlan(null);
+                }}
+              />
+            </Elements>
           </div>
         </div>
       )}
@@ -673,7 +657,6 @@ function ClaimsSection({ customerPolicies = [] }) {
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     
-    // Validate file types
     const allowedTypes = [
       'application/pdf',
       'image/jpeg',
@@ -691,8 +674,7 @@ function ClaimsSection({ customerPolicies = [] }) {
       return;
     }
 
-    // Validate file size (max 10MB each)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     const validSizeFiles = validFiles.filter(file => file.size <= maxSize);
     
     if (validSizeFiles.length !== validFiles.length) {
@@ -700,7 +682,6 @@ function ClaimsSection({ customerPolicies = [] }) {
       return;
     }
 
-    // Create preview of selected files
     const filePreviews = validSizeFiles.map(file => ({
       file: file,
       name: file.name,
@@ -764,10 +745,8 @@ function ClaimsSection({ customerPolicies = [] }) {
     try {
       const token = localStorage.getItem('healthinsura360_token');
       
-      // Create FormData for file upload
       const formData = new FormData();
       
-      // Append all form fields
       formData.append('policy_id', claimFormData.policy_id);
       formData.append('patient_name', claimFormData.patient_name);
       formData.append('hospital_name', claimFormData.hospital_name);
@@ -776,7 +755,6 @@ function ClaimsSection({ customerPolicies = [] }) {
       formData.append('claim_amount', claimFormData.claim_amount);
       formData.append('description', claimFormData.description || '');
       
-      // Append documents
       claimFormData.documents.forEach(file => {
         formData.append('documents', file);
       });
@@ -851,7 +829,6 @@ function ClaimsSection({ customerPolicies = [] }) {
         </button>
       </div>
 
-      {/* Claim Form */}
       {showClaimForm && (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Submit Reimbursement Claim</h3>
@@ -861,7 +838,6 @@ function ClaimsSection({ customerPolicies = [] }) {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Policy Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Select Policy <span className="text-red-500">*</span>
@@ -881,7 +857,6 @@ function ClaimsSection({ customerPolicies = [] }) {
                 </select>
               </div>
 
-              {/* Patient Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -911,7 +886,6 @@ function ClaimsSection({ customerPolicies = [] }) {
                 </div>
               </div>
 
-              {/* Medical Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -940,7 +914,6 @@ function ClaimsSection({ customerPolicies = [] }) {
                 </div>
               </div>
 
-              {/* Claim Amount */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -959,7 +932,6 @@ function ClaimsSection({ customerPolicies = [] }) {
                 </div>
               </div>
 
-              {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Description
@@ -974,7 +946,6 @@ function ClaimsSection({ customerPolicies = [] }) {
                 />
               </div>
 
-              {/* Document Upload Section */}
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
                 <label className="block text-sm font-medium text-gray-700 mb-4">
                   Supporting Documents <span className="text-gray-500 text-xs">(PDF, Images, DOC - Max 10MB each)</span>
@@ -1019,7 +990,6 @@ function ClaimsSection({ customerPolicies = [] }) {
                   </div>
                 </div>
 
-                {/* Selected Files Preview */}
                 {uploadedFiles.length > 0 && (
                   <div className="mt-4">
                     <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Files:</h4>
@@ -1049,7 +1019,6 @@ function ClaimsSection({ customerPolicies = [] }) {
                   </div>
                 )}
 
-                {/* Upload Progress */}
                 {uploadProgress > 0 && uploadProgress < 100 && (
                   <div className="mt-4">
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
@@ -1063,7 +1032,6 @@ function ClaimsSection({ customerPolicies = [] }) {
                 )}
               </div>
 
-              {/* Form Actions */}
               <div className="flex gap-3 pt-4">
                 <button
                   onClick={submitClaim}
@@ -1099,7 +1067,6 @@ function ClaimsSection({ customerPolicies = [] }) {
         </div>
       )}
 
-      {/* Claims List */}
       {loading ? (
         <div className="text-center py-8">
           <div className="w-12 h-12 border-4 border-burgundy-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -1142,7 +1109,6 @@ function ClaimsSection({ customerPolicies = [] }) {
                   
                   <p className="text-sm text-gray-600 mb-2">{claim.description}</p>
                   
-                  {/* Display attached documents */}
                   {claim.documents && claim.documents.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <p className="text-xs font-medium text-gray-500 mb-2">Attached Documents:</p>
@@ -1202,12 +1168,17 @@ function ProfileSection() {
     fetchUserProfile();
   }, []);
 
-  const fetchUserProfile = async () => {
+ const fetchUserProfile = async () => {
     try {
       const config = getAxiosConfig();
       const response = await axios.get(`${API_BASE_URL}/auth/profile`, config);
+      console.log('🔍 Fetch profile response:', response.data);
+      
       if (response.data.success) {
         const user = response.data.profile || response.data.user || response.data.data;
+        console.log('🔍 User object from backend:', user);
+        console.log('🔍 Profile picture URL from backend:', user.profile_picture);
+        
         const profileData = {
           first_name: user.firstName || user.first_name || '',
           last_name: user.lastName || user.last_name || '',
@@ -1221,6 +1192,9 @@ function ProfileSection() {
           dob: user.dob || user.dateOfBirth || '',
           profile_picture: user.profile_picture || ''
         };
+        
+        console.log('📸 Setting profileData with picture path:', profileData.profile_picture);
+        
         setProfileData(profileData);
         setEditFormData(profileData);
       }
@@ -1241,14 +1215,12 @@ function ProfileSection() {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (!allowedTypes.includes(file.type)) {
       alert('Please select a valid image file (JPEG, PNG, GIF)');
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       alert('File size must be less than 5MB');
       return;
@@ -1274,17 +1246,17 @@ function ProfileSection() {
       
       const formData = new FormData();
       
-      // Append all form fields
       Object.keys(editFormData).forEach(key => {
         if (key !== 'profile_picture' && editFormData[key]) {
           formData.append(key, editFormData[key]);
         }
       });
       
-      // Append profile picture if selected
       if (selectedFile) {
         formData.append('profilePicture', selectedFile);
       }
+
+      console.log('📤 Uploading profile with picture:', selectedFile ? selectedFile.name : 'No new picture');
 
       const response = await axios.put(
         `${API_BASE_URL}/profile/update`,
@@ -1292,24 +1264,31 @@ function ProfileSection() {
         config
       );
 
+      console.log('🔍 Full backend response:', response.data);
+      console.log('🔍 Response user object:', response.data.user);
+      console.log('🔍 Profile picture from backend after save:', response.data.user?.profile_picture);
+
       if (response.data.success) {
         setProfileData(response.data.user);
         setEditFormData(response.data.user);
         setSelectedFile(null);
         setPreviewUrl(null);
         setShowEditForm(false);
-        alert('Profile updated successfully');
         
-        // Update stored name
+        console.log('✅ Profile updated successfully. New profile picture:', response.data.user?.profile_picture);
+        alert('Profile updated successfully!');
+        
         if (response.data.user.first_name) {
           localStorage.setItem('customerName', 
             `${response.data.user.first_name} ${response.data.user.last_name || ''}`.trim()
           );
         }
+      } else {
+        throw new Error(response.data.message || 'Update failed');
       }
     } catch (err) {
-      console.error('Profile update error:', err);
-      alert(err.response?.data?.error || 'Failed to update profile');
+      console.error('❌ Profile update error:', err);
+      alert(err.response?.data?.error || err.message || 'Failed to update profile');
     } finally {
       setUploading(false);
     }
@@ -1340,12 +1319,24 @@ function ProfileSection() {
   };
 
   const getProfileImageUrl = () => {
-    if (previewUrl) return previewUrl;
-    if (profileData.profile_picture) {
-      return `http://localhost:5000${profileData.profile_picture}`;
+  if (previewUrl) {
+    console.log('📸 Using preview URL:', previewUrl);
+    return previewUrl;
+  }
+  
+  if (profileData.profile_picture) {
+    let picturePath = profileData.profile_picture;
+    if (!picturePath.startsWith('/')) {
+      picturePath = '/' + picturePath;
     }
-    return null;
-  };
+    const fullUrl = `http://localhost:5000${picturePath}`;
+    console.log('📸 Using saved profile picture URL:', fullUrl);
+    return fullUrl;
+  }
+  
+  console.log('📸 No profile picture available');
+  return null;
+};
 
   return (
     <div className="space-y-6">
@@ -1364,7 +1355,6 @@ function ProfileSection() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Profile</h3>
           
-          {/* Profile Picture Upload Section */}
           <div className="mb-6 flex items-center gap-6">
             <div className="relative">
               <div className="w-24 h-24 bg-burgundy-100 rounded-full overflow-hidden border-4 border-white shadow-lg">
@@ -1373,6 +1363,11 @@ function ProfileSection() {
                     src={getProfileImageUrl()} 
                     alt="Profile" 
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error('❌ Image failed to load:', getProfileImageUrl());
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg class="h-12 w-12 text-burgundy-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg></div>';
+                    }}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
@@ -1414,7 +1409,6 @@ function ProfileSection() {
             </div>
           </div>
 
-          {/* Form fields */}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -1549,18 +1543,18 @@ function ProfileSection() {
             <p className="text-gray-600">Loading profile...</p>
           ) : (
             <div className="space-y-4">
-              {/* Profile Header with Picture */}
               <div className="flex items-center gap-6 pb-4 border-b border-gray-200">
                 <div className="w-20 h-20 bg-burgundy-100 rounded-full overflow-hidden border-2 border-burgundy-200">
                   {profileData.profile_picture ? (
                     <img 
-                      src={`http://localhost:5000${profileData.profile_picture}`}
+                      src={`http://localhost:5000${profileData.profile_picture.startsWith('/') ? profileData.profile_picture : `/${profileData.profile_picture}`}`}
                       alt="Profile"
                       className="w-full h-full object-cover"
                       onError={(e) => {
+                        console.error('❌ Image failed to load in view mode:', profileData.profile_picture);
                         e.target.onerror = null;
                         e.target.style.display = 'none';
-                        e.target.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center"><User class="h-10 w-10 text-burgundy-600" /></div>`;
+                        e.target.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center"><svg class="h-10 w-10 text-burgundy-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg></div>`;
                       }}
                     />
                   ) : (
@@ -1577,7 +1571,6 @@ function ProfileSection() {
                 </div>
               </div>
               
-              {/* Profile Details Grid */}
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">First Name</p>
@@ -1636,83 +1629,182 @@ function ProfileSection() {
 
 // ==================== NOTIFICATIONS SECTION ====================
 function NotificationsSection() {
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: 'claim_approved',
-      title: 'Claim Approved',
-      message: 'Your claim CLM-2024-001 has been approved. Amount: Rs. 25,000',
-      date: '2024-12-10',
-      read: false
-    },
-    {
-      id: 2,
-      type: 'policy_expiring',
-      title: 'Policy Expiring Soon',
-      message: 'Your policy HI360-2023-045 will expire on 2024-12-25. Renew now to avoid coverage gaps.',
-      date: '2024-12-08',
-      read: false
-    },
-    {
-      id: 3,
-      type: 'payment_received',
-      title: 'Payment Received',
-      message: 'Your premium payment of Rs. 5,000 has been received successfully.',
-      date: '2024-12-01',
-      read: true
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    setLoading(true);
+    try {
+      const config = getAxiosConfig();
+      const response = await axios.get(`${API_BASE_URL}/notifications`, config);
+      
+      if (response.data.success) {
+        setNotifications(response.data.notifications || []);
+        setError(null);
+      } else {
+        throw new Error(response.data.message);
+      }
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+      setError('Failed to load notifications');
+    } finally {
+      setLoading(false);
     }
-  ]);
-
-  const markAsRead = (id) => {
-    setNotifications(notifications.map(notif =>
-      notif.id === id ? { ...notif, read: true } : notif
-    ));
   };
 
-  const deleteNotification = (id) => {
-    setNotifications(notifications.filter(notif => notif.id !== id));
+  const markAsRead = async (id) => {
+    try {
+      const config = getAxiosConfig();
+      await axios.put(`${API_BASE_URL}/notifications/${id}/read`, {}, config);
+      
+      setNotifications(notifications.map(notif =>
+        notif.notification_id === id ? { ...notif, is_read: true } : notif
+      ));
+    } catch (err) {
+      console.error('Error marking as read:', err);
+    }
   };
+
+  const markAllAsRead = async () => {
+    try {
+      const config = getAxiosConfig();
+      await axios.put(`${API_BASE_URL}/notifications/read-all`, {}, config);
+      
+      setNotifications(notifications.map(notif => ({ ...notif, is_read: true })));
+    } catch (err) {
+      console.error('Error marking all as read:', err);
+    }
+  };
+
+  const deleteNotification = async (id) => {
+    try {
+      const config = getAxiosConfig();
+      await axios.delete(`${API_BASE_URL}/notifications/${id}`, config);
+      
+      setNotifications(notifications.filter(notif => notif.notification_id !== id));
+    } catch (err) {
+      console.error('Error deleting notification:', err);
+    }
+  };
+
+  const getNotificationIcon = (type) => {
+    switch (type) {
+      case 'claim_approved': return '✅';
+      case 'claim_rejected': return '❌';
+      case 'policy_purchased': return '📄';
+      case 'policy_expiring': return '⚠️';
+      case 'payment_received': return '💰';
+      default: return '🔔';
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-12 h-12 border-4 border-burgundy-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <p className="text-gray-600 mt-4">Loading notifications...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
-      <div className="space-y-4">
-        {notifications.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-            <Bell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No notifications</p>
-          </div>
-        ) : (
-          notifications.map((notif) => (
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
+        {notifications.length > 0 && (
+          <button
+            onClick={markAllAsRead}
+            className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            Mark all as read
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-600">{error}</p>
+          <button 
+            onClick={fetchNotifications}
+            className="mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {notifications.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+          <Bell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">No notifications</p>
+          <p className="text-gray-400 text-sm mt-1">When you receive notifications, they will appear here</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {notifications.map((notif) => (
             <div
-              key={notif.id}
-              className={`p-4 rounded-lg border transition-colors cursor-pointer ${
-                notif.read
+              key={notif.notification_id}
+              className={`p-4 rounded-lg border transition-colors ${
+                notif.is_read
                   ? 'bg-white border-gray-200'
                   : 'bg-burgundy-50 border-burgundy-200'
               }`}
-              onClick={() => markAsRead(notif.id)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900">{notif.title}</h4>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xl">{getNotificationIcon(notif.type)}</span>
+                    <h4 className="font-semibold text-gray-900">{notif.title}</h4>
+                    {!notif.is_read && (
+                      <span className="px-2 py-0.5 text-xs bg-burgundy-600 text-white rounded-full">New</span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-600 mt-1">{notif.message}</p>
-                  <p className="text-xs text-gray-500 mt-2">{new Date(notif.date).toLocaleDateString()}</p>
+                  <p className="text-xs text-gray-500 mt-2">{formatDate(notif.created_at)}</p>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteNotification(notif.id);
-                  }}
-                  className="text-gray-400 hover:text-gray-600 ml-4"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+                <div className="flex gap-2 ml-4">
+                  {!notif.is_read && (
+                    <button
+                      onClick={() => markAsRead(notif.notification_id)}
+                      className="text-gray-400 hover:text-gray-600"
+                      title="Mark as read"
+                    >
+                      <Check className="h-5 w-5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => deleteNotification(notif.notification_id)}
+                    className="text-gray-400 hover:text-red-600"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1790,20 +1882,17 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
     try {
       const config = getAxiosConfig();
       
-      // Fetch policies
       const policiesResponse = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
       if (policiesResponse.data.success) {
         setPolicies(policiesResponse.data.policies || []);
       }
 
-      // Fetch claims
       const claimsResponse = await axios.get(`${API_BASE_URL}/claims/my-claims`, config);
       if (claimsResponse.data.success) {
         setClaims(claimsResponse.data.claims || []);
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
-      // Fallback to mock data
       setPolicies([
         { id: 1, plan_name: 'Premium Health Coverage', status: 'active', premium: 5000, coverage: 500000 },
         { id: 2, plan_name: 'Basic Health Plan', status: 'expiring_soon', premium: 3000, coverage: 300000 }
@@ -1836,13 +1925,11 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
 
   return (
     <div className="space-y-8">
-      {/* Welcome Section */}
       <div className="bg-gradient-to-r from-burgundy-600 to-burgundy-800 rounded-lg p-8 text-white shadow-lg">
         <h1 className="text-4xl font-bold mb-2">Welcome back, {displayName}!</h1>
         <p className="text-burgundy-100">Manage your health insurance policies with ease</p>
       </div>
 
-      {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
@@ -1900,9 +1987,7 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
         </div>
       </div>
 
-      {/* My Claims Card - Dedicated Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Claims Overview */}
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Claims Overview</h3>
@@ -1957,7 +2042,6 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
           )}
         </div>
 
-        {/* Recent Policies */}
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Your Policies</h3>
@@ -2002,7 +2086,6 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
         </div>
       </div>
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <button 
           onClick={() => setCurrentView('buy-policies')}
@@ -2033,6 +2116,28 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
   );
 }
 
+// ==================== SETTINGS SECTION ====================
+function SettingsSection() {
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">Account Settings</h2>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <p className="text-gray-600">Settings panel coming soon...</p>
+        <div className="mt-4 space-y-4">
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-medium text-gray-900 mb-2">Notification Preferences</h3>
+            <p className="text-sm text-gray-600">Email notifications, SMS alerts, etc.</p>
+          </div>
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-medium text-gray-900 mb-2">Privacy Settings</h3>
+            <p className="text-sm text-gray-600">Data sharing preferences, account privacy</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ==================== MAIN DASHBOARD COMPONENT ====================
 function CustomerDashboard() {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -2048,8 +2153,8 @@ function CustomerDashboard() {
   });
   const [refreshPolicies, setRefreshPolicies] = useState(0);
   const [policies, setPolicies] = useState([]);
-
-  const unreadNotifications = 2;
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [recentNotifications, setRecentNotifications] = useState([]);
 
   // Handle click outside to close profile menu
   useEffect(() => {
@@ -2064,6 +2169,20 @@ function CustomerDashboard() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Fetch unread count and recent notifications
+  const fetchUnreadCount = async () => {
+    try {
+      const config = getAxiosConfig();
+      const response = await axios.get(`${API_BASE_URL}/notifications`, config);
+      if (response.data.success) {
+        setUnreadCount(response.data.unreadCount || 0);
+        setRecentNotifications(response.data.notifications?.slice(0, 5) || []);
+      }
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
 
   // Fetch customer profile on mount
   useEffect(() => {
@@ -2094,6 +2213,7 @@ function CustomerDashboard() {
       }
     };
     fetchCustomerProfile();
+    fetchUnreadCount();
   }, []);
 
   // Fetch customer policies
@@ -2123,6 +2243,7 @@ function CustomerDashboard() {
         return <BuyPoliciesSection onBack={() => {
           setCurrentView('policies');
           setRefreshPolicies(prev => prev + 1);
+          fetchUnreadCount(); // Refresh notifications after purchase
         }} />;
       case 'claims':
         return <ClaimsSection customerPolicies={policies} />;
@@ -2143,9 +2264,33 @@ function CustomerDashboard() {
     window.location.href = '/login';
   };
 
+  const formatNotificationDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
+
+  const markNotificationAsRead = async (id) => {
+    try {
+      const config = getAxiosConfig();
+      await axios.put(`${API_BASE_URL}/notifications/${id}/read`, {}, config);
+      fetchUnreadCount();
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
       <Sidebar
         currentView={currentView}
         setCurrentView={setCurrentView}
@@ -2153,7 +2298,6 @@ function CustomerDashboard() {
         setIsSidebarOpen={setIsSidebarOpen}
       />
 
-      {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
@@ -2161,9 +2305,7 @@ function CustomerDashboard() {
         />
       )}
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-0">
-        {/* Header */}
         <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-20">
           <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
@@ -2179,13 +2321,18 @@ function CustomerDashboard() {
               {/* Notifications */}
               <div className="relative">
                 <button
-                  onClick={() => setShowNotifications(!showNotifications)}
+                  onClick={() => {
+                    setShowNotifications(!showNotifications);
+                    if (!showNotifications && unreadCount > 0) {
+                      // Mark as seen when opening? Optional
+                    }
+                  }}
                   className="relative p-1 sm:p-2 text-gray-600 hover:text-gray-900 flex-shrink-0"
                 >
                   <Bell className="h-5 sm:h-6 w-5 sm:w-6" />
-                  {unreadNotifications > 0 && (
-                    <span className="absolute top-0 right-0 w-4 h-4 sm:w-5 sm:h-5 bg-burgundy-600 text-white text-xs rounded-full flex items-center justify-center">
-                      {unreadNotifications}
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}
                 </button>
@@ -2193,9 +2340,37 @@ function CustomerDashboard() {
                   <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white border border-gray-200 rounded-lg shadow-lg p-3 sm:p-4 z-50">
                     <h3 className="font-semibold text-gray-900 mb-3">Recent Notifications</h3>
                     <div className="space-y-2 max-h-64 overflow-y-auto">
-                      <p className="text-sm text-gray-600">Your policy renewal is due soon</p>
-                      <p className="text-sm text-gray-600">Claim CLM-2024-001 approved</p>
+                      {recentNotifications.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-4">No new notifications</p>
+                      ) : (
+                        recentNotifications.map((notif) => (
+                          <div 
+                            key={notif.notification_id} 
+                            className={`p-2 rounded-lg cursor-pointer ${!notif.is_read ? 'bg-burgundy-50' : 'hover:bg-gray-50'}`}
+                            onClick={() => {
+                              markNotificationAsRead(notif.notification_id);
+                              setShowNotifications(false);
+                              setCurrentView('notifications');
+                            }}
+                          >
+                            <p className="text-sm font-medium text-gray-900">{notif.title}</p>
+                            <p className="text-xs text-gray-500">{notif.message.substring(0, 60)}...</p>
+                            <p className="text-xs text-gray-400 mt-1">{formatNotificationDate(notif.created_at)}</p>
+                          </div>
+                        ))
+                      )}
                     </div>
+                    {recentNotifications.length > 0 && (
+                      <button 
+                        onClick={() => {
+                          setShowNotifications(false);
+                          setCurrentView('notifications');
+                        }}
+                        className="w-full mt-3 text-center text-sm text-burgundy-600 hover:text-burgundy-700 font-medium"
+                      >
+                        View All Notifications →
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -2222,7 +2397,6 @@ function CustomerDashboard() {
                   )}
                 </button>
                 
-                {/* Dropdown Menu */}
                 {showProfileMenu && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                     <div className="px-4 py-3 border-b border-gray-100">
@@ -2292,32 +2466,9 @@ function CustomerDashboard() {
           </div>
         </div>
 
-        {/* Content Area */}
         <div className="flex-1 overflow-auto">
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
             {renderView()}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ==================== SETTINGS SECTION ====================
-function SettingsSection() {
-  return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Account Settings</h2>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <p className="text-gray-600">Settings panel coming soon...</p>
-        <div className="mt-4 space-y-4">
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-medium text-gray-900 mb-2">Notification Preferences</h3>
-            <p className="text-sm text-gray-600">Email notifications, SMS alerts, etc.</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-medium text-gray-900 mb-2">Privacy Settings</h3>
-            <p className="text-sm text-gray-600">Data sharing preferences, account privacy</p>
           </div>
         </div>
       </div>

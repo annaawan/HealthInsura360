@@ -4,11 +4,12 @@ const db = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const auditController = require('../controllers/auditController');
 
-// Get all policy plans
-router.get('/', async (req, res) => {
+// Get all policy plans - Allow both admin AND customers to view
+router.get('/', authenticate, async (req, res) => {
   try {
     const result = await db.query(`
       SELECT * FROM policy_plans 
+      WHERE status = 'active'
       ORDER BY created_at DESC
     `);
     
@@ -28,7 +29,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create new policy plan
-router.post('/', async (req, res) => {
+router.post('/', authenticate, authorize('admin'), async (req, res) => {
   try {
     const {
       plan_name,
@@ -48,7 +49,7 @@ router.post('/', async (req, res) => {
       status
     } = req.body;
 
-    const adminId = 1; // Default admin ID since no auth
+    const adminId = req.user?.userId || req.user?.id || 1;
 
     const result = await db.query(`
       INSERT INTO policy_plans (
@@ -108,10 +109,10 @@ router.post('/', async (req, res) => {
 });
 
 // Update policy plan
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const adminId = 1; // Default admin ID since no auth
     const { id } = req.params;
+    const adminId = req.user?.userId || req.user?.id || 1;
     const {
       plan_name,
       description,
@@ -207,8 +208,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// In your backend route for DELETE
-router.delete('/:id', async (req, res) => {
+// Delete policy plan
+router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
     const { id } = req.params;
     

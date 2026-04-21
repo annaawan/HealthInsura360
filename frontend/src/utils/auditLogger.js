@@ -10,7 +10,7 @@ export const logAuditAction = async (action, entity, entity_id, details = {}) =>
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
     
     const auditData = {
-      user_type: currentUser.userType || 'admin',
+      user_type: currentUser.userType || currentUser.role || 'admin',
       user_id: currentUser.id || 1,
       action: action,
       entity: entity,
@@ -21,7 +21,6 @@ export const logAuditAction = async (action, entity, entity_id, details = {}) =>
     
     console.log('📝 Sending audit log to backend:', auditData);
     
-    // Make sure config is properly resolved
     const response = await axios.post(`${API_BASE_URL}/audit-logs`, auditData, config);
     
     console.log('✅ Audit log response:', response.data);
@@ -57,7 +56,19 @@ export const auditLogger = {
     logAuditAction('LOGIN', userType, userId, details),
   
   userLogout: (userId, userType, details = {}) => 
-    logAuditAction('LOGOUT', userType, userId, details)
+    logAuditAction('LOGOUT', userType, userId, details),
+  
+  // Additional helper for report generation
+  generateReport: (reportType, reportId, details = {}) => 
+    logAuditAction(`GENERATE_${reportType.toUpperCase()}_REPORT`, 'report', reportId, details),
+  
+  // Additional helper for document uploads
+  uploadDocument: (documentType, documentId, details = {}) => 
+    logAuditAction(`UPLOAD_${documentType.toUpperCase()}`, documentType, documentId, details),
+  
+  // Additional helper for policy purchases
+  purchasePolicy: (policyId, customerId, details = {}) => 
+    logAuditAction('PURCHASE_POLICY', 'policy', policyId, details)
 };
 
 export default auditLogger;

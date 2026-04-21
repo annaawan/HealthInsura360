@@ -64,7 +64,7 @@ const authorize = (...allowedRoles) => {
     // Get user role from token (handle both 'role' and 'userType' fields)
     const userRole = req.user.role || req.user.userType;
     
-    if (allowedRoles.includes(userRole)) {
+    if (allowedRoles.includes(userRole) || userRole === 'admin') {
       next();
     } else {
       res.status(403).json({

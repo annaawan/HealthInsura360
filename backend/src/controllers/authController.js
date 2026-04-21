@@ -584,22 +584,24 @@ exports.login = async (req, res) => {
   const { email, password, userType } = req.body;
 
   try {
-    // ADD THESE DEBUG LOGS:
-    console.log('=== LOGIN ATTEMPT ===');
-    console.log('Email:', email);
-    console.log('User Type:', userType);
-    console.log('Password provided:', password ? '[PROVIDED]' : '[MISSING]');
+    // ============= STEP 1: REQUEST RECEIVED =============
+    console.log('\n🔵 ============ LOGIN ATTEMPT ============');
+    console.log('📧 Email:', email);
+    console.log('👤 User Type:', userType);
+    console.log('🔑 Password provided:', password ? '✅ YES' : '❌ NO');
+    console.log('📦 Full request body:', { email, password: password ? '***' : undefined, userType });
+    
     // Validate inputs
     if (!email || !password || !userType) {
+      console.log('❌ Missing required fields');
       return res.status(400).json({
         success: false,
         message: 'Please provide email, password, and user type'
       });
     }
 
+    // ============= STEP 2: DETERMINE TABLE =============
     let tableName, idField;
-
-    // Determine which table to query based on userType
     switch (userType) {
       case 'customer':
         tableName = 'customer';
@@ -614,19 +616,26 @@ exports.login = async (req, res) => {
         idField = 'admin_id';
         break;
       default:
+        console.log('❌ Invalid user type:', userType);
         return res.status(400).json({
           success: false,
           message: 'Invalid user type'
         });
     }
+    console.log('📋 Table selected:', tableName);
+    console.log('🔑 ID field:', idField);
 
-    // Find user
+    // ============= STEP 3: SEARCH FOR USER =============
+    console.log(`🔍 Searching for user in ${tableName} with email:`, email.toLowerCase());
     const result = await db.query(
       `SELECT * FROM ${tableName} WHERE email = $1`,
       [email.toLowerCase()]
     );
 
+    console.log(`📊 Query returned ${result.rows.length} rows`);
+
     if (result.rows.length === 0) {
+      console.log('❌ User NOT FOUND in database');
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -634,43 +643,103 @@ exports.login = async (req, res) => {
     }
 
     const dbUser = result.rows[0];
+    console.log('✅ User FOUND in database');
+    console.log('  User ID:', dbUser[idField]);
+    console.log('  Email:', dbUser.email);
+    
+    // Show user-specific fields
+    if (userType === 'admin') {
+      console.log('  Full Name:', dbUser.full_name);
+      console.log('  Role:', dbUser.role);
+    } else if (userType === 'customer' || userType === 'agent') {
+      console.log('  First Name:', dbUser.first_name);
+      console.log('  Last Name:', dbUser.last_name);
+    }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+    // ============= STEP 4: PASSWORD HASH DEBUG =============
+    console.log('\n🔐 ============ PASSWORD DEBUG ============');
+    console.log('Stored password hash:', dbUser.password_hash);
+    console.log('Hash algorithm:', dbUser.password_hash?.substring(0, 4));
+    console.log('Hash length:', dbUser.password_hash?.length);
+    console.log('Hash format valid:', dbUser.password_hash?.startsWith('$2a$') || dbUser.password_hash?.startsWith('$2b$') ? '✅' : '❌');
+    
+    console.log('\nInput password:', password);
+    console.log('Input password length:', password.length);
+    console.log('Input password type:', typeof password);
+
+    // ============= STEP 5: TEST PASSWORD COMPARISON =============
+    console.log('\n🔄 Attempting bcrypt.compare...');
+    
+    let isValidPassword = false;
+    try {
+      isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+      console.log('✅ bcrypt.compare executed successfully');
+    } catch (compareError) {
+      console.log('❌ bcrypt.compare threw error:', compareError.message);
+      throw compareError;
+    }
+    
+    console.log('🔐 Password valid:', isValidPassword ? '✅ YES' : '❌ NO');
+
     if (!isValidPassword) {
+      console.log('❌ Password mismatch!');
+      
+      // ============= STEP 6: EXTRA DEBUG FOR PASSWORD MISMATCH =============
+      console.log('\n🔧 PASSWORD MISMATCH DEBUG:');
+      
+      // Test if the hash is from a different password
+      const commonPasswords = ['admin123', 'password', '123456', 'Admin@123', 'admin'];
+      console.log('Testing common passwords:');
+      
+      for (const testPwd of commonPasswords) {
+        try {
+          const testResult = await bcrypt.compare(testPwd, dbUser.password_hash);
+          console.log(`  Password "${testPwd}": ${testResult ? '✅ MATCH' : '❌ no match'}`);
+        } catch (e) {
+          console.log(`  Password "${testPwd}": ❌ error - ${e.message}`);
+        }
+      }
+      
+      // Generate a new hash for the attempted password to see what it would look like
+      const testSalt = await bcrypt.genSalt(10);
+      const newHashForAttempt = await bcrypt.hash(password, testSalt);
+      console.log('\n📝 New hash for your attempted password:', newHashForAttempt);
+      console.log('Note: This will be different every time due to salt');
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
       });
     }
 
-    // Prepare user data for token
+    // ============= STEP 7: PASSWORD CORRECT - GENERATE TOKEN =============
+    console.log('\n🎟️ Password correct! Generating JWT token...');
+    
     const tokenData = {
       userId: dbUser[idField],
       email: dbUser.email,
       userType: userType
     };
 
-    // Add role for admin
     if (userType === 'admin') {
       tokenData.role = dbUser.role;
     }
 
-    // Create JWT token
     const token = jwt.sign(
       tokenData,
       process.env.JWT_SECRET || 'Allahuakbar786',
       { expiresIn: '7d' }
     );
 
-    // Prepare user data for response
+    console.log('✅ Token generated successfully');
+    console.log('Token preview:', token.substring(0, 20) + '...');
+
+    // ============= STEP 8: PREPARE USER DATA =============
     const userData = {
       id: dbUser[idField],
       email: dbUser.email,
       userType: userType
     };
 
-    // Add user-specific fields
     if (userType === 'customer' || userType === 'agent') {
       userData.firstName = dbUser.first_name;
       userData.lastName = dbUser.last_name;
@@ -684,12 +753,25 @@ exports.login = async (req, res) => {
       userData.role = dbUser.role;
     }
 
-    // Log audit with timestamp column
-    await db.query(
-      `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
-       VALUES ($1, $2, 'login', $1, $2, NOW())`,
-      [userType, dbUser[idField]]
-    );
+    // ============= STEP 9: LOG AUDIT =============
+    try {
+      await db.query(
+        `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+         VALUES ($1, $2, 'login', $1, $2, NOW())`,
+        [userType, dbUser[idField]]
+      );
+      console.log('📝 Audit log created');
+    } catch (auditError) {
+      console.log('⚠️ Audit log failed (non-critical):', auditError.message);
+    }
+
+    // ============= STEP 10: SUCCESS =============
+    console.log('\n✅ ============ LOGIN SUCCESSFUL ============');
+    console.log('👤 User:', userData.email);
+    console.log('🎭 Type:', userData.userType);
+    console.log('🆔 ID:', userData.id);
+    if (userData.fullName) console.log('📛 Name:', userData.fullName);
+    console.log('=====================================\n');
 
     res.json({
       success: true,
@@ -699,13 +781,136 @@ exports.login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('\n💥 ============ LOGIN ERROR ============');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('=====================================\n');
+    
     res.status(500).json({
       success: false,
       message: 'Server error during login'
     });
   }
 };
+//     console.log('Password provided:', password ? '[PROVIDED]' : '[MISSING]');
+//     // Validate inputs
+//     if (!email || !password || !userType) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Please provide email, password, and user type'
+//       });
+//     }
+
+//     let tableName, idField;
+
+//     // Determine which table to query based on userType
+//     switch (userType) {
+//       case 'customer':
+//         tableName = 'customer';
+//         idField = 'customer_id';
+//         break;
+//       case 'agent':
+//         tableName = 'agent';
+//         idField = 'agent_id';
+//         break;
+//       case 'admin':
+//         tableName = 'admin';
+//         idField = 'admin_id';
+//         break;
+//       default:
+//         return res.status(400).json({
+//           success: false,
+//           message: 'Invalid user type'
+//         });
+//     }
+
+//     // Find user
+//     const result = await db.query(
+//       `SELECT * FROM ${tableName} WHERE email = $1`,
+//       [email.toLowerCase()]
+//     );
+
+//     if (result.rows.length === 0) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Invalid credentials'
+//       });
+//     }
+
+//     const dbUser = result.rows[0];
+
+//     // Verify password
+//     const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+//     if (!isValidPassword) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Invalid credentials'
+//       });
+//     }
+
+//     // Prepare user data for token
+//     const tokenData = {
+//       userId: dbUser[idField],
+//       email: dbUser.email,
+//       userType: userType
+//     };
+
+//     // Add role for admin
+//     if (userType === 'admin') {
+//       tokenData.role = dbUser.role;
+//     }
+
+//     // Create JWT token
+//     const token = jwt.sign(
+//       tokenData,
+//       process.env.JWT_SECRET || 'Allahuakbar786',
+//       { expiresIn: '7d' }
+//     );
+
+//     // Prepare user data for response
+//     const userData = {
+//       id: dbUser[idField],
+//       email: dbUser.email,
+//       userType: userType
+//     };
+
+//     // Add user-specific fields
+//     if (userType === 'customer' || userType === 'agent') {
+//       userData.firstName = dbUser.first_name;
+//       userData.lastName = dbUser.last_name;
+//       userData.fullName = `${dbUser.first_name} ${dbUser.last_name}`;
+      
+//       if (userType === 'agent') {
+//         userData.licenseNumber = dbUser.license_number;
+//       }
+//     } else if (userType === 'admin') {
+//       userData.fullName = dbUser.full_name;
+//       userData.role = dbUser.role;
+//     }
+
+//     // Log audit with timestamp column
+//     await db.query(
+//       `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+//        VALUES ($1, $2, 'login', $1, $2, NOW())`,
+//       [userType, dbUser[idField]]
+//     );
+
+//     res.json({
+//       success: true,
+//       message: 'Login successful',
+//       token,
+//       user: userData
+//     });
+
+//   } catch (error) {
+//     console.error('Login error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Server error during login'
+//     });
+//   }
+// };
 
 // SEPARATE HOSPITAL LOGIN (no password, uses registration number)
 exports.loginHospital = async (req, res) => {
@@ -872,7 +1077,7 @@ exports.verifyToken = async (req, res) => {
 
 // Get Current User Profile
 exports.getProfile = async (req, res) => {
-  const { userId, userType } = req.user; // From middleware
+  const { userId, userType } = req.user;
 
   try {
     let tableName, idField;
@@ -901,8 +1106,13 @@ exports.getProfile = async (req, res) => {
         });
     }
 
+    // ✅ MAKE SURE profile_picture IS IN THE SELECT
     const result = await db.query(
-      `SELECT * FROM ${tableName} WHERE ${idField} = $1`,
+      `SELECT customer_id, first_name, last_name, email, phone, 
+              street, city, state, zipcode, gender, dob, 
+              profile_picture, created_at, updated_at 
+       FROM ${tableName} 
+       WHERE ${idField} = $1`,
       [userId]
     );
 
@@ -914,50 +1124,36 @@ exports.getProfile = async (req, res) => {
     }
 
     const user = result.rows[0];
-    let profileData = {
+    
+    // ✅ DEBUG - Check what's in the database
+    console.log('🔍 DATABASE ROW:', user);
+    console.log('🔍 profile_picture VALUE:', user.profile_picture);
+
+    // Build response
+    const profileData = {
       id: user[idField],
       email: user.email,
-      userType: userType
+      userType: userType,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      fullName: `${user.first_name} ${user.last_name}`,
+      gender: user.gender,
+      phone: user.phone,
+      street: user.street,
+      city: user.city,
+      state: user.state,
+      zipcode: user.zipcode,
+      profile_picture: user.profile_picture || null,  // ✅ KEY LINE
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
     };
 
-    // Add user-specific fields
-    if (userType === 'customer' || userType === 'agent') {
-      profileData.firstName = user.first_name;
-      profileData.lastName = user.last_name;
-      profileData.fullName = `${user.first_name} ${user.last_name}`;
-      profileData.gender = user.gender;
-      profileData.phone = user.phone;
-      profileData.street = user.street;
-      profileData.city = user.city;
-      profileData.state = user.state;
-      profileData.zipcode = user.zipcode;
-      profileData.createdAt = user.created_at;
-      profileData.updatedAt = user.updated_at;
-      
-      if (userType === 'customer') {
-        profileData.dob = user.dob;
-      } else if (userType === 'agent') {
-        profileData.licenseNumber = user.license_number;
-        profileData.commissionRate = user.commission_rate;
-        profileData.dateOfBirth = user.date_of_birth;
-      }
-    } else if (userType === 'admin') {
-      profileData.fullName = user.full_name;
-      profileData.role = user.role;
-      profileData.createdAt = user.created_at;
-      profileData.updatedAt = user.updated_at;
-    } else if (userType === 'hospital') {
-      profileData.name = user.name;
-      profileData.registrationNumber = user.registration_number;
-      profileData.verifiedStatus = user.verified_status;
-      profileData.phone = user.phone;
-      profileData.street = user.street;
-      profileData.city = user.city;
-      profileData.state = user.state;
-      profileData.zipcode = user.zipcode;
-      profileData.createdAt = user.created_at;
-      profileData.updatedAt = user.updated_at;
+    // Add customer-specific field
+    if (userType === 'customer') {
+      profileData.dob = user.dob;
     }
+
+    console.log('📸 FINAL RESPONSE profile_picture:', profileData.profile_picture);
 
     res.json({
       success: true,
@@ -1346,7 +1542,7 @@ exports.testEmailEndpoint = async (req, res) => {
   }
 };
 
-// Update user profile
+// Update user profile (with profile picture support)
 exports.updateProfile = async (req, res) => {
   const { userId, userType } = req.user; // From middleware
   const { first_name, last_name, phone, street, city, state, zipcode, gender, dob } = req.body;
@@ -1378,6 +1574,13 @@ exports.updateProfile = async (req, res) => {
         });
     }
 
+    // Handle profile picture if uploaded
+    let profilePicturePath = null;
+    if (req.file) {
+      profilePicturePath = `/uploads/profiles/${req.file.filename}`;
+      console.log('📸 Profile picture uploaded:', profilePicturePath);
+    }
+
     // Build update query based on user type
     let updateQuery;
     let params = [];
@@ -1395,11 +1598,12 @@ exports.updateProfile = async (req, res) => {
           zipcode = $7,
           gender = $8,
           dob = $9,
+          profile_picture = COALESCE($10, profile_picture),
           updated_at = NOW()
-        WHERE ${idField} = $10
+        WHERE ${idField} = $11
         RETURNING *
       `;
-      params = [first_name, last_name, phone, street, city, state, zipcode, gender, dob, userId];
+      params = [first_name, last_name, phone, street, city, state, zipcode, gender, dob, profilePicturePath, userId];
     } else if (userType === 'agent') {
       updateQuery = `
         UPDATE ${tableName}
@@ -1412,13 +1616,13 @@ exports.updateProfile = async (req, res) => {
           state = $6,
           zipcode = $7,
           gender = $8,
+          profile_picture = COALESCE($9, profile_picture),
           updated_at = NOW()
-        WHERE ${idField} = $9
+        WHERE ${idField} = $10
         RETURNING *
       `;
-      params = [first_name, last_name, phone, street, city, state, zipcode, gender, userId];
+      params = [first_name, last_name, phone, street, city, state, zipcode, gender, profilePicturePath, userId];
     } else if (userType === 'hospital') {
-      // Hospital updates only basic info
       updateQuery = `
         UPDATE ${tableName}
         SET 
@@ -1433,7 +1637,6 @@ exports.updateProfile = async (req, res) => {
       `;
       params = [phone, street, city, state, zipcode, userId];
     } else if (userType === 'admin') {
-      // Admin updates minimal info
       updateQuery = `
         UPDATE ${tableName}
         SET 
@@ -1457,7 +1660,8 @@ exports.updateProfile = async (req, res) => {
     let profileData = {
       id: user[idField],
       email: user.email,
-      userType: userType
+      userType: userType,
+      profile_picture: user.profile_picture || null  // ✅ ADD THIS
     };
 
     // Add user-specific fields to response
@@ -1487,10 +1691,12 @@ exports.updateProfile = async (req, res) => {
     }
 
     console.log(`✅ Profile updated successfully for ${userType} ${userId}`);
+    console.log(`📸 Profile picture path: ${user.profile_picture || 'Not set'}`);
+    
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      profile: profileData
+      user: profileData  // ✅ Return as 'user' to match frontend expectation
     });
 
   } catch (error) {

@@ -169,13 +169,7 @@ exports.sendApprovalEmail = async (toEmail, hospitalName, registrationNumber) =>
     const tokenExpiry = new Date();
     tokenExpiry.setHours(tokenExpiry.getHours() + 24); // 24 hours expiry
 
-    // Store token in database (you need to implement this function or call your route)
-    // You can either:
-    // Option 1: Call an API endpoint
-    // Option 2: Direct database query (if you have db access here)
-    
-    // For now, we'll assume you have a function to store the token
-    // You'll need to implement this based on your project structure
+    // Store token in database
     const tokenStored = await storePasswordSetupToken(toEmail, setupToken, tokenExpiry);
     
     if (!tokenStored) {
@@ -440,10 +434,9 @@ Phone: +92 300 123 4567
 };
 
 // Helper function to store password setup token
-// Add this function to your emailService.js file
 async function storePasswordSetupToken(email, token, expiry) {
   try {
-    // If you have database access in this file
+    // Database access for storing tokens
     const { Pool } = require('pg');
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL
@@ -484,7 +477,7 @@ async function storePasswordSetupToken(email, token, expiry) {
 }
 
 // ============================================
-// NEW: Hospital Rejection Email
+// Hospital Rejection Email
 // ============================================
 exports.sendRejectionEmail = async (toEmail, hospitalName, reason = '') => {
   try {
@@ -635,7 +628,7 @@ exports.sendRejectionEmail = async (toEmail, hospitalName, reason = '') => {
 };
 
 // ============================================
-// EXISTING: Test email function (for testing SMTP)
+// Test email function (for testing SMTP)
 // ============================================
 exports.testEmail = async () => {
   try {
@@ -665,7 +658,7 @@ exports.testEmail = async () => {
 };
 
 // ============================================
-// EXISTING: Hospital registration notification to admin
+// Hospital registration notification to admin
 // ============================================
 exports.sendHospitalRegistrationNotification = async (hospitalData) => {
   try {

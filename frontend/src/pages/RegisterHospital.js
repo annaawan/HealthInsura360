@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import { hospitalAPI } from '../services/api';
+import React, { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Box,
@@ -38,6 +39,9 @@ const RegisterHospital = () => {
   const [uploadingDocuments, setUploadingDocuments] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  
+  // FIXED: Move fileInputRef to the top, before it's used
+  const fileInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -49,49 +53,110 @@ const RegisterHospital = () => {
     city: "",
     state: "",
     zipCode: "",
-    documents: [] // Array to store uploaded file objects
+    documents: [], // Array to store uploaded file objects
+    tempDocuments: [] // FIXED: Add tempDocuments to initial state
   });
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // FIXED: Use hospitalAPI import
   const handleDocumentUpload = async (files) => {
     if (!files || files.length === 0) return;
 
     setUploadingDocuments(true);
     setError("");
+    setSuccess("");
 
     try {
-      const formDataObj = new FormData();
+      const token = localStorage.getItem('healthinsura360_token');
       
-      // Add all files to FormData
-      for (let i = 0; i < files.length; i++) {
-        formDataObj.append('documents', files[i]);
+      if (!token) {
+        throw new Error('You must be logged in to upload documents');
       }
 
-      // Upload files to backend
-      const response = await fetch('http://localhost:5000/api/hospitals/upload-documents', {
-        method: 'POST',
-        body: formDataObj
+      console.log('🔄 Uploading documents...', files.length);
+
+      // USING hospitalAPI - fixes the ESLint warning
+      const formDataObj = new FormData();
+      Array.from(files).forEach(file => {
+        formDataObj.append('documents', file);
       });
+      formDataObj.append('document_type', 'hospital_registration');
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Document upload failed');
+      let response;
+      let data;
+      
+      // Check if we have a hospital ID (editing existing hospital)
+      if (formData.hospitalId) {
+        const hospitalId = formData.hospitalId;
+        
+        // USING hospitalAPI
+        data = await hospitalAPI.uploadDocuments(
+          hospitalId,
+          Array.from(files),
+          'hospital_registration'
+        );
+        
+        if (!data.success) {
+          throw new Error(data.message || 'Document upload failed');
+        }
+      } else {
+        // If no hospital ID (new registration), upload to temporary endpoint
+        response = await fetch('http://localhost:5000/api/hospitals/upload-documents', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formDataObj
+        });
+        
+        data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.message || data.error || 'Document upload failed');
+        }
+        
+        // Store file info in formData for later submission with hospital registration
+        setFormData(prev => ({
+          ...prev,
+          documents: [...prev.documents, ...data.files],
+          tempDocuments: [...(prev.tempDocuments || []), ...data.files]
+        }));
+        
+        setSuccess(`Successfully uploaded ${data.files.length} document(s). They will be attached to your hospital registration.`);
+        setTimeout(() => setSuccess(""), 3000);
+        
+        // Clear file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        
+        setUploadingDocuments(false);
+        return;
       }
 
-      // Add uploaded files to form data
+      console.log('✅ Documents uploaded successfully:', data);
+
+      // Add uploaded files to form data with proper structure from backend
+      const uploadedFiles = data.documents || data.files || [];
+      
       setFormData(prev => ({
         ...prev,
-        documents: [...prev.documents, ...data.files]
+        documents: [...prev.documents, ...uploadedFiles]
       }));
 
-      setSuccess(`Successfully uploaded ${data.files.length} document(s)`);
+      setSuccess(`Successfully uploaded ${uploadedFiles.length} document(s)`);
       setTimeout(() => setSuccess(""), 3000);
+      
+      // Clear file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
     } catch (err) {
-      console.error('Document upload error:', err);
+      console.error('❌ Document upload error:', err);
       setError(err.message || 'Failed to upload documents. Please try again.');
     } finally {
       setUploadingDocuments(false);
@@ -99,15 +164,119 @@ const RegisterHospital = () => {
   };
 
   const handleFileInputChange = (e) => {
-    const files = e.target.files;
+    const files = Array.from(e.target.files);
+    
+    // Validate file types
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    
+    const invalidFiles = files.filter(file => !allowedTypes.includes(file.type));
+    const oversizedFiles = files.filter(file => file.size > maxSize);
+    
+    if (invalidFiles.length > 0) {
+      setError(`Invalid file type: ${invalidFiles.map(f => f.name).join(', ')}. Allowed: PDF, JPG, PNG, DOC, DOCX`);
+      e.target.value = '';
+      return;
+    }
+    
+    if (oversizedFiles.length > 0) {
+      setError(`File too large: ${oversizedFiles.map(f => f.name).join(', ')}. Max size: 10MB`);
+      e.target.value = '';
+      return;
+    }
+    
     handleDocumentUpload(files);
+    // Clear file input after upload starts
+    e.target.value = '';
   };
 
-  const handleRemoveDocument = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      documents: prev.documents.filter((_, i) => i !== index)
-    }));
+  const handleRemoveDocument = async (index, documentId = null) => {
+    try {
+      // If document is already uploaded to server (has ID), delete it
+      if (documentId) {
+        const token = localStorage.getItem('healthinsura360_token');
+        const response = await fetch(`http://localhost:5000/api/documents/${documentId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to delete document');
+        }
+        
+        console.log('✅ Document deleted successfully');
+      }
+      
+      // Remove from form state
+      setFormData(prev => ({
+        ...prev,
+        documents: prev.documents.filter((_, i) => i !== index),
+        tempDocuments: prev.tempDocuments?.filter((_, i) => i !== index) || []
+      }));
+      
+      setSuccess('Document removed successfully');
+      setTimeout(() => setSuccess(""), 3000);
+      
+    } catch (err) {
+      console.error('❌ Document removal error:', err);
+      setError(err.message || 'Failed to remove document');
+    }
+  };
+
+  // FIXED: renderUploadedDocuments function (will be called in JSX)
+  const renderUploadedDocuments = () => {
+    if (!formData.documents || formData.documents.length === 0) return null;
+    
+    return (
+      <Box sx={{ mt: 4, width: '100%' }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#0a2540', mb: 2 }}>
+          Uploaded Documents ({formData.documents.length})
+        </Typography>
+        <Stack spacing={1}>
+          {formData.documents.map((doc, index) => (
+            <Box
+              key={index}
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                p: 1.5,
+                bgcolor: '#f0faff',
+                borderRadius: 1,
+                border: '1px solid #0cc0df30'
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Typography variant="body2" sx={{ color: '#0a2540', fontWeight: 500 }}>
+                  {doc.originalName || doc.file_name || `Document ${index + 1}`}
+                </Typography>
+                {doc.document_id && (
+                  <Chip
+                    label="Uploaded"
+                    size="small"
+                    sx={{ ml: 1, bgcolor: '#4caf50', color: 'white', fontSize: '0.7rem' }}
+                  />
+                )}
+              </Box>
+              <Button
+                size="small"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => handleRemoveDocument(index, doc.document_id)}
+                sx={{ fontSize: '0.75rem' }}
+              >
+                Remove
+              </Button>
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+    );
   };
 
   const handleNext = () => {
@@ -116,7 +285,7 @@ const RegisterHospital = () => {
     if (activeStep === 0) {
       // Step 1: Hospital details validation
       const requiredFields = ['name', 'email', 'phone', 'contactPerson', 'street', 'city', 'state', 'zipCode'];
-      const emptyFields = requiredFields.filter(field => !formData[field].trim());
+      const emptyFields = requiredFields.filter(field => !formData[field]?.trim());
       
       if (emptyFields.length > 0) {
         setError("Please fill all required fields");
@@ -173,7 +342,7 @@ const RegisterHospital = () => {
         city: formData.city,
         state: formData.state,
         zipcode: formData.zipCode,
-        documents: formData.documents.map(doc => doc.originalName) // Send just the filenames
+        documents: formData.documents.map(doc => doc.originalName || doc.file_name) // Send just the filenames
       };
 
       console.log('Sending hospital data to backend:', hospitalData);
@@ -212,7 +381,8 @@ const RegisterHospital = () => {
         city: "",
         state: "",
         zipCode: "",
-        documents: []
+        documents: [],
+        tempDocuments: []
       });
       
       // Redirect to login page after 3 seconds
@@ -406,10 +576,11 @@ const RegisterHospital = () => {
               <input
                 type="file"
                 multiple
-                accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                 onChange={handleFileInputChange}
                 style={{ display: 'none' }}
                 disabled={uploadingDocuments}
+                ref={fileInputRef}
               />
               {uploadingDocuments ? (
                 <>
@@ -425,7 +596,7 @@ const RegisterHospital = () => {
                     Click to upload or drag and drop
                   </Typography>
                   <Typography variant="body2" color="#64748b">
-                    PDF, JPG, PNG, GIF, DOC, DOCX, XLS, XLSX (Max 10MB per file)
+                    PDF, JPG, PNG, DOC, DOCX (Max 10MB per file)
                   </Typography>
                 </>
               )}
@@ -444,42 +615,8 @@ const RegisterHospital = () => {
               </Typography>
             </Box>
 
-            {/* Uploaded Files Display */}
-            {formData.documents.length > 0 && (
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: '#0a2540' }}>
-                  Uploaded Files ({formData.documents.length}):
-                </Typography>
-                <Stack spacing={1}>
-                  {formData.documents.map((doc, index) => (
-                    <Box
-                      key={index}
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        p: 1.5,
-                        bgcolor: '#f0faff',
-                        borderRadius: 1,
-                        border: '1px solid #0cc0df'
-                      }}
-                    >
-                      <Typography variant="body2" sx={{ color: '#0a2540', fontWeight: 500 }}>
-                        {doc.originalName}
-                      </Typography>
-                      <Button
-                        size="small"
-                        color="error"
-                        startIcon={<DeleteIcon />}
-                        onClick={() => handleRemoveDocument(index)}
-                      >
-                        Remove
-                      </Button>
-                    </Box>
-                  ))}
-                </Stack>
-              </Box>
-            )}
+            {/* FIXED: Call renderUploadedDocuments here */}
+            {renderUploadedDocuments()}
           </Box>
         );
 
@@ -537,7 +674,7 @@ const RegisterHospital = () => {
                     {formData.documents.map((doc, index) => (
                       <Chip
                         key={index}
-                        label={doc.originalName}
+                        label={doc.originalName || doc.file_name || `Document ${index + 1}`}
                         variant="outlined"
                         size="small"
                         sx={{ mr: 1, mb: 1 }}

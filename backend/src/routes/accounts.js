@@ -5,32 +5,8 @@ const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 const bcrypt = require('bcrypt');
 const auditController = require('../controllers/auditController');
 
-// Test route within accounts
-router.get('/test', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Accounts API is working!',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Apply authentication and admin middleware to all routes except test
-router.use((req, res, next) => {
-  if (req.path === '/test') {
-    return next();
-  }
-  authMiddleware(req, res, next);
-});
-
-router.use((req, res, next) => {
-  if (req.path === '/test') {
-    return next();
-  }
-  adminMiddleware(req, res, next);
-});
-
 // Get all customers from PostgreSQL
-router.get('/customers', async (req, res) => {
+router.get('/customers', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     console.log('📋 Fetching customers from PostgreSQL...');
     const result = await db.query(`
@@ -69,7 +45,7 @@ router.get('/customers', async (req, res) => {
 });
 
 // Get all agents from PostgreSQL
-router.get('/agents', async (req, res) => {
+router.get('/agents', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     console.log('📋 Fetching agents from PostgreSQL...');
     const result = await db.query(`
@@ -117,7 +93,7 @@ router.get('/agents', async (req, res) => {
 });
 
 // Get all hospitals from PostgreSQL
-router.get('/hospitals', async (req, res) => {
+router.get('/hospitals', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     console.log('📋 Fetching hospitals from PostgreSQL...');
     const result = await db.query(`
@@ -159,7 +135,7 @@ router.get('/hospitals', async (req, res) => {
 });
 
 // Create new account
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     console.log('➕ Creating new account:', req.body);
     const { type, data } = req.body;
@@ -388,7 +364,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update account
-router.put('/:type/:id', async (req, res) => {
+router.put('/:type/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { type, id } = req.params;
     const data = req.body;
@@ -655,7 +631,7 @@ if (data.name && table === 'hospital') {  // ✅ ADD THIS SECTION
 });
 
 // Delete account
-router.delete('/:type/:id', async (req, res) => {
+router.delete('/:type/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { type, id } = req.params;
     const adminId = req.user?.userId || req.user?.id || 1; // ✅ Add adminId
@@ -758,7 +734,7 @@ router.delete('/:type/:id', async (req, res) => {
 });
 
 // Get single account by ID
-router.get('/:type/:id', async (req, res) => {
+router.get('/:type/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { type, id } = req.params;
     

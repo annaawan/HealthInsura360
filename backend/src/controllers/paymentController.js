@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const Stripe = require('stripe');
+const { createNotification } = require('../routes/notificationRoutes');
 
 exports.createPaymentIntent = async (req, res) => {
   try {
@@ -13,7 +14,7 @@ exports.createPaymentIntent = async (req, res) => {
     // 2. Check user from auth
     console.log('👤 User from auth:', req.user);
     
-    const { policyId, amount } = req.body;
+    const { policyId, amount, policyName } = req.body;
     
     // 3. Validate inputs
     if (!policyId) {
@@ -55,7 +56,8 @@ exports.createPaymentIntent = async (req, res) => {
       currency: 'pkr',
       metadata: { 
         customerId: customerId.toString(), 
-        policyId: policyId.toString() 
+        policyId: policyId.toString(),
+        policyName: policyName || 'Policy Purchase'
       },
     });
     
@@ -117,8 +119,10 @@ exports.confirmPayment = async (req, res) => {
     console.log('📝 CONFIRM PAYMENT CALLED');
     console.log('='.repeat(50));
     
-    const { paymentIntentId } = req.body;
+    const { paymentIntentId, policyId, policyName, amount } = req.body;
     console.log('💰 PaymentIntent ID:', paymentIntentId);
+    console.log('📋 Policy ID:', policyId);
+    console.log('💰 Amount:', amount);
     
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -126,6 +130,11 @@ exports.confirmPayment = async (req, res) => {
     console.log('✅ PaymentIntent status:', paymentIntent.status);
     
     if (paymentIntent.status === 'succeeded') {
+      // Get customer ID from metadata or request
+      const customerId = paymentIntent.metadata?.customerId || req.user?.userId || req.user?.id;
+      const policyNameFromMetadata = paymentIntent.metadata?.policyName || policyName || 'your policy';
+      const paymentAmount = amount || (paymentIntent.amount / 100);
+      
       // Update database if table exists
       try {
         await db.query(
@@ -137,12 +146,139 @@ exports.confirmPayment = async (req, res) => {
         console.log('⚠️ Database update failed:', dbError.message);
       }
       
-      res.json({ success: true, message: 'Payment confirmed' });
+      // ✅ CREATE NOTIFICATION FOR SUCCESSFUL PAYMENT
+      if (customerId) {
+        const formattedAmount = parseFloat(paymentAmount).toLocaleString();
+        
+        await createNotification(
+          customerId,                          // customer ID
+          'customer',                          // user type
+          'payment_received',                  // notification type
+          'Payment Received Successfully',     // title
+          `Your payment of Rs. ${formattedAmount} for "${policyNameFromMetadata}" has been received successfully. Thank you for your purchase!`, // message
+          policyId                             // related policy ID
+        );
+        
+        console.log(`📧 Payment notification sent to customer ${customerId}`);
+      } else {
+        console.log('⚠️ No customerId found, skipping notification');
+      }
+      
+      res.json({ 
+        success: true, 
+        message: 'Payment confirmed and notification sent' 
+      });
     } else {
       res.status(400).json({ success: false, error: 'Payment not successful' });
     }
   } catch (error) {
     console.error('❌ Confirm payment error:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ============================================
+// WEBHOOK FOR STRIPE PAYMENT SUCCESS (Alternative)
+// ============================================
+exports.handleStripeWebhook = async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  
+  let event;
+  
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    
+    if (endpointSecret) {
+      event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    } else {
+      event = req.body;
+    }
+    
+    console.log('📨 Webhook event type:', event.type);
+    
+    // Handle payment success
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object;
+      const customerId = paymentIntent.metadata?.customerId;
+      const policyId = paymentIntent.metadata?.policyId;
+      const policyName = paymentIntent.metadata?.policyName || 'your policy';
+      const amount = paymentIntent.amount / 100;
+      
+      console.log(`💰 Payment succeeded for customer ${customerId}, policy ${policyId}`);
+      
+      // Update payment intent in database
+      try {
+        await db.query(
+          `UPDATE payment_intents 
+           SET status = 'succeeded', updated_at = NOW() 
+           WHERE payment_intent_id = $1`,
+          [paymentIntent.id]
+        );
+        console.log('✅ Payment intent updated in database');
+      } catch (dbError) {
+        console.log('⚠️ Database update error:', dbError.message);
+      }
+      
+      // ✅ CREATE NOTIFICATION FOR SUCCESSFUL PAYMENT VIA WEBHOOK
+      if (customerId) {
+        const formattedAmount = amount.toLocaleString();
+        
+        await createNotification(
+          parseInt(customerId),                // customer ID
+          'customer',                          // user type
+          'payment_received',                  // notification type
+          'Payment Received Successfully',     // title
+          `Your payment of Rs. ${formattedAmount} for "${policyName}" has been received successfully. Thank you for your purchase!`, // message
+          policyId ? parseInt(policyId) : null // related policy ID
+        );
+        
+        console.log(`📧 Payment notification sent to customer ${customerId} via webhook`);
+      }
+    }
+    
+    // Handle payment failure
+    if (event.type === 'payment_intent.payment_failed') {
+      const paymentIntent = event.data.object;
+      const customerId = paymentIntent.metadata?.customerId;
+      const policyName = paymentIntent.metadata?.policyName || 'your policy';
+      const amount = paymentIntent.amount / 100;
+      
+      console.log(`❌ Payment failed for customer ${customerId}`);
+      
+      // Update payment intent in database
+      try {
+        await db.query(
+          `UPDATE payment_intents 
+           SET status = 'failed', updated_at = NOW() 
+           WHERE payment_intent_id = $1`,
+          [paymentIntent.id]
+        );
+      } catch (dbError) {
+        console.log('⚠️ Database update error:', dbError.message);
+      }
+      
+      // ✅ CREATE NOTIFICATION FOR FAILED PAYMENT
+      if (customerId) {
+        const formattedAmount = amount.toLocaleString();
+        
+        await createNotification(
+          parseInt(customerId),                // customer ID
+          'customer',                          // user type
+          'payment_failed',                    // notification type
+          'Payment Failed',                    // title
+          `Your payment of Rs. ${formattedAmount} for "${policyName}" failed. Please check your payment method and try again.`, // message
+          null
+        );
+        
+        console.log(`📧 Payment failure notification sent to customer ${customerId}`);
+      }
+    }
+    
+    res.json({ received: true });
+    
+  } catch (error) {
+    console.error('❌ Webhook error:', error.message);
+    return res.status(400).send(`Webhook Error: ${error.message}`);
   }
 };

@@ -11,7 +11,6 @@ router.get('/plans', policyController.getPlans);
 router.get('/my-policies', authenticate, policyController.getUserPolicies);
 router.post('/purchase', authenticate, policyController.purchasePolicy);
 
-
 // ============================================
 // SEARCH POLICIES - FINAL FIXED VERSION
 // ============================================

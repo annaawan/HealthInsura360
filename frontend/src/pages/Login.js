@@ -27,16 +27,14 @@ const Login = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    registrationNumber: '', // For hospital login
-    accountType: 'customer', // Default to customer
+    registrationNumber: '',
+    accountType: 'customer',
   });
 
-  // Toggle password visibility
   const handleClickShowPassword = () => {
     setShowPassword(!showPassword);
   };
 
-  // Toggle registration number visibility
   const handleClickShowRegistrationNumber = () => {
     setShowRegistrationNumber(!showRegistrationNumber);
   };
@@ -48,7 +46,6 @@ const Login = () => {
     });
   };
 
-  // Handle account type change
   const handleAccountTypeChange = (e) => {
     const newAccountType = e.target.value;
     setFormData({
@@ -60,181 +57,175 @@ const Login = () => {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
-  try {
-    console.log('=== LOGIN ATTEMPT ===');
-    console.log('Account Type:', formData.accountType);
-    console.log('Email:', formData.email);
+    try {
+      console.log('\n🔵 ============ LOGIN ATTEMPT ============');
+      console.log('Account Type:', formData.accountType);
+      console.log('Email:', formData.email);
 
-    // Validate basic fields
-    if (!formData.email || !formData.email.includes('@')) {
-      setError('Please enter a valid email address');
+      // Validate basic fields
+      if (!formData.email || !formData.email.includes('@')) {
+        setError('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
+
+      // HOSPITAL LOGIN
+      if (formData.accountType === 'hospital') {
+        if (!formData.registrationNumber) {
+          setError('Registration number is required');
+          setLoading(false);
+          return;
+        }
+
+        console.log('🏥 Hospital login data:', {
+          email: formData.email,
+          registrationNumber: formData.registrationNumber
+        });
+
+        const response = await fetch('http://localhost:5000/api/auth/login/hospital', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: formData.email.trim(),
+            registrationNumber: formData.registrationNumber.trim()
+          }),
+        });
+
+        const data = await response.json();
+        console.log('Hospital login response:', data);
+
+        if (!response.ok) {
+          throw new Error(data.message || data.error || 'Hospital login failed');
+        }
+
+        // Create a proper user object for hospital
+        const hospitalUser = {
+          id: data.user.id || data.user.hospital_id,
+          name: data.user.name,
+          email: data.user.email,
+          registrationNumber: data.user.registrationNumber || data.user.registration_number,
+          phone: data.user.phone || '',
+          city: data.user.city || '',
+          role: 'hospital'
+        };
+
+        // Store ALL necessary data
+        localStorage.setItem('healthinsura360_token', data.token);
+        localStorage.setItem('user', JSON.stringify(hospitalUser));
+        localStorage.setItem('accountType', 'hospital');
+        localStorage.setItem('isLoggedIn', 'true');
+        
+        // Keep these for backward compatibility
+        localStorage.setItem('userEmail', data.user.email);
+        localStorage.setItem('hospitalName', data.user.name);
+        localStorage.setItem('userId', data.user.id);
+        localStorage.setItem('registrationNumber', hospitalUser.registrationNumber);
+
+        console.log('✅ Hospital login successful!');
+        console.log('👤 Stored user:', hospitalUser);
+        
+        // Redirect to hospital dashboard
+        navigate('/hospital-dashboard');
+
+      } else {
+        // CUSTOMER/AGENT/ADMIN LOGIN (ALL USE THE SAME ENDPOINT)
+        if (!formData.password) {
+          setError('Password is required');
+          setLoading(false);
+          return;
+        }
+
+        console.log('👤 Login data:', {
+          email: formData.email,
+          password: '[HIDDEN]',
+          userType: formData.accountType
+        });
+
+        // ALL non-hospital users use the SAME endpoint: /api/auth/login
+        const response = await fetch('http://localhost:5000/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: formData.email.trim(),
+            password: formData.password,
+            userType: formData.accountType
+          }),
+        });
+
+        const data = await response.json();
+        console.log('Login response:', data);
+
+        if (!response.ok) {
+          throw new Error(data.message || data.error || 'Login failed');
+        }
+
+        // Create user object for non-hospital users
+        const userData = {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.fullName || data.user.name || `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim(),
+          role: formData.accountType
+        };
+
+        // Store login info
+        localStorage.setItem('healthinsura360_token', data.token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('userEmail', data.user.email);
+        localStorage.setItem('accountType', formData.accountType);
+        localStorage.setItem('userId', data.user.id);
+        
+        // Store additional user info based on type
+        if (formData.accountType === 'agent') {
+          localStorage.setItem('agentName', data.user.fullName || `${data.user.firstName} ${data.user.lastName}`);
+          localStorage.setItem('licenseNumber', data.user.licenseNumber || '');
+        } else if (formData.accountType === 'customer') {
+          localStorage.setItem('customerName', data.user.fullName || `${data.user.firstName} ${data.user.lastName}`);
+        } else if (formData.accountType === 'admin') {
+          localStorage.setItem('adminName', data.user.fullName);
+          localStorage.setItem('adminRole', data.user.role || '');
+        }
+
+        console.log('✅ Login successful! User stored:', userData);
+        console.log('=====================================\n');
+
+        // Redirect based on account type
+        const redirectPaths = {
+          customer: '/customer-dashboard',
+          agent: '/agent-dashboard',
+          admin: '/admin-dashboard'
+        };
+        
+        const redirectTo = redirectPaths[formData.accountType] || '/dashboard';
+        navigate(redirectTo);
+      }
+
+    } catch (err) {
+      console.error('❌ Login error:', err);
+      
+      let errorMessage = err.message;
+      if (err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
+        errorMessage = 'Cannot connect to server. Please check if backend is running.';
+      } else if (err.message.includes('401')) {
+        errorMessage = 'Invalid email or password.';
+      } else if (err.message.includes('404')) {
+        errorMessage = 'Login service unavailable. Please contact administrator.';
+      }
+      
+      setError(errorMessage);
+    } finally {
       setLoading(false);
-      return;
     }
+  };
 
-    // HOSPITAL LOGIN - UPDATED SECTION
-    if (formData.accountType === 'hospital') {
-      if (!formData.registrationNumber) {
-        setError('Registration number is required');
-        setLoading(false);
-        return;
-      }
-
-      console.log('Hospital login data:', {
-        email: formData.email,
-        registrationNumber: formData.registrationNumber
-      });
-
-      const response = await fetch('http://localhost:5000/api/auth/login/hospital', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email.trim(),
-          registrationNumber: formData.registrationNumber.trim()
-        }),
-      });
-
-      console.log('Hospital login response status:', response.status);
-      
-      const data = await response.json();
-      console.log('Hospital login response:', data);
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Hospital login failed');
-      }
-
-      // ✅ FIXED: Create a proper user object for hospital
-      const hospitalUser = {
-        id: data.user.id || data.user.hospital_id,
-        name: data.user.name,
-        email: data.user.email,
-        registrationNumber: data.user.registrationNumber || data.user.registration_number,
-        phone: data.user.phone || '',
-        city: data.user.city || '',
-        role: 'hospital'
-      };
-
-      // ✅ Store ALL necessary data
-      localStorage.setItem('healthinsura360_token', data.token);
-      localStorage.setItem('user', JSON.stringify(hospitalUser));
-      localStorage.setItem('accountType', 'hospital');
-      localStorage.setItem('isLoggedIn', 'true');
-      
-      // Keep these for backward compatibility
-      localStorage.setItem('userEmail', data.user.email);
-      localStorage.setItem('hospitalName', data.user.name);
-      localStorage.setItem('userId', data.user.id);
-      localStorage.setItem('registrationNumber', hospitalUser.registrationNumber);
-
-      console.log('✅ Hospital login successful!');
-      console.log('👤 Stored user:', hospitalUser);
-      
-      // Redirect to hospital dashboard
-      navigate('/hospital-dashboard');
-
-    } else {
-      // CUSTOMER/AGENT/ADMIN LOGIN (ALL USE THE SAME ENDPOINT)
-      if (!formData.password) {
-        setError('Password is required');
-        setLoading(false);
-        return;
-      }
-
-      console.log('Login data:', {
-        email: formData.email,
-        password: '[HIDDEN]',
-        userType: formData.accountType
-      });
-
-      // ALL non-hospital users use the SAME endpoint: /api/auth/login
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        // Backend expects: email, password, userType
-        body: JSON.stringify({
-          email: formData.email.trim(),
-          password: formData.password,
-          userType: formData.accountType // This MUST be 'customer', 'agent', or 'admin'
-        }),
-      });
-
-      console.log('Login response status:', response.status);
-      
-      const data = await response.json();
-      console.log('Login response:', data);
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Login failed');
-      }
-
-      // ✅ Create user object for non-hospital users too
-      const userData = {
-        id: data.user.id,
-        email: data.user.email,
-        name: data.user.fullName || data.user.name || `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim(),
-        role: formData.accountType
-      };
-
-      // Store login info
-      localStorage.setItem('healthinsura360_token', data.token);
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userEmail', data.user.email);
-      localStorage.setItem('accountType', formData.accountType);
-      localStorage.setItem('userId', data.user.id);
-      
-      // Store additional user info based on type
-      if (formData.accountType === 'agent') {
-        localStorage.setItem('agentName', data.user.fullName || `${data.user.firstName} ${data.user.lastName}`);
-        localStorage.setItem('licenseNumber', data.user.licenseNumber || '');
-      } else if (formData.accountType === 'customer') {
-        localStorage.setItem('customerName', data.user.fullName || `${data.user.firstName} ${data.user.lastName}`);
-      } else if (formData.accountType === 'admin') {
-        localStorage.setItem('adminName', data.user.fullName);
-        localStorage.setItem('adminRole', data.user.role || '');
-      }
-
-      console.log('✅ Login successful! User stored:', userData);
-
-      // Redirect based on account type
-      const redirectPaths = {
-        customer: '/customer-dashboard',
-        agent: '/agent-dashboard',
-        admin: '/admin-dashboard',
-        hospital: '/hospital-dashboard'
-      };
-      
-      const redirectTo = redirectPaths[formData.accountType] || '/dashboard';
-      navigate(redirectTo);
-    }
-
-  } catch (err) {
-    console.error('Login error:', err);
-    
-    // More specific error messages
-    let errorMessage = err.message;
-    if (err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
-      errorMessage = 'Cannot connect to server. Please check if backend is running.';
-    } else if (err.message.includes('401')) {
-      errorMessage = 'Invalid email or password.';
-    } else if (err.message.includes('404')) {
-      errorMessage = 'Login service unavailable. Please contact administrator.';
-    }
-    
-    setError(errorMessage);
-    setLoading(false);
-  }
-};
-
-  // Account type descriptions
   const accountTypeDescriptions = {
     customer: 'Access your policies, claims, and insurance details',
     hospital: 'Manage patient claims and hospital records - Use registration number',
@@ -242,7 +233,6 @@ const Login = () => {
     admin: 'System administration and user management'
   };
 
-  // Conditional fields based on account type
   const isHospitalLogin = formData.accountType === 'hospital';
 
   return (
@@ -316,7 +306,7 @@ const Login = () => {
             </Typography>
           </Box>
 
-          {/* Error Alert - Centered */}
+          {/* Error Alert */}
           <Box sx={{ width: '100%', maxWidth: 400, mb: 3 }}>
             {error && (
               <Alert severity="error" sx={{ borderRadius: 2, textAlign: 'left' }}>
@@ -325,7 +315,7 @@ const Login = () => {
             )}
           </Box>
 
-          {/* Form - Centered with Stack */}
+          {/* Form */}
           <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
             <Box sx={{ width: '100%', maxWidth: 400 }}>
               <form onSubmit={handleSubmit}>
@@ -526,7 +516,7 @@ const Login = () => {
             </Typography>
           </Divider>
 
-          {/* Registration Options - Centered */}
+          {/* Registration Options */}
           <Box sx={{ width: '100%', maxWidth: 400, textAlign: 'center' }}>
             <Typography variant="body2" color="#64748b" sx={{ mb: 3 }}>
               Don't have an account yet?
@@ -599,7 +589,7 @@ const Login = () => {
             </Box>
           </Box>
 
-          {/* Footer - Centered */}
+          {/* Footer */}
           <Box sx={{ width: '100%', maxWidth: 400, mt: 4, pt: 4, borderTop: '1px solid #e2e8f0' }}>
             <Typography variant="caption" color="#94a3b8" align="center">
               By signing in, you agree to our Terms of Service and Privacy Policy.

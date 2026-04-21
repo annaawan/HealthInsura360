@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { createNotification } = require('../routes/notificationRoutes');
 
 // Submit a comprehensive reimbursement claim (Customer)
 exports.submitClaim = async (req, res) => {
@@ -94,6 +95,23 @@ exports.submitClaim = async (req, res) => {
         console.log(`✅ Reimbursement claim submitted successfully: ${claimNumber}`);
         console.log(`   Documents uploaded: ${documentUrls.length}`);
         
+        // ✅ CREATE NOTIFICATION FOR CLAIM SUBMISSION
+        if (claimResult.rows[0]) {
+            const newClaim = claimResult.rows[0];
+            const formattedAmount = parseFloat(claim_amount).toLocaleString();
+            
+            await createNotification(
+                userId,                          // customer ID
+                'customer',                      // user type
+                'claim_submitted',               // notification type
+                'Claim Submitted Successfully',  // title
+                `Your claim #${claimNumber} for Rs. ${formattedAmount} has been submitted successfully. We will review it within 3-5 business days.`, // message
+                newClaim.id                      // related claim ID
+            );
+            
+            console.log(`📧 Notification sent to customer ${userId} for claim submission: ${claimNumber}`);
+        }
+        
         res.status(201).json({
             success: true,
             message: 'Claim submitted successfully',
@@ -108,7 +126,6 @@ exports.submitClaim = async (req, res) => {
         });
     }
 };
-
 
 // ============================================
 // Submit Cashless Claim (Hospital) - FINAL FIXED VERSION
@@ -175,7 +192,7 @@ exports.submitCashlessClaim = async (req, res) => {
 
         // Get customer name for patient_name
         const customerResult = await db.query(
-            'SELECT first_name, last_name FROM customer WHERE customer_id = $1',
+            'SELECT first_name, last_name, email FROM customer WHERE customer_id = $1',
             [customerId]
         );
 
@@ -187,6 +204,7 @@ exports.submitCashlessClaim = async (req, res) => {
         }
 
         const patientName = `${customerResult.rows[0].first_name} ${customerResult.rows[0].last_name}`;
+        const customerEmail = customerResult.rows[0].email;
 
         // Start transaction
         await db.query('BEGIN');
@@ -240,6 +258,20 @@ exports.submitCashlessClaim = async (req, res) => {
 
         // Commit the transaction
         await db.query('COMMIT');
+        
+        // ✅ CREATE NOTIFICATION FOR CASHLESS CLAIM SUBMISSION
+        const formattedCost = parseFloat(treatmentCost).toLocaleString();
+        
+        await createNotification(
+            customerId,                          // customer ID
+            'customer',                          // user type
+            'claim_submitted',                   // notification type
+            'Cashless Claim Request Received',   // title
+            `A cashless claim request for Rs. ${formattedCost} has been submitted by ${patientName} at the hospital. We will process it shortly.`, // message
+            claimId                              // related claim ID
+        );
+        
+        console.log(`📧 Notification sent to customer ${customerId} for cashless claim submission`);
 
         res.status(201).json({
             success: true,
@@ -263,7 +295,6 @@ exports.submitCashlessClaim = async (req, res) => {
         });
     }
 };
-
 
 // ============================================
 // Get Hospital's Claims - UPDATED
@@ -459,3 +490,136 @@ exports.getClaimById = async (req, res) => {
     }
 };
 
+// ============================================
+// UPDATE CLAIM STATUS (Admin/Staff)
+// ============================================
+exports.updateClaimStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, rejection_reason, approved_amount } = req.body;
+        const adminId = req.user?.userId;
+        
+        // Validate status
+        const validStatuses = ['pending', 'processing', 'approved', 'rejected', 'paid'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid status value'
+            });
+        }
+        
+        // First check if claim exists and get customer_id
+        let claimResult = await db.query(
+            `SELECT * FROM claims WHERE id = $1`,
+            [id]
+        );
+        
+        let claimType = 'reimbursement';
+        let customerId;
+        let claimNumber;
+        let claimAmount;
+        
+        if (claimResult.rows.length === 0) {
+            // Check cashless claim table
+            claimResult = await db.query(
+                `SELECT * FROM claim WHERE claim_id = $1`,
+                [id]
+            );
+            claimType = 'cashless';
+            
+            if (claimResult.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Claim not found'
+                });
+            }
+        }
+        
+        const claim = claimResult.rows[0];
+        customerId = claim.customer_id;
+        claimNumber = claim.claim_number || `CLM${id}`;
+        claimAmount = claim.amount || claim.claim_amount || 0;
+        
+        // Update based on claim type
+        let updateResult;
+        
+        if (claimType === 'reimbursement') {
+            updateResult = await db.query(
+                `UPDATE claims 
+                 SET status = $1, 
+                     rejection_reason = $2,
+                     approved_amount = $3,
+                     updated_at = NOW()
+                 WHERE id = $4
+                 RETURNING *`,
+                [status, rejection_reason || null, approved_amount || claimAmount, id]
+            );
+        } else {
+            updateResult = await db.query(
+                `UPDATE claim 
+                 SET status = $1, 
+                     updated_at = NOW()
+                 WHERE claim_id = $2
+                 RETURNING *`,
+                [status, id]
+            );
+        }
+        
+        console.log(`✅ Claim ${id} status updated to: ${status}`);
+        
+        // ✅ CREATE NOTIFICATION BASED ON STATUS CHANGE
+        const formattedAmount = parseFloat(claimAmount).toLocaleString();
+        let notificationTitle, notificationMessage;
+        
+        switch (status) {
+            case 'processing':
+                notificationTitle = 'Claim Under Review';
+                notificationMessage = `Your claim #${claimNumber} for Rs. ${formattedAmount} is now being reviewed by our claims team. We will notify you once a decision is made.`;
+                break;
+                
+            case 'approved':
+                const approvedAmt = approved_amount ? parseFloat(approved_amount).toLocaleString() : formattedAmount;
+                notificationTitle = 'Claim Approved! 🎉';
+                notificationMessage = `Great news! Your claim #${claimNumber} for Rs. ${approvedAmt} has been APPROVED. The amount will be credited to your account within 7 business days.`;
+                break;
+                
+            case 'rejected':
+                notificationTitle = 'Claim Rejected';
+                notificationMessage = `We regret to inform you that your claim #${claimNumber} for Rs. ${formattedAmount} has been REJECTED. Reason: ${rejection_reason || 'Please contact support for more information.'}`;
+                break;
+                
+            case 'paid':
+                notificationTitle = 'Claim Payment Disbursed';
+                notificationMessage = `The payment of Rs. ${formattedAmount} for your claim #${claimNumber} has been disbursed to your registered bank account. Please allow 2-3 business days for reflection.`;
+                break;
+                
+            default:
+                notificationTitle = `Claim Status Updated`;
+                notificationMessage = `Your claim #${claimNumber} status has been updated to: ${status.toUpperCase()}.`;
+        }
+        
+        await createNotification(
+            customerId,                      // customer ID
+            'customer',                      // user type
+            `claim_${status}`,               // notification type
+            notificationTitle,               // title
+            notificationMessage,             // message
+            id                               // related claim ID
+        );
+        
+        console.log(`📧 Notification sent to customer ${customerId} for claim ${id} status: ${status}`);
+        
+        res.json({
+            success: true,
+            message: `Claim status updated to ${status}`,
+            claim: updateResult.rows[0]
+        });
+        
+    } catch (error) {
+        console.error('❌ Update claim status error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update claim status: ' + error.message
+        });
+    }
+};
