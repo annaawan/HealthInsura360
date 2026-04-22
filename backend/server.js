@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
+const reminderScheduler = require('./src/services/reminderScheduler');
 
 console.log('🔵 SERVER STARTING...');
 console.log('🔵 Current directory:', __dirname);
@@ -270,6 +271,12 @@ app.use('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+reminderScheduler.start();
+process.on('SIGINT', () => {
+    console.log('🛑 Shutting down...');
+    reminderScheduler.stop();
+    process.exit();
+});
 
 app.listen(PORT, () => {
   console.log(`\n🚀 Server running on port ${PORT}`);

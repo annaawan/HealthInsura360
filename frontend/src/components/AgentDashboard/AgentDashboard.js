@@ -3,13 +3,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { AgentSidebar } from './AgentSidebar';
 import { ClientManagement } from './ClientManagement';
 import { AgentProfile } from './AgentProfile';
-import { CommissionTracking } from './CommissionTracking';  // ADD THIS IMPORT
+import AgentPayments from './AgentPayments';
+import PaymentReminders from './PaymentReminders';
+import ClaimManagement from './ClaimManagement';
+import { CommissionTracking } from './CommissionTracking';
 import axios from 'axios';
 import { API_BASE_URL, getAxiosConfig } from '../../config';
 
 export const AgentView = {
   CLIENTS: 'clients',
-  SALES: 'sales',
+  PAYMENTS: 'payments',
+  CLAIMS: 'claims',
+  REMINDERS: 'reminders',
   COMMISSION: 'commission',
   PROFILE: 'profile'
 };
@@ -54,7 +59,13 @@ export function AgentDashboard({ onLogout, agentData }) {
     switch (currentView) {
       case AgentView.CLIENTS:
         return <ClientManagement agentId={agent?.id || agent?.agent_id} />;
-      case AgentView.COMMISSION:  // ADD THIS CASE
+      case AgentView.PAYMENTS:
+        return <AgentPayments agent={agent} />;
+      case AgentView.CLAIMS:
+        return <ClaimManagement agent={agent} />;
+      case AgentView.REMINDERS:
+        return <PaymentReminders agent={agent} />;
+      case AgentView.COMMISSION:
         return <CommissionTracking agentId={agent?.id || agent?.agent_id} />;
       case AgentView.PROFILE:
         return <AgentProfile agent={agent} onUpdate={fetchAgentProfile} />;
@@ -62,7 +73,7 @@ export function AgentDashboard({ onLogout, agentData }) {
         return <ClientManagement agentId={agent?.id || agent?.agent_id} />;
     }
   };
-
+  
   return (
     <div className="flex h-screen bg-gray-100">
       <AgentSidebar

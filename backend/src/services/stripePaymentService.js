@@ -188,6 +188,88 @@ class StripePaymentService {
             throw error;
         }
     }
+    // Create a payout for approved claim
+async createClaimPayout(claimData) {
+    try {
+        console.log('💰 Processing claim payout for:', claimData.claim_id);
+        
+        // For now, we'll create a PaymentIntent or Transfer
+        // In production, you would need to have the customer's Stripe account ID
+        
+        // Option 1: If you have customer's Stripe account ID stored
+        if (claimData.stripe_account_id) {
+            const transfer = await stripe.transfers.create({
+                amount: Math.round(claimData.amount * 100),
+                currency: 'usd',
+                destination: claimData.stripe_account_id,
+                transfer_group: `CLAIM_${claimData.claim_id}`,
+                metadata: {
+                    claim_id: claimData.claim_id,
+                    customer_id: claimData.customer_id,
+                    policy_id: claimData.policy_id,
+                    claim_type: claimData.claim_type
+                },
+                description: `Claim payout for claim #${claimData.claim_id} - ${claimData.claim_type}`
+            });
+            
+            console.log(`✅ Claim payout created: ${transfer.id}`);
+            
+            return {
+                success: true,
+                transfer_id: transfer.id,
+                amount: claimData.amount,
+                status: transfer.status
+            };
+        } 
+        // Option 2: Create a payment record without actual Stripe transfer (for testing)
+        else {
+            console.log('⚠️ No Stripe account ID found, creating payment record only');
+            return {
+                success: true,
+                payment_record: true,
+                amount: claimData.amount,
+                message: 'Payment recorded in system. Stripe payout requires customer Stripe account.'
+            };
+        }
+        
+    } catch (error) {
+        console.error('❌ Claim payout error:', error.message);
+        throw error;
+    }
+}
+
+// Get claim payout status
+async getClaimPayoutStatus(claimId) {
+    try {
+        const result = await db.query(
+            `SELECT payment_status, payment_transfer_date, payment_intent_id 
+             FROM claim 
+             WHERE claim_id = $1`,
+            [claimId]
+        );
+        
+        const claim = result.rows ? result.rows[0] : result[0];
+        
+        if (claim && claim.payment_intent_id) {
+            const paymentIntent = await stripe.paymentIntents.retrieve(claim.payment_intent_id);
+            return {
+                status: paymentIntent.status,
+                amount: paymentIntent.amount / 100,
+                transfer_date: claim.payment_transfer_date
+            };
+        }
+        
+        return {
+            status: claim?.payment_status || 'pending',
+            amount: null,
+            transfer_date: claim?.payment_transfer_date
+        };
+        
+    } catch (error) {
+        console.error('❌ Get payout status error:', error.message);
+        throw error;
+    }
+}
 }
 
 module.exports = new StripePaymentService();

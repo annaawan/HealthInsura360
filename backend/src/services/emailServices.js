@@ -1108,6 +1108,72 @@ async sendClientStatusUpdateEmail({ to, clientName, newStatus, oldStatus, agentN
         return { success: false, error: error.message };
     }
 }
+// Send policy renewal email to customer
+async sendPolicyRenewalEmail(customerEmail, customerName, policyDetails) {
+    console.log('📧 Sending policy renewal email to:', customerEmail);
+    
+    try {
+        const emailContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Policy Renewed</title>
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+                    .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                    .header { background: linear-gradient(135deg, #0cc0df, #0aa9c4); color: white; padding: 30px; text-align: center; }
+                    .content { padding: 30px; }
+                    .details-box { background: #f8f9fa; border-left: 4px solid #0cc0df; padding: 20px; margin: 20px 0; border-radius: 5px; }
+                    .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h2>🔄 Policy Renewed</h2>
+                        <p>HealthInsura360</p>
+                    </div>
+                    <div class="content">
+                        <p>Dear <strong>${customerName}</strong>,</p>
+                        <p>Your insurance policy has been successfully renewed by your agent.</p>
+                        
+                        <div class="details-box">
+                            <h3 style="margin-top: 0;">Policy Details</h3>
+                            <p><strong>Policy ID:</strong> #${policyDetails.policy_id}</p>
+                            <p><strong>Policy Type:</strong> ${policyDetails.policy_type}</p>
+                            <p><strong>Coverage Amount:</strong> $${policyDetails.sum_insured.toLocaleString()}</p>
+                            <p><strong>Renewal Period:</strong> ${policyDetails.renewal_period_months} months</p>
+                            <p><strong>New Expiry Date:</strong> ${new Date(policyDetails.new_end_date).toLocaleDateString()}</p>
+                        </div>
+                        
+                        <p>Your coverage has been reset to the full amount. You can now submit new claims.</p>
+                        <p>If you have any questions, please contact your insurance agent.</p>
+                    </div>
+                    <div class="footer">
+                        <p>This is an automated message from HealthInsura360.</p>
+                        <p>© ${new Date().getFullYear()} HealthInsura360. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        const mailOptions = {
+            from: `"HealthInsura360" <${process.env.SMTP_EMAIL}>`,
+            to: customerEmail,
+            subject: `🔄 Policy Renewed - #${policyDetails.policy_id}`,
+            html: emailContent
+        };
+        
+        const info = await this.transporter.sendMail(mailOptions);
+        console.log(`✅ Policy renewal email sent: ${info.messageId}`);
+        return { success: true, messageId: info.messageId };
+    } catch (error) {
+        console.error('❌ Failed to send renewal email:', error.message);
+        return { success: false, error: error.message };
+    }
+}
 }
 
 module.exports = new EmailService();

@@ -6,12 +6,17 @@ import {
   User,
   LogOut,
   Briefcase,
-  Menu
+  Menu,
+  CreditCard,
+  Bell,
+  FileText
 } from 'lucide-react';
 
 const menuItems = [
   { id: 'clients', label: 'My Clients', icon: Users },
-  { id: 'sales', label: 'Sales', icon: TrendingUp },
+  { id: 'payments', label: 'Payments', icon: CreditCard },
+  { id: 'claims', label: 'Claims', icon: FileText },
+  { id: 'reminders', label: 'Reminders', icon: Bell },
   { id: 'commission', label: 'Commission', icon: DollarSign },
   { id: 'profile', label: 'Profile', icon: User },
 ];
