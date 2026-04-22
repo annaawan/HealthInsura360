@@ -70,7 +70,7 @@ const RegisterHospital = () => {
     setSuccess("");
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('healthinsura360_token');
       
       if (!token) {
         throw new Error('You must be logged in to upload documents');
@@ -194,7 +194,7 @@ const RegisterHospital = () => {
     try {
       // If document is already uploaded to server (has ID), delete it
       if (documentId) {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('healthinsura360_token');
         const response = await fetch(`http://localhost:5000/api/documents/${documentId}`, {
           method: 'DELETE',
           headers: {

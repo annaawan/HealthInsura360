@@ -1,6 +1,8 @@
 // backend/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
 const { 
   registerCustomer, 
   registerAgent, 
@@ -10,12 +12,59 @@ const {
   loginHospital,
   verifyToken,
   getProfile,
-  requestPasswordReset,    // ADD THIS
-  verifyResetToken,        // ADD THIS
-  resetPassword,          // ADD THIS
-  testEmailEndpoint       // Optional - remove in production
+  updateProfile,
+  requestPasswordReset,
+  verifyResetToken,
+  resetPassword,
+  testEmailEndpoint
 } = require('../controllers/authController');
 const { authMiddleware } = require('../middleware/auth');
+
+// ========== MULTER CONFIGURATION FOR PROFILE PICTURE UPLOADS ==========
+
+// Ensure uploads directory exists
+const fs = require('fs');
+const uploadDir = 'uploads/profiles/';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log('📁 Created uploads directory:', uploadDir);
+}
+
+// Configure storage for profile pictures
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/profiles/');
+  },
+  filename: (req, file, cb) => {
+    // Get user ID from authenticated request
+    const userId = req.user?.userId || req.user?.id || Date.now();
+    const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, `profile_${userId}_${uniqueSuffix}${ext}`);
+  }
+});
+
+// File filter for images only
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|gif/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+  
+  if (mimetype && extname) {
+    return cb(null, true);
+  } else {
+    cb(new Error('Only image files (JPEG, PNG, GIF) are allowed'));
+  }
+};
+
+// Create multer upload instance
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: fileFilter
+});
+
+console.log('✅ Multer configured for profile picture uploads');
 
 // ========== PUBLIC ROUTES ==========
 
@@ -43,6 +92,8 @@ router.get('/verify', verifyToken);
 
 // User profile
 router.get('/profile', authMiddleware, getProfile);
+// ✅ UPDATED: Added multer middleware for file upload
+router.put('/profile', authMiddleware, upload.single('profilePicture'), updateProfile);
 
 // Admin registration (protected - only accessible internally)
 router.post('/register/admin', registerAdmin);

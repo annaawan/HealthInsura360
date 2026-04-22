@@ -4,11 +4,12 @@ const db = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const auditController = require('../controllers/auditController');
 
-// Get all policy plans
-router.get('/', authenticate, authorize('admin'), async (req, res) => {
+// Get all policy plans - Allow both admin AND customers to view
+router.get('/', authenticate, async (req, res) => {
   try {
     const result = await db.query(`
       SELECT * FROM policy_plans 
+      WHERE status = 'active'
       ORDER BY created_at DESC
     `);
     
@@ -207,7 +208,7 @@ router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-// In your backend route for DELETE
+// Delete policy plan
 router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
     const { id } = req.params;

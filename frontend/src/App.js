@@ -10,7 +10,13 @@ import LandingPage from './pages/LandingPage';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AdminDashboard from './components/AdminDashboard/AdminDashboard';
-import { CustomerDashboard } from './components/CustomerDashboard';
+// CORRECT
+import CustomerDashboard from './components/CustomerDashboard';
+import SubmitClaim from './components/Claims/SubmitClaim';
+import MyClaims from './components/Claims/MyClaims';
+import SetupPassword from './pages/hospital/SetupPassword';
+import HospitalLogin from './pages/hospital/HospitalLogin';
+import HospitalDashboard from './pages/hospital/HospitalDashboard';
 import { CommissionProvider } from './context/CommissionContext';
 import { AgentDashboard } from './components/AgentDashboard/AgentDashboard';  
 
@@ -28,7 +34,11 @@ function App() {
           <Route path="/register-hospital" element={<RegisterHospital />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          
+          {/* Admin Routes */}
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          
+          {/* Customer Routes */}
           <Route path="/customer-dashboard" element={<CustomerDashboard />} />
           {/* <Route path="/agent-dashboard" element={<AgentDashboard />} /> */}
           <Route 
@@ -38,6 +48,13 @@ function App() {
                } 
           />
 
+          <Route path="/submit-claim" element={<SubmitClaim />} />
+          <Route path="/my-claims" element={<MyClaims />} />
+          
+          {/* Hospital Routes */}
+          <Route path="/hospital/setup-password" element={<SetupPassword />} />
+          <Route path="/hospital/login" element={<HospitalLogin />} />
+          <Route path="/hospital-dashboard" element={<HospitalDashboard />} />
         </Routes>
       </Router>
     </CommissionProvider>

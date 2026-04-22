@@ -7,7 +7,7 @@ import {
   RefreshCw, XCircle, Save, Tag, Activity, Clock
 } from 'lucide-react';
 import { API_BASE_URL, getAxiosConfig } from '../../config';
-import webhookService from '../../services/webhookServices';
+// import webhookService from '../../services/webhookServices'; // TEMPORARILY DISABLED
 
 function PoliciesManagement() {
   const [plans, setPlans] = useState([]);
@@ -21,13 +21,13 @@ function PoliciesManagement() {
   const [editingPlan, setEditingPlan] = useState(null);
   const [viewingPlan, setViewingPlan] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [webhookStatus, setWebhookStatus] = useState(null); // Track webhook status
+  const [webhookStatus, setWebhookStatus] = useState(null);
   
   // Form state for create/edit policy plan
   const [formData, setFormData] = useState({
     plan_name: '',
     description: '',
-    policy_type: 'health',
+    plan_type: 'health',
     category: 'basic',
     premium_amount: '',
     coverage_amount: '',
@@ -42,23 +42,62 @@ function PoliciesManagement() {
     status: 'active'
   });
 
-  // Fetch policy plans from backend
+  // Helper function to map plan_type to category
+  const mapPlanTypeToCategory = (planType) => {
+    switch (planType?.toLowerCase()) {
+      case 'individual': return 'standard';
+      case 'family': return 'premium';
+      case 'government': return 'special';
+      case 'group': return 'basic';
+      default: return 'basic';
+    }
+  };
+
+  // Helper function to map category to plan_type
+  const mapCategoryToPlanType = (category) => {
+    switch (category) {
+      case 'standard': return 'Individual';
+      case 'premium': return 'Family';
+      case 'special': return 'Government';
+      case 'basic': return 'Group';
+      default: return 'Individual';
+    }
+  };
+
+  // Fetch policy plans from backend - UPDATED to use insurance-plans with mapping
   const fetchPolicyPlans = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
       const config = getAxiosConfig();
-      const response = await axios.get(`${API_BASE_URL}/policy-plans`, config);
+      const response = await axios.get(`${API_BASE_URL}/insurance-plans`, config);
       
       if (response.data.success) {
-        setPlans(response.data.data);
-        console.log(`✅ Found ${response.data.data.length} policy plans`);
+        // Map database fields to what frontend expects
+        const mappedPlans = response.data.plans.map(plan => ({
+          ...plan,
+          // Map plan_type to category for frontend display
+          category: mapPlanTypeToCategory(plan.plan_type),
+          // Map is_active to status
+          status: plan.is_active ? 'active' : 'inactive',
+          // Ensure these fields exist with defaults
+          coverage_details: plan.coverage_details || '',
+          max_claim_limit: plan.coverage_amount,
+          waiting_period_days: plan.waiting_period_days || 30,
+          renewal_period_months: plan.renewal_period_months || 12,
+          eligibility_criteria: plan.eligibility_criteria || '',
+          exclusions: plan.exclusions || '',
+          benefits: plan.benefits || ''
+        }));
+        
+        setPlans(mappedPlans);
+        console.log(`✅ Found ${mappedPlans.length} insurance plans`);
       } else {
         throw new Error(response.data.message);
       }
     } catch (err) {
-      console.error('❌ Error fetching policy plans:', err);
+      console.error('❌ Error fetching insurance plans:', err);
       setError(`Error: ${err.response?.data?.message || err.message}`);
       setPlans(getMockPolicyPlans());
     } finally {
@@ -73,40 +112,60 @@ function PoliciesManagement() {
   const getMockPolicyPlans = () => [
     { 
       plan_id: 1, 
-      plan_name: 'Basic Health Plan', 
-      description: 'Basic health coverage for individuals',
-      policy_type: 'health', 
-      category: 'basic',
-      premium_amount: 99, 
-      coverage_amount: 100000,
-      coverage_details: 'Hospitalization, Consultation, Basic Tests',
-      deductible: 1000,
-      max_claim_limit: 100000,
+      plan_name: 'Premium Health Coverage', 
+      description: 'Comprehensive health coverage with hospitalization',
+      plan_type: 'Individual', 
+      category: 'standard',
+      premium_amount: 5000, 
+      coverage_amount: 500000,
+      coverage_details: 'Hospitalization, Consultation, Surgery',
+      deductible: 0,
+      max_claim_limit: 500000,
       waiting_period_days: 30,
       renewal_period_months: 12,
-      eligibility_criteria: 'Age 18-60, No pre-existing conditions',
-      exclusions: 'Cosmetic surgery, Dental, Vision',
-      benefits: 'Annual health checkup, Cashless hospitalization',
+      eligibility_criteria: 'Age 18-60',
+      exclusions: 'Cosmetic surgery',
+      benefits: 'Cashless hospitalization',
       status: 'active',
       created_at: '2024-01-01',
       updated_at: '2024-01-01'
     },
     { 
       plan_id: 2, 
-      plan_name: 'Family Health Plan', 
-      description: 'Comprehensive coverage for entire family',
-      policy_type: 'health', 
-      category: 'standard',
-      premium_amount: 299, 
-      coverage_amount: 500000,
-      coverage_details: 'Hospitalization, Surgery, Maternity, Dental, Vision',
-      deductible: 500,
-      max_claim_limit: 500000,
-      waiting_period_days: 15,
+      plan_name: 'Basic Health Plan', 
+      description: 'Basic coverage for individuals',
+      plan_type: 'Group', 
+      category: 'basic',
+      premium_amount: 3000, 
+      coverage_amount: 300000,
+      coverage_details: 'Hospitalization, Basic Tests',
+      deductible: 5000,
+      max_claim_limit: 300000,
+      waiting_period_days: 30,
       renewal_period_months: 12,
-      eligibility_criteria: 'Family of 2-6 members, Age 0-65',
-      exclusions: 'Experimental treatments',
-      benefits: 'Maternity cover, Dental checkup, Vision care',
+      eligibility_criteria: 'Age 18-65',
+      exclusions: 'Maternity, Dental',
+      benefits: 'Annual checkup',
+      status: 'active',
+      created_at: '2024-01-15',
+      updated_at: '2024-01-15'
+    },
+    { 
+      plan_id: 4, 
+      plan_name: 'Sehat Card Plus', 
+      description: 'Government-funded health insurance',
+      plan_type: 'Government', 
+      category: 'special',
+      premium_amount: 0, 
+      coverage_amount: 1000000,
+      coverage_details: 'Full hospitalization coverage',
+      deductible: 0,
+      max_claim_limit: 1000000,
+      waiting_period_days: 0,
+      renewal_period_months: 12,
+      eligibility_criteria: 'Pakistani citizens',
+      exclusions: 'OPD without hospitalization',
+      benefits: 'Zero premium, pre-existing conditions covered',
       status: 'active',
       created_at: '2024-01-15',
       updated_at: '2024-01-15'
@@ -136,7 +195,7 @@ function PoliciesManagement() {
     setFormData({
       plan_name: '',
       description: '',
-      policy_type: 'health',
+      plan_type: 'health',
       category: 'basic',
       premium_amount: '',
       coverage_amount: '',
@@ -159,7 +218,7 @@ function PoliciesManagement() {
     setFormData({
       plan_name: plan.plan_name || '',
       description: plan.description || '',
-      policy_type: plan.policy_type || 'health',
+      plan_type: plan.plan_type || 'health',
       category: plan.category || 'basic',
       premium_amount: plan.premium_amount || '',
       coverage_amount: plan.coverage_amount || '',
@@ -188,15 +247,15 @@ function PoliciesManagement() {
 
     try {
       const config = getAxiosConfig();
-      const response = await axios.delete(`${API_BASE_URL}/policy-plans/${id}`, config);
+      const response = await axios.delete(`${API_BASE_URL}/insurance-plans/${id}`, config);
       
-      if (!response.data.success) {
+      if (response.data.success) {
+        setPlans(prev => prev.filter(plan => plan.plan_id !== id));
+        alert(response.data.message || 'Policy plan deleted successfully!');
+        fetchPolicyPlans();
+      } else {
         throw new Error(response.data.message);
       }
-      
-      setPlans(prev => prev.filter(plan => plan.plan_id !== id));
-      alert(response.data.message || 'Policy plan deleted successfully!');
-      fetchPolicyPlans();
     } catch (err) {
       console.error('Error deleting policy plan:', err);
       
@@ -219,50 +278,37 @@ function PoliciesManagement() {
     try {
       const config = getAxiosConfig();
       
+      // Map frontend category to database plan_type
+      const dbPlanType = mapCategoryToPlanType(formData.category);
+      
       const apiData = {
         plan_name: formData.plan_name,
         description: formData.description,
-        policy_type: 'health',
-        category: formData.category,
+        plan_type: dbPlanType,  // ← Use mapped value
         premium_amount: parseFloat(formData.premium_amount),
         coverage_amount: parseFloat(formData.coverage_amount),
-        coverage_details: formData.coverage_details,
         deductible: parseFloat(formData.deductible) || 0,
+        is_active: formData.status === 'active',
+        // Optional fields if your table has them
+        coverage_details: formData.coverage_details,
         max_claim_limit: parseFloat(formData.max_claim_limit),
         waiting_period_days: parseInt(formData.waiting_period_days),
         renewal_period_months: parseInt(formData.renewal_period_months),
         eligibility_criteria: formData.eligibility_criteria,
         exclusions: formData.exclusions,
-        benefits: formData.benefits,
-        status: formData.status
+        benefits: formData.benefits
       };
       
       let savedPlan;
       
       if (modalType === 'create') {
-        const response = await axios.post(`${API_BASE_URL}/policy-plans`, apiData, config);
+        const response = await axios.post(`${API_BASE_URL}/insurance-plans`, apiData, config);
         
         if (response.data.success) {
           savedPlan = response.data.data;
-          alert('Policy plan created successfully!');
+          alert('Insurance plan created successfully!');
           
-          // 🔥 TRIGGER WEBHOOK for commission calculation
-          if (savedPlan && savedPlan.plan_id) {
-            setWebhookStatus('triggering');
-            
-            // Trigger webhook for commission calculation
-            await webhookService.triggerPolicyCreated({
-              policy_id: savedPlan.plan_id,
-              agent_id: null, // Will be assigned when policy is sold to customer
-              premium_amount: parseFloat(formData.premium_amount),
-              policy_type: 'health',
-              plan_name: formData.plan_name,
-              start_date: new Date().toISOString().split('T')[0]
-            });
-            
-            setWebhookStatus('success');
-            console.log('✅ Webhook triggered for commission calculation');
-          }
+          console.log('✅ Insurance plan created:', savedPlan);
           
           setShowModal(false);
           fetchPolicyPlans();
@@ -270,15 +316,15 @@ function PoliciesManagement() {
           throw new Error(response.data.message || 'Creation failed');
         }
       } else {
-        // Edit mode - don't trigger webhook for edits
+        // Edit mode
         const response = await axios.put(
-          `${API_BASE_URL}/policy-plans/${editingPlan.plan_id}`,
+          `${API_BASE_URL}/insurance-plans/${editingPlan.plan_id}`,
           apiData,
           config
         );
         
         if (response.data.success) {
-          alert('Policy plan updated successfully!');
+          alert('Insurance plan updated successfully!');
           setShowModal(false);
           fetchPolicyPlans();
         } else {
@@ -295,9 +341,9 @@ function PoliciesManagement() {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-PK', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'PKR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(amount);
@@ -309,6 +355,7 @@ function PoliciesManagement() {
       case 'standard': return 'bg-green-100 text-green-800';
       case 'premium': return 'bg-yellow-100 text-yellow-800';
       case 'special': return 'bg-purple-100 text-purple-800';
+      case 'government': return 'bg-emerald-100 text-emerald-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -328,7 +375,7 @@ function PoliciesManagement() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading policy plans...</p>
+            <p className="text-gray-600">Loading insurance plans...</p>
           </div>
         </div>
       </div>
@@ -339,8 +386,8 @@ function PoliciesManagement() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Policy Plans Management</h1>
-          <p className="text-gray-600">Create and manage health insurance policy plans</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Insurance Plans Management</h1>
+          <p className="text-gray-600">Create and manage health insurance plans</p>
         </div>
         <button 
           onClick={handleCreatePlan}
@@ -377,22 +424,22 @@ function PoliciesManagement() {
             webhookStatus === 'success' ? 'bg-green-600' : 'bg-red-600'
           }`}></div>
           <p className="text-sm">
-            {webhookStatus === 'processing' && 'Processing policy plan...'}
-            {webhookStatus === 'triggering' && 'Triggering commission calculation webhook...'}
-            {webhookStatus === 'success' && '✓ Commission calculation triggered successfully!'}
-            {webhookStatus === 'error' && '✗ Failed to trigger commission calculation'}
+            {webhookStatus === 'processing' && 'Processing insurance plan...'}
+            {webhookStatus === 'triggering' && 'Processing...'}
+            {webhookStatus === 'success' && '✓ Plan saved successfully!'}
+            {webhookStatus === 'error' && '✗ Failed to save plan'}
           </p>
         </div>
       )}
 
-      {/* Filters - Same as your existing code */}
+      {/* Filters */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search policy plans..."
+              placeholder="Search insurance plans..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -439,17 +486,17 @@ function PoliciesManagement() {
         </div>
       </div>
 
-      {/* Policy Plans Grid - Same as your existing code */}
+      {/* Policy Plans Grid */}
       {filteredPlans.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <FileText className="h-8 w-8 text-gray-400" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No policy plans found</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No insurance plans found</h3>
           <p className="text-gray-600 mb-4">
             {searchTerm || selectedCategory !== 'all' || selectedStatus !== 'all'
               ? 'Try adjusting your search filters' 
-              : 'No policy plans found in the database'}
+              : 'No insurance plans found in the database'}
           </p>
           {!searchTerm && selectedCategory === 'all' && selectedStatus === 'all' && (
             <button 
@@ -457,7 +504,7 @@ function PoliciesManagement() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               <Plus className="h-5 w-5" />
-              Create your first policy plan
+              Create your first insurance plan
             </button>
           )}
         </div>
@@ -560,14 +607,14 @@ function PoliciesManagement() {
         </div>
       )}
 
-      {/* Create/Edit Modal - Same as your existing code */}
+      {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">
-                  {modalType === 'create' ? 'Create New Health Insurance Plan' : 'Edit Health Insurance Plan'}
+                  {modalType === 'create' ? 'Create New Insurance Plan' : 'Edit Insurance Plan'}
                 </h2>
                 <button
                   onClick={() => setShowModal(false)}
@@ -578,7 +625,6 @@ function PoliciesManagement() {
               </div>
 
               <form onSubmit={handleSubmit}>
-                {/* Form fields - Same as your existing code */}
                 <div className="space-y-6 mb-6">
                   <div className="space-y-4">
                     <h3 className="font-medium text-gray-900 border-b pb-2">Basic Information</h3>
@@ -616,6 +662,7 @@ function PoliciesManagement() {
                           <option value="standard">Standard</option>
                           <option value="premium">Premium</option>
                           <option value="special">Special</option>
+                          <option value="government">Government</option>
                         </select>
                       </div>
                       <div>
@@ -639,7 +686,7 @@ function PoliciesManagement() {
                     
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-gray-700 mb-2">Premium Amount ($) *</label>
+                        <label className="block text-gray-700 mb-2">Premium Amount (Rs.) *</label>
                         <input
                           type="number"
                           required
@@ -651,7 +698,7 @@ function PoliciesManagement() {
                         />
                       </div>
                       <div>
-                        <label className="block text-gray-700 mb-2">Coverage Amount ($) *</label>
+                        <label className="block text-gray-700 mb-2">Coverage Amount (Rs.) *</label>
                         <input
                           type="number"
                           required
@@ -666,7 +713,7 @@ function PoliciesManagement() {
 
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-gray-700 mb-2">Deductible ($)</label>
+                        <label className="block text-gray-700 mb-2">Deductible (Rs.)</label>
                         <input
                           type="number"
                           min="0"
@@ -677,7 +724,7 @@ function PoliciesManagement() {
                         />
                       </div>
                       <div>
-                        <label className="block text-gray-700 mb-2">Max Claim Limit ($) *</label>
+                        <label className="block text-gray-700 mb-2">Max Claim Limit (Rs.) *</label>
                         <input
                           type="number"
                           required
@@ -790,13 +837,13 @@ function PoliciesManagement() {
         </div>
       )}
 
-      {/* View Details Modal - Same as your existing code */}
+      {/* View Details Modal */}
       {showViewModal && viewingPlan && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">Policy Plan Details</h2>
+                <h2 className="text-xl font-bold text-gray-900">Insurance Plan Details</h2>
                 <button
                   onClick={() => setShowViewModal(false)}
                   className="p-2 hover:bg-gray-100 rounded-lg"

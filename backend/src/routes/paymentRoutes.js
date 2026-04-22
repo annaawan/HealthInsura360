@@ -1,7 +1,8 @@
-// backend/src/routes/paymentRoutes.js
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
+const paymentController = require('../controllers/paymentController');
+const { authenticate } = require('../middleware/auth');
 const stripePaymentService = require('../services/stripePaymentService');
 const { authenticate, adminMiddleware } = require('../middleware/auth');
 // At the top of paymentRoutes.js, add this line with other requires

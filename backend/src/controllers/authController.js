@@ -2,6 +2,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
+const { sendHospitalRegistrationNotification } = require('../utils/emailService');
 const { getNextAgentRoundRobin } = require('../utils/agentAssignment');
 
 // Helper function to generate random registration number
@@ -110,33 +111,21 @@ exports.registerCustomer = async (req, res) => {
 
     const customerId = result.rows[0].customer_id;
 
-    // Update agent's total_sales count if assigned
-    if (assignedAgentId) {
-      await db.query(
-        `UPDATE agent 
-         SET total_sales = COALESCE(total_sales, 0) + 1,
-             updated_at = NOW()
-         WHERE agent_id = $1`,
-        [assignedAgentId]
-      );
-      
-      console.log(`✅ Agent ${assignedAgentId} total_sales updated to +1`);
-    }
+  // After getting customerId, ADD THIS:
+const tokenData = {
+  userId: customerId,
+  email: result.rows[0].email,
+  userType: 'customer'
+};
 
-    // Generate token
-    const tokenData = {
-      userId: customerId,
-      email: result.rows[0].email,
-      userType: 'customer'
-    };
+const token = jwt.sign(
+  tokenData,
+  process.env.JWT_SECRET || 'Allahuakbar786',
+  { expiresIn: '7d' }
+);
 
-    const token = jwt.sign(
-      tokenData,
-      process.env.JWT_SECRET || 'Allahuakbar786',
-      { expiresIn: '7d' }
-    );
 
-    // Log audit
+    // Log audit with TIMESTAMP column
     await db.query(
       `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
        VALUES ('customer', $1, 'register', 'customer', $1, NOW())`,
@@ -276,18 +265,17 @@ exports.registerAgent = async (req, res) => {
     );
 
     const agentId = result.rows[0].agent_id;
-// After getting agentId, ADD THIS:
-const tokenData = {
-  userId: agentId,
-  email: result.rows[0].email,
-  userType: 'agent'
-};
 
-const token = jwt.sign(
-  tokenData,
-  process.env.JWT_SECRET || 'Allahuakbar786',
-  { expiresIn: '7d' }
-);
+    // Create JWT token
+    const token = jwt.sign(
+      {
+        userId: agentId,
+        email: result.rows[0].email,
+        userType: 'agent'
+      },
+      process.env.JWT_SECRET || 'Allahuakbar786',
+      { expiresIn: '7d' }
+    );
 
     // Log audit WITH TIMESTAMP
     await db.query(
@@ -348,10 +336,13 @@ exports.registerHospital = async (req, res) => {
     name,
     email,
     phone,
+    contactPerson,
+    registrationNumber,
     street,
     city,
     state,
-    zipcode
+    zipcode,
+    documents
   } = req.body;
 
   try {
@@ -376,53 +367,70 @@ exports.registerHospital = async (req, res) => {
       });
     }
 
-    // Generate unique registration number
-    let registrationNumber;
-    let isUnique = false;
-    let attempts = 0;
-    const maxAttempts = 5;
+    // Generate unique registration number if not provided
+    let finalRegistrationNumber = registrationNumber;
+    if (!finalRegistrationNumber) {
+      let isUnique = false;
+      let attempts = 0;
+      const maxAttempts = 5;
 
-    // Keep generating until we get a unique registration number
-    while (!isUnique && attempts < maxAttempts) {
-      registrationNumber = generateRegistrationNumber();
+      // Keep generating until we get a unique registration number
+      while (!isUnique && attempts < maxAttempts) {
+        finalRegistrationNumber = generateRegistrationNumber();
+        const existingReg = await db.query(
+          'SELECT registration_number FROM hospital WHERE registration_number = $1',
+          [finalRegistrationNumber]
+        );
+        
+        if (existingReg.rows.length === 0) {
+          isUnique = true;
+        }
+        attempts++;
+      }
+
+      if (!isUnique) {
+        return res.status(500).json({
+          success: false,
+          message: 'Could not generate unique registration number'
+        });
+      }
+    } else {
+      // Check if provided registration number is unique
       const existingReg = await db.query(
         'SELECT registration_number FROM hospital WHERE registration_number = $1',
-        [registrationNumber]
+        [finalRegistrationNumber]
       );
       
-      if (existingReg.rows.length === 0) {
-        isUnique = true;
+      if (existingReg.rows.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Registration number already exists'
+        });
       }
-      attempts++;
-    }
-
-    if (!isUnique) {
-      return res.status(500).json({
-        success: false,
-        message: 'Could not generate unique registration number'
-      });
     }
 
     // Start transaction
     await db.query('BEGIN');
 
-    // Insert into hospital table WITH CREATED_AT AND UPDATED_AT
+    // Insert into hospital table WITH STATUS SET TO 'pending'
     const result = await db.query(
       `INSERT INTO hospital (
-        name, email, phone, registration_number,
-        street, city, state, zipcode,
+        name, email, phone, contact_person, registration_number,
+        street, city, state, zipcode, status, documents,
         created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-      RETURNING hospital_id, name, email, registration_number, created_at, updated_at`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, NOW(), NOW())
+      RETURNING hospital_id, name, email, contact_person, registration_number, status, created_at, updated_at`,
       [
         name,
         email.toLowerCase(),
         phone || null,
-        registrationNumber,
+        contactPerson || null,
+        finalRegistrationNumber,
         street || null,
         city || null,
         state || null,
-        zipcode || null
+        zipcode || null,
+        documents ? JSON.stringify(documents) : null
       ]
     );
 
@@ -437,15 +445,38 @@ exports.registerHospital = async (req, res) => {
 
     await db.query('COMMIT');
 
+    // Prepare hospital data for email notification
+    const hospitalData = {
+      name: result.rows[0].name,
+      email: result.rows[0].email,
+      phone: phone || null,
+      contactPerson: result.rows[0].contact_person,
+      registrationNumber: result.rows[0].registration_number,
+      street: street || null,
+      city: city || null,
+      state: state || null,
+      zipcode: zipcode || null,
+      documents: documents || []
+    };
+
+    // Send email notification to admin (async - don't wait for completion)
+    try {
+      await sendHospitalRegistrationNotification(hospitalData);
+    } catch (emailError) {
+      console.error('Error sending hospital registration email notification:', emailError);
+      // Don't fail the registration if email fails
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Hospital registration submitted successfully. Admin will verify and provide credentials.',
+      message: 'Hospital registration submitted successfully. Admin will verify and provide credentials via email.',
       hospital: {
         id: hospitalId,
         name: result.rows[0].name,
         email: result.rows[0].email,
+        contactPerson: result.rows[0].contact_person,
         registrationNumber: result.rows[0].registration_number,
-        status: 'pending_verification',
+        status: result.rows[0].status,
         createdAt: result.rows[0].created_at,
         updatedAt: result.rows[0].updated_at
       }
@@ -523,19 +554,18 @@ exports.registerAdmin = async (req, res) => {
     );
 
     const adminId = result.rows[0].admin_id;
-// After getting adminId, ADD THIS:
-const tokenData = {
-  userId: adminId,
-  email: result.rows[0].email,
-  userType: 'admin',
-  role: result.rows[0].role
-};
 
-const token = jwt.sign(
-  tokenData,
-  process.env.JWT_SECRET || 'Allahuakbar786',
-  { expiresIn: '7d' }
-);
+    // Create JWT token
+    const token = jwt.sign(
+      {
+        userId: adminId,
+        email: result.rows[0].email,
+        userType: 'admin',
+        role: result.rows[0].role
+      },
+      process.env.JWT_SECRET || 'Allahuakbar786',
+      { expiresIn: '7d' }
+    );
 
     // Log audit WITH TIMESTAMP
     await db.query(
@@ -728,7 +758,6 @@ exports.login = async (req, res) => {
       const newHashForAttempt = await bcrypt.hash(password, testSalt);
       console.log('\n📝 New hash for your attempted password:', newHashForAttempt);
       console.log('Note: This will be different every time due to salt');
-      
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -1037,27 +1066,84 @@ exports.loginHospital = async (req, res) => {
   }
 };
 
+// Verify Token (for protected routes)
 exports.verifyToken = async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ success: false, message: 'No token provided' });
+    return res.status(401).json({
+      success: false,
+      message: 'No token provided'
+    });
   }
 
   try {
-    // USE THE SAME SECRET AS LOGIN AND MIDDLEWARE!
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Allahuakbar786');  // ← MUST MATCH
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Allahuakbar786');
     
-    // ... rest of your code
+    // Check if user still exists in database
+    let tableName, idField;
+    
+    switch (decoded.userType) {
+      case 'customer':
+        tableName = 'customer';
+        idField = 'customer_id';
+        break;
+      case 'agent':
+        tableName = 'agent';
+        idField = 'agent_id';
+        break;
+      case 'admin':
+        tableName = 'admin';
+        idField = 'admin_id';
+        break;
+      case 'hospital':
+        tableName = 'hospital';
+        idField = 'hospital_id';
+        break;
+      default:
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid user type'
+        });
+    }
+
+    const result = await db.query(
+      `SELECT ${idField}, email FROM ${tableName} WHERE ${idField} = $1`,
+      [decoded.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: decoded
+    });
+
   } catch (error) {
     console.error('Token verification error:', error);
-    res.status(401).json({ success: false, message: 'Invalid token' });
+    
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token expired'
+      });
+    }
+    
+    res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
   }
 };
 
 // Get Current User Profile
 exports.getProfile = async (req, res) => {
-  const { userId, userType } = req.user; // From middleware
+  const { userId, userType } = req.user;
 
   try {
     let tableName, idField;
@@ -1086,8 +1172,13 @@ exports.getProfile = async (req, res) => {
         });
     }
 
+    // ✅ MAKE SURE profile_picture IS IN THE SELECT
     const result = await db.query(
-      `SELECT * FROM ${tableName} WHERE ${idField} = $1`,
+      `SELECT customer_id, first_name, last_name, email, phone, 
+              street, city, state, zipcode, gender, dob, 
+              profile_picture, created_at, updated_at 
+       FROM ${tableName} 
+       WHERE ${idField} = $1`,
       [userId]
     );
 
@@ -1099,50 +1190,36 @@ exports.getProfile = async (req, res) => {
     }
 
     const user = result.rows[0];
-    let profileData = {
+    
+    // ✅ DEBUG - Check what's in the database
+    console.log('🔍 DATABASE ROW:', user);
+    console.log('🔍 profile_picture VALUE:', user.profile_picture);
+
+    // Build response
+    const profileData = {
       id: user[idField],
       email: user.email,
-      userType: userType
+      userType: userType,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      fullName: `${user.first_name} ${user.last_name}`,
+      gender: user.gender,
+      phone: user.phone,
+      street: user.street,
+      city: user.city,
+      state: user.state,
+      zipcode: user.zipcode,
+      profile_picture: user.profile_picture || null,  // ✅ KEY LINE
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
     };
 
-    // Add user-specific fields
-    if (userType === 'customer' || userType === 'agent') {
-      profileData.firstName = user.first_name;
-      profileData.lastName = user.last_name;
-      profileData.fullName = `${user.first_name} ${user.last_name}`;
-      profileData.gender = user.gender;
-      profileData.phone = user.phone;
-      profileData.street = user.street;
-      profileData.city = user.city;
-      profileData.state = user.state;
-      profileData.zipcode = user.zipcode;
-      profileData.createdAt = user.created_at;
-      profileData.updatedAt = user.updated_at;
-      
-      if (userType === 'customer') {
-        profileData.dob = user.dob;
-      } else if (userType === 'agent') {
-        profileData.licenseNumber = user.license_number;
-        profileData.commissionRate = user.commission_rate;
-        profileData.dateOfBirth = user.date_of_birth;
-      }
-    } else if (userType === 'admin') {
-      profileData.fullName = user.full_name;
-      profileData.role = user.role;
-      profileData.createdAt = user.created_at;
-      profileData.updatedAt = user.updated_at;
-    } else if (userType === 'hospital') {
-      profileData.name = user.name;
-      profileData.registrationNumber = user.registration_number;
-      profileData.verifiedStatus = user.verified_status;
-      profileData.phone = user.phone;
-      profileData.street = user.street;
-      profileData.city = user.city;
-      profileData.state = user.state;
-      profileData.zipcode = user.zipcode;
-      profileData.createdAt = user.created_at;
-      profileData.updatedAt = user.updated_at;
+    // Add customer-specific field
+    if (userType === 'customer') {
+      profileData.dob = user.dob;
     }
+
+    console.log('📸 FINAL RESPONSE profile_picture:', profileData.profile_picture);
 
     res.json({
       success: true,
@@ -1223,16 +1300,17 @@ exports.requestPasswordReset = async (req, res) => {
     const userId = user[idField];
     const userName = user[nameField] || 'User';
 
+    // Generate reset token (expires in 1 hour)
     const resetToken = jwt.sign(
-  {
-    userId: userId,
-    email: user.email,
-    userType: userType,
-    purpose: 'password_reset'
-  },
-  process.env.JWT_SECRET || 'Allahuakbar786',  // ✅ CORRECT SECRET
-  { expiresIn: '1h' }
-);
+      {
+        userId: userId,
+        email: user.email,
+        userType: userType,
+        purpose: 'password_reset'
+      },
+      process.env.JWT_SECRET || 'Allahuakbar786',
+      { expiresIn: '1h' }
+    );
 
     // Send password reset email
     const { sendPasswordResetEmail } = require('../utils/emailService');
@@ -1396,8 +1474,8 @@ exports.resetPassword = async (req, res) => {
     }
 
     // Password strength validation
-// To this (allows all common special characters):
-const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?])[A-Za-z\d!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]{8,}$/;    if (!passwordRegex.test(newPassword)) {
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
       return res.status(400).json({
         success: false,
         message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character'
@@ -1526,6 +1604,173 @@ exports.testEmailEndpoint = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Test email failed'
+    });
+  }
+};
+
+// Update user profile (with profile picture support)
+exports.updateProfile = async (req, res) => {
+  const { userId, userType } = req.user; // From middleware
+  const { first_name, last_name, phone, street, city, state, zipcode, gender, dob } = req.body;
+
+  try {
+    let tableName, idField;
+
+    switch (userType) {
+      case 'customer':
+        tableName = 'customer';
+        idField = 'customer_id';
+        break;
+      case 'agent':
+        tableName = 'agent';
+        idField = 'agent_id';
+        break;
+      case 'admin':
+        tableName = 'admin';
+        idField = 'admin_id';
+        break;
+      case 'hospital':
+        tableName = 'hospital';
+        idField = 'hospital_id';
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid user type'
+        });
+    }
+
+    // Handle profile picture if uploaded
+    let profilePicturePath = null;
+    if (req.file) {
+      profilePicturePath = `/uploads/profiles/${req.file.filename}`;
+      console.log('📸 Profile picture uploaded:', profilePicturePath);
+    }
+
+    // Build update query based on user type
+    let updateQuery;
+    let params = [];
+
+    if (userType === 'customer') {
+      updateQuery = `
+        UPDATE ${tableName}
+        SET 
+          first_name = $1,
+          last_name = $2,
+          phone = $3,
+          street = $4,
+          city = $5,
+          state = $6,
+          zipcode = $7,
+          gender = $8,
+          dob = $9,
+          profile_picture = COALESCE($10, profile_picture),
+          updated_at = NOW()
+        WHERE ${idField} = $11
+        RETURNING *
+      `;
+      params = [first_name, last_name, phone, street, city, state, zipcode, gender, dob, profilePicturePath, userId];
+    } else if (userType === 'agent') {
+      updateQuery = `
+        UPDATE ${tableName}
+        SET 
+          first_name = $1,
+          last_name = $2,
+          phone = $3,
+          street = $4,
+          city = $5,
+          state = $6,
+          zipcode = $7,
+          gender = $8,
+          profile_picture = COALESCE($9, profile_picture),
+          updated_at = NOW()
+        WHERE ${idField} = $10
+        RETURNING *
+      `;
+      params = [first_name, last_name, phone, street, city, state, zipcode, gender, profilePicturePath, userId];
+    } else if (userType === 'hospital') {
+      updateQuery = `
+        UPDATE ${tableName}
+        SET 
+          phone = $1,
+          street = $2,
+          city = $3,
+          state = $4,
+          zipcode = $5,
+          updated_at = NOW()
+        WHERE ${idField} = $6
+        RETURNING *
+      `;
+      params = [phone, street, city, state, zipcode, userId];
+    } else if (userType === 'admin') {
+      updateQuery = `
+        UPDATE ${tableName}
+        SET 
+          updated_at = NOW()
+        WHERE ${idField} = $1
+        RETURNING *
+      `;
+      params = [userId];
+    }
+
+    const result = await db.query(updateQuery, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = result.rows[0];
+    let profileData = {
+      id: user[idField],
+      email: user.email,
+      userType: userType,
+      profile_picture: user.profile_picture || null  // ✅ ADD THIS
+    };
+
+    // Add user-specific fields to response
+    if (userType === 'customer' || userType === 'agent') {
+      profileData.firstName = user.first_name;
+      profileData.lastName = user.last_name;
+      profileData.fullName = `${user.first_name} ${user.last_name}`;
+      profileData.gender = user.gender;
+      profileData.phone = user.phone;
+      profileData.street = user.street;
+      profileData.city = user.city;
+      profileData.state = user.state;
+      profileData.zipcode = user.zipcode;
+      profileData.updatedAt = user.updated_at;
+      
+      if (userType === 'customer') {
+        profileData.dob = user.dob;
+      }
+    } else if (userType === 'hospital') {
+      profileData.name = user.name;
+      profileData.phone = user.phone;
+      profileData.street = user.street;
+      profileData.city = user.city;
+      profileData.state = user.state;
+      profileData.zipcode = user.zipcode;
+      profileData.updatedAt = user.updated_at;
+    }
+
+    console.log(`✅ Profile updated successfully for ${userType} ${userId}`);
+    console.log(`📸 Profile picture path: ${user.profile_picture || 'Not set'}`);
+    
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: profileData  // ✅ Return as 'user' to match frontend expectation
+    });
+
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update profile',
+      error: error.message
     });
   }
 };

@@ -12,3 +12,31 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// Hospital Registration Status Enum
+enum hospital_status {
+  pending
+  verified
+  rejected
+  suspended
+}
+
+// Hospital Model
+model Hospital {
+  hospital_id       Int       @id @default(autoincrement())
+  name              String    @db.VarChar(255)
+  email             String    @unique
+  phone             String?   @db.VarChar(20)
+  registration_number String? @unique
+  contact_person    String?   @db.VarChar(255)
+  street            String?   @db.VarChar(255)
+  city              String?   @db.VarChar(100)
+  state             String?   @db.VarChar(100)
+  zipcode           String?   @db.VarChar(20)
+  status            hospital_status @default(pending)
+  documents         String?   @db.Text // JSON array of document paths
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@map("hospital")
+}

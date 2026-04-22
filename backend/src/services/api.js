@@ -1,12 +1,11 @@
-
 const API_BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to get auth token
-const getAuthHeaders = () => {
+const getAuthHeaders = (options = {}) => {
   const token = localStorage.getItem('token');
   return {
     'Authorization': `Bearer ${token}`,
-    ...( !(arguments[0]?.isFormData) ? { 'Content-Type': 'application/json' } : {} )
+    ...(options.isFormData ? {} : { 'Content-Type': 'application/json' })
   };
 };
 

@@ -5,14 +5,8 @@ const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 const bcrypt = require('bcrypt');
 const auditController = require('../controllers/auditController');
 
-
-
 // Get all customers from PostgreSQL
 router.get('/customers', authMiddleware, adminMiddleware, async (req, res) => {
-   console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
-  console.log('🔥 CUSTOMERS ROUTE IS EXECUTING! 🔥');
-  console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
-  console.log('User from middleware:', req.user);
   try {
     console.log('📋 Fetching customers from PostgreSQL...');
     const result = await db.query(`
@@ -51,7 +45,7 @@ router.get('/customers', authMiddleware, adminMiddleware, async (req, res) => {
 });
 
 // Get all agents from PostgreSQL
-router.get('/agents',authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/agents', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     console.log('📋 Fetching agents from PostgreSQL...');
     const result = await db.query(`
@@ -99,7 +93,7 @@ router.get('/agents',authMiddleware, adminMiddleware, async (req, res) => {
 });
 
 // Get all hospitals from PostgreSQL
-router.get('/hospitals',authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/hospitals', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     console.log('📋 Fetching hospitals from PostgreSQL...');
     const result = await db.query(`

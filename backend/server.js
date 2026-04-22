@@ -28,35 +28,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 console.log('🔵 JSON middleware configured');
 
-// Test route
-app.get('/api/test', (req, res) => {
-  console.log('🟢 /api/test route accessed');
-  res.json({ 
-    success: true, 
-    message: 'Backend is running!',
-    timestamp: new Date().toISOString(),
-    availableRoutes: [
-      'POST /api/auth/login',
-      'POST /api/auth/register',
-      'POST /api/auth/verify',
-      'GET /api/auth/profile',
-      'POST /api/auth/logout',
-      'GET /api/accounts/customers',
-      'GET /api/accounts/agents',
-      'GET /api/accounts/hospitals',
-      'GET /api/hospitals',
-      'GET /api/payments/test',
-      'GET /api/payments/transactions'
-    ]
-  });
+app.use((req, res, next) => {
+  console.log(`📨 REQUEST: ${req.method} ${req.url}`);
+  next();
 });
+
+// Add with other route registrations
+const notificationRoutes = require('./src/routes/notificationRoutes');
+app.use('/api/notifications', notificationRoutes);
+
 
 console.log('🔵 Attempting to import routes...');
 
-// Import routes with error catching
-let accounts, authRoutes, hospitalsRoutes, auditRoutes, policyPlansRoutes, 
-    analyticsRoutes, reportsRoutes, webhookRoutes, paymentRoutes, 
-    stripeWebhookRoutes, commissionRoutes;
+let accounts, authRoutes, hospitalsRoutes, auditRoutes, policyRoutes, insurancePlansRoutes,
+    claimRoutes, policyPlansRoutes, analyticsRoutes, reportsRoutes,
+    webhookRoutes, paymentRoutes, stripeWebhookRoutes, commissionRoutes,
+    userRoutes, profileRoutes;
 
 try {
   console.log('🔵 Importing accounts routes...');
@@ -64,6 +51,14 @@ try {
   console.log('✅ accounts routes loaded');
 } catch (err) {
   console.error('❌ Error loading accounts:', err.message);
+}
+
+try {
+  console.log('🔵 Importing insurance plans routes...');
+  insurancePlansRoutes = require('./src/routes/insurancePlans');
+  console.log('✅ insurance plans routes loaded');
+} catch (err) {
+  console.error('❌ Error loading insurance plans:', err.message);
 }
 
 try {
@@ -91,9 +86,25 @@ try {
 }
 
 try {
+  console.log('🔵 Importing policy routes...');
+  policyRoutes = require('./src/routes/policyRoutes');
+  console.log('✅ policy routes loaded');
+} catch (err) {
+  console.error('❌ Error loading policy routes:', err.message);
+}
+
+try {
+  console.log('🔵 Importing claim routes...');
+  claimRoutes = require('./src/routes/claimRoutes');
+  console.log('✅ claim routes loaded');
+} catch (err) {
+  console.error('❌ Error loading claim routes:', err.message);
+}
+
+try {
   console.log('🔵 Importing policy plans routes...');
   policyPlansRoutes = require('./src/routes/policyPlans');
-  console.log('✅ policy plans routes loaded');
+  console.log('✅ policy plans loaded');
 } catch (err) {
   console.error('❌ Error loading policy plans:', err.message);
 }
@@ -131,7 +142,6 @@ try {
 } catch (err) {
   console.error('❌❌❌ CRITICAL: Error loading payment routes:', err.message);
   console.error('Full error:', err);
-  // Create a fallback route
   paymentRoutes = express.Router();
   paymentRoutes.get('/test', (req, res) => {
     res.json({ success: false, message: 'Payment routes failed to load: ' + err.message });
@@ -167,64 +177,72 @@ console.log('🔵 All imports attempted, now mounting routes...');
 
 // Routes
 try {
-  console.log('🔵 Mounting /api/webhooks/stripe');
-  app.use('/api/webhooks/stripe', stripeWebhookRoutes);
-} catch (err) { console.error('Error mounting stripe:', err.message); }
-
-try {
-  console.log('🔵 Mounting /api/accounts');
-  app.use('/api/accounts', accounts);
-} catch (err) { console.error('Error mounting accounts:', err.message); }
-
-try {
-  console.log('🔵 Mounting /api/auth');
-  app.use('/api/auth', authRoutes);
-} catch (err) { console.error('Error mounting auth:', err.message); }
-
-try {
-  console.log('🔵 Mounting /api/hospitals');
-  app.use('/api/hospitals', hospitalsRoutes);
-} catch (err) { console.error('Error mounting hospitals:', err.message); }
-
-try {
-  console.log('🔵 Mounting /api/audit-logs');
-  app.use('/api/audit-logs', auditRoutes);
-} catch (err) { console.error('Error mounting audit:', err.message); }
-
-try {
-  console.log('🔵 Mounting /api/policy-plans');
-  app.use('/api/policy-plans', policyPlansRoutes);
-} catch (err) { console.error('Error mounting policy-plans:', err.message); }
-
-try {
-  console.log('🔵 Mounting /api/analytics');
-  app.use('/api/analytics', analyticsRoutes);
-} catch (err) { console.error('Error mounting analytics:', err.message); }
-
-try {
-  console.log('🔵 Mounting /api/reports');
-  app.use('/api/reports', reportsRoutes);
-} catch (err) { console.error('Error mounting reports:', err.message); }
-
-try {
-  console.log('🔵 Mounting /api/webhooks');
-  app.use('/api/webhooks', webhookRoutes);
-} catch (err) { console.error('Error mounting webhooks:', err.message); }
-
-try {
-  console.log('🔵 🔴 🔵 MOUNTING PAYMENT ROUTES at /api/payments');
-  app.use('/api/payments', paymentRoutes);
-  console.log('✅✅✅ Payment routes mounted successfully at /api/payments');
-} catch (err) { 
-  console.error('❌❌❌ CRITICAL: Error mounting payment routes:', err.message);
+  console.log('🔵 Importing profile routes...');
+  profileRoutes = require('./src/routes/profileRoutes');
+  console.log('✅ profile routes loaded');
+} catch (err) {
+  console.error('❌ Error loading profile routes:', err.message);
 }
 
 try {
-  console.log('🔵 Mounting /api/commissions');
-  app.use('/api/commissions', commissionRoutes);
-} catch (err) { console.error('Error mounting commissions:', err.message); }
+  console.log('🔵 Importing user routes...');
+  userRoutes = require('./src/routes/userRoutes');
+  console.log('✅ user routes loaded');
+} catch (err) {
+  console.error('❌ Error loading user routes:', err.message);
+}
 
-// Health check
+app.get('/api/test', (req, res) => {
+  console.log('🟢 /api/test route accessed');
+  res.json({
+    success: true,
+    message: 'Backend is running!',
+    timestamp: new Date().toISOString(),
+    availableRoutes: [
+      'POST /api/auth/login',
+      'POST /api/auth/register',
+      'POST /api/auth/verify',
+      'GET /api/auth/profile',
+      'POST /api/auth/logout',
+      'GET /api/accounts/customers',
+      'GET /api/accounts/agents',
+      'GET /api/accounts/hospitals',
+      'POST /api/accounts',
+      'PUT /api/accounts/:type/:id',
+      'DELETE /api/accounts/:type/:id',
+      'GET /api/accounts/:type/:id',
+      'GET /api/users',
+      'GET /api/users/:id',
+      'POST /api/users',
+      'PUT /api/users/:id',
+      'DELETE /api/users/:id',
+      'GET /api/hospitals',
+      'PUT /api/hospitals/:id/status',
+      'GET /api/payments/test',
+      'GET /api/payments/transactions'
+    ]
+  });
+});
+
+console.log('🔵 All imports attempted, now mounting routes...');
+
+try { if (accounts) app.use('/api/accounts', accounts); } catch (err) { console.error('Error mounting accounts:', err.message); }
+try { if (authRoutes) app.use('/api/auth', authRoutes); } catch (err) { console.error('Error mounting auth:', err.message); }
+try { if (hospitalsRoutes) app.use('/api/hospitals', hospitalsRoutes); } catch (err) { console.error('Error mounting hospitals:', err.message); }
+try { if (auditRoutes) app.use('/api/audit-logs', auditRoutes); } catch (err) { console.error('Error mounting audit:', err.message); }
+try { if (policyRoutes) app.use('/api/policies', policyRoutes); } catch (err) { console.error('Error mounting policies:', err.message); }
+try { if (claimRoutes) app.use('/api/claims', claimRoutes); } catch (err) { console.error('Error mounting claims:', err.message); }
+try { if (userRoutes) app.use('/api/users', userRoutes); } catch (err) { console.error('Error mounting users:', err.message); }
+try { if (policyPlansRoutes) app.use('/api/policy-plans', policyPlansRoutes); } catch (err) { console.error('Error mounting policy-plans:', err.message); }
+try { if (analyticsRoutes) app.use('/api/analytics', analyticsRoutes); } catch (err) { console.error('Error mounting analytics:', err.message); }
+try { if (reportsRoutes) app.use('/api/reports', reportsRoutes); } catch (err) { console.error('Error mounting reports:', err.message); }
+try { if (webhookRoutes) app.use('/api/webhooks', webhookRoutes); } catch (err) { console.error('Error mounting webhooks:', err.message); }
+try { if (stripeWebhookRoutes) app.use('/api/webhooks/stripe', stripeWebhookRoutes); } catch (err) { console.error('Error mounting stripe:', err.message); }
+try { if (paymentRoutes) { app.use('/api/payments', paymentRoutes); console.log('✅✅✅ Payment routes mounted successfully at /api/payments'); } } catch (err) { console.error('❌❌❌ CRITICAL: Error mounting payment routes:', err.message); }
+try { if (commissionRoutes) app.use('/api/commissions', commissionRoutes); } catch (err) { console.error('Error mounting commissions:', err.message); }
+try { if (insurancePlansRoutes) app.use('/api/insurance-plans', insurancePlansRoutes); } catch (err) { console.error('Error mounting insurance-plans:', err.message); }
+try { if (profileRoutes) app.use('/api/profile', profileRoutes); } catch (err) { console.error('Error mounting profile:', err.message); }
+
 app.get('/health', (req, res) => {
   console.log('🟢 /health route accessed');
   res.json({
@@ -233,12 +251,6 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
-});
-
-// Debug middleware to log all requests
-app.use((req, res, next) => {
-  console.log(`📨 REQUEST: ${req.method} ${req.url}`);
-  next();
 });
 
 // Error handling middleware
@@ -261,11 +273,27 @@ app.use('*', (req, res) => {
     availableEndpoints: [
       'GET    /api/test',
       'GET    /health',
-      'GET    /api/payments/test',
-      'GET    /api/payments/transactions',
       'POST   /api/auth/login',
+      'POST   /api/auth/register',
+      'POST   /api/auth/verify',
+      'GET    /api/auth/profile',
+      'POST   /api/auth/logout',
+      'GET    /api/users',
+      'GET    /api/users/:id',
+      'POST   /api/users',
+      'PUT    /api/users/:id',
+      'DELETE /api/users/:id',
       'GET    /api/accounts/customers',
-      'GET    /api/hospitals'
+      'GET    /api/accounts/agents',
+      'GET    /api/accounts/hospitals',
+      'POST   /api/accounts',
+      'PUT    /api/accounts/:type/:id',
+      'DELETE /api/accounts/:type/:id',
+      'GET    /api/accounts/:type/:id',
+      'GET    /api/hospitals',
+      'PUT    /api/hospitals/:id/status',
+      'GET    /api/payments/test',
+      'GET    /api/payments/transactions'
     ]
   });
 });

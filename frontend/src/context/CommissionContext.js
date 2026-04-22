@@ -4,7 +4,39 @@ import React, { createContext, useContext, useReducer, useEffect, useState, useC
 import axios from 'axios';
 import { commissionAPI } from '../services/api';
 import { API_BASE_URL, getAxiosConfig } from '../config';
+
 const CommissionContext = createContext();
+
+// Helper function to get user type from localStorage
+const getUserType = () => {
+  try {
+    // Try to get from userType directly
+    let userType = localStorage.getItem('userType');
+    if (userType) return userType;
+    
+    // Try to get from user object
+    const userStr = localStorage.getItem('healthinsura360_user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      return user.userType || user.role || 'customer';
+    }
+    
+    // Try to get from token (decode JWT)
+    const token = localStorage.getItem('healthinsura360_token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.userType || payload.role || 'customer';
+      } catch (e) {
+        console.log('Could not decode token');
+      }
+    }
+  } catch (error) {
+    console.error('Error getting user type:', error);
+  }
+  
+  return 'customer'; // Default to customer
+};
 
 // Define the reducer outside the component
 const commissionReducer = (state, action) => {
@@ -152,8 +184,22 @@ export function CommissionProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const accountType = localStorage.getItem('accountType');
+  const [isCommissionUser, setIsCommissionUser] = useState(false);
   
-  // Define loadMockData first (before it's used)
+  // Check if user is agent or admin on mount
+  useEffect(() => {
+    const userType = getUserType();
+    const hasCommissionAccess = userType === 'agent' || userType === 'admin';
+    setIsCommissionUser(hasCommissionAccess);
+    
+    if (!hasCommissionAccess) {
+      console.log('ℹ️ Commission service disabled for user type:', userType);
+      setLoading(false);
+      dispatch({ type: 'SET_COMMISSIONS', payload: [] });
+    }
+  }, []);
+  
+  // Load mock data (only used as fallback)
   const loadMockData = useCallback(() => {
     const mockCommissions = [
       {
@@ -201,40 +247,54 @@ export function CommissionProvider({ children }) {
     ];
     dispatch({ type: 'SET_COMMISSIONS', payload: mockCommissions });
   }, []);
-  
 
-// Update fetchCommissions to NOT call loadMockData:
-const fetchCommissions = useCallback(async () => {
-  try {
-    setLoading(true);
-    const response = await commissionAPI.getAllCommissions();
+  // Fetch commissions - ONLY for agents and admins
+  const fetchCommissions = useCallback(async () => {
+    // Double check user type before fetching
+    const userType = getUserType();
+    const hasAccess = userType === 'agent' || userType === 'admin';
     
-    // Check if response has data
-    if (response && Array.isArray(response)) {
-      dispatch({ type: 'SET_COMMISSIONS', payload: response });
-    } else {
-      // No data - set empty array
+    if (!hasAccess) {
+      console.log('ℹ️ Skipping commission fetch - user type:', userType);
+      setLoading(false);
       dispatch({ type: 'SET_COMMISSIONS', payload: [] });
+      return;
     }
-  } catch (error) {
-    console.error('Error fetching commissions:', error);
-    setError(error.message);
-    // DO NOT load mock data - set empty array
-    dispatch({ type: 'SET_COMMISSIONS', payload: [] });
-  } finally {
-    setLoading(false);
-  }
-}, []); // Remove loadMockData dependency
-  // useEffect with proper dependency
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await commissionAPI.getAllCommissions();
+      
+      if (response && Array.isArray(response)) {
+        dispatch({ type: 'SET_COMMISSIONS', payload: response });
+      } else {
+        dispatch({ type: 'SET_COMMISSIONS', payload: [] });
+      }
+    } catch (error) {
+      console.error('Error fetching commissions:', error);
+      setError(error.message);
+      // Don't load mock data - set empty array
+      dispatch({ type: 'SET_COMMISSIONS', payload: [] });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  // Fetch commissions only if user has access
   useEffect(() => {
-    if (accountType === 'admin') {
+    if (isCommissionUser) {
+      if (accountType === 'admin') {
       fetchCommissions();
+    }
     } else {
       setLoading(false);
     }
-  }, [fetchCommissions, accountType]);
+  }, [fetchCommissions, isCommissionUser, accountType]);
   
   const addCommission = async (commissionData) => {
+    if (!isCommissionUser) throw new Error('Unauthorized');
+    
     try {
       const response = await commissionAPI.createCommission(commissionData);
       dispatch({ type: 'ADD_COMMISSION', payload: response });
@@ -246,6 +306,8 @@ const fetchCommissions = useCallback(async () => {
   };
   
   const addBulkCommissions = async (commissionsData) => {
+    if (!isCommissionUser) throw new Error('Unauthorized');
+    
     try {
       const response = await commissionAPI.createBulkCommissions(commissionsData);
       dispatch({ type: 'ADD_BULK_COMMISSIONS', payload: response });
@@ -257,6 +319,8 @@ const fetchCommissions = useCallback(async () => {
   };
   
  const payCommission = async (commissionId, paymentReference, paymentMethod, paymentDate, notes) => {
+    if (!isCommissionUser) throw new Error('Unauthorized');
+    
     try {
         const config = getAxiosConfig();
         const response = await axios.put(
@@ -278,6 +342,8 @@ const fetchCommissions = useCallback(async () => {
 };
   
  const cancelCommission = async (commissionId, reason) => {
+    if (!isCommissionUser) throw new Error('Unauthorized');
+    
     try {
         const config = getAxiosConfig();
         const response = await axios.put(
@@ -299,6 +365,8 @@ const fetchCommissions = useCallback(async () => {
 };
   
   const updateCommissionRate = async (commissionId, newRate) => {
+    if (!isCommissionUser) throw new Error('Unauthorized');
+    
     try {
       const response = await commissionAPI.updateCommissionRate(commissionId, newRate);
       dispatch({ type: 'UPDATE_COMMISSION_RATE', payload: { commission_id: commissionId, new_rate: newRate } });
@@ -310,6 +378,8 @@ const fetchCommissions = useCallback(async () => {
   };
   
   const deleteCommission = async (commissionId) => {
+    if (!isCommissionUser) throw new Error('Unauthorized');
+    
     try {
       await commissionAPI.deleteCommission(commissionId);
       dispatch({ type: 'DELETE_COMMISSION', payload: { commission_id: commissionId } });
@@ -380,6 +450,8 @@ const disapproveCommission = async (commissionId, reason, notes = '') => {
     }
 };
   const exportReport = async (filters = {}) => {
+    if (!isCommissionUser) throw new Error('Unauthorized');
+    
     try {
       const blob = await commissionAPI.exportCommissionsReport(filters);
       const url = window.URL.createObjectURL(blob);
@@ -397,7 +469,9 @@ const disapproveCommission = async (commissionId, reason, notes = '') => {
   };
   
   const refreshData = async () => {
-    await fetchCommissions();
+    if (isCommissionUser) {
+      await fetchCommissions();
+    }
   };
   
   const getCommissionsByAgent = (agentId) => {
@@ -424,8 +498,9 @@ const disapproveCommission = async (commissionId, reason, notes = '') => {
   
   // ==================== AUDIT LOG FUNCTIONS ====================
   
-  // Get audit logs for a specific commission
   const getCommissionAuditLogs = async (commissionId) => {
+    if (!isCommissionUser) return [];
+    
     try {
       const config = getAxiosConfig();
       const response = await axios.get(
@@ -439,8 +514,9 @@ const disapproveCommission = async (commissionId, reason, notes = '') => {
     }
   };
   
-  // Get all commission audit logs with filters
   const getAllAuditLogs = async (filters = {}) => {
+    if (!isCommissionUser) return { logs: [], total: 0 };
+    
     try {
       const config = getAxiosConfig();
       const params = new URLSearchParams(filters).toString();
@@ -457,13 +533,13 @@ const disapproveCommission = async (commissionId, reason, notes = '') => {
   
   return (
     <CommissionContext.Provider value={{
-      // Existing values
       commissions: state.commissions,
       totalPending: state.totalPending,
       totalPaid: state.totalPaid,
       summary: state.summary,
       loading,
       error,
+      isCommissionUser, // ✅ Expose this to check if user has commission access
       getAllCommissions,
       getCommissionsByAgent,
       getAgentSummary,
@@ -477,7 +553,6 @@ const disapproveCommission = async (commissionId, reason, notes = '') => {
       fetchCommissionsWithFilters,
       exportReport,
       refreshData,
-      // Audit log functions
       getCommissionAuditLogs,
       getAllAuditLogs,
       approveCommission,
