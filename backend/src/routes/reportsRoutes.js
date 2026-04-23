@@ -1,3 +1,4 @@
+// backend/src/routes/reportsRoutes.js
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
@@ -7,11 +8,11 @@ const { authenticate, adminMiddleware } = require('../middleware/auth');
 const reportService = require('../services/reportServices');
 const auditLogService = require('../services/auditLogServices');
 
-// ==================== MONTHLY PERFORMANCE REPORT ====================
+// ==================== COMMISSION REPORTS (Admin Only) ====================
 
 // Get commission summary report
-router.get('/commission-summary', authenticate, adminMiddleware, async (req, res) => { 
-     try {
+router.get('/commission-summary', authenticate, adminMiddleware, async (req, res) => {
+    try {
         const { start_date, end_date, format = 'json' } = req.query;
         
         if (!start_date || !end_date) {
@@ -20,7 +21,6 @@ router.get('/commission-summary', authenticate, adminMiddleware, async (req, res
         
         const reportData = await reportService.generateCommissionSummary(start_date, end_date);
         
-        // Log report generation
         await auditLogService.logReportGeneration(
             req.user.admin_id,
             'commission_summary',
@@ -82,7 +82,6 @@ router.get('/transactions', authenticate, adminMiddleware, async (req, res) => {
 
 // Get agent performance report
 router.get('/agent-performance', authenticate, adminMiddleware, async (req, res) => {
-
     try {
         const { year, quarter, format = 'json' } = req.query;
         
@@ -145,7 +144,7 @@ router.get('/templates', authenticate, adminMiddleware, (req, res) => {
     res.json(templates);
 });
 
-// ==================== USER & HOSPITAL REPORTS (Public/Authenticated) ====================
+// ==================== USER & HOSPITAL REPORTS ====================
 
 // GET report data (for dashboard)
 router.get('/:reportType', async (req, res) => {
@@ -252,70 +251,70 @@ router.get('/export/:reportType', async (req, res) => {
     }
 });
 
-// ========== USER GROWTH REPORT (MySQL version) ==========
+// ========== USER GROWTH REPORT (PostgreSQL) ==========
 async function getUserGrowthReport(range) {
     try {
-        console.log('👥 Generating User Growth Report for range:', range);
+        console.log('👥 Generating User Growth Report...');
         
-        let whereClause = '';
+        // Determine date range based on selection
+        let dateCondition = '';
+        let params = [];
         
-        // PostgreSQL date conditions
         switch (range) {
             case 'last-7-days':
-                whereClause = `WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'7 days\'';
                 break;
             case 'last-30-days':
-                whereClause = `WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'30 days\'';
                 break;
             case 'last-quarter':
-                whereClause = `WHERE created_at >= CURRENT_DATE - INTERVAL '3 months'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'3 months\'';
                 break;
             case 'last-year':
-                whereClause = `WHERE created_at >= CURRENT_DATE - INTERVAL '1 year'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'1 year\'';
                 break;
             case 'all-time':
-                whereClause = ''; // No filter for all time
+                dateCondition = '';
                 break;
             default:
-                whereClause = `WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'30 days\'';
                 break;
         }
         
-        console.log('Where clause:', whereClause);
-        
-        // Get user growth data grouped by month (MySQL syntax)
-        let growthQuery = `
+        // Get user growth data grouped by month
+        const growthQuery = `
             SELECT 
-                DATE_FORMAT(created_at, '%Y-%m') as period,
-                COUNT(*) as new_users
+                TO_CHAR(created_at, 'YYYY-MM') as period,
+                COUNT(*) as new_users,
+                SUM(COUNT(*)) OVER (ORDER BY TO_CHAR(created_at, 'YYYY-MM')) as cumulative_users
             FROM customer
-            ${dateCondition.whereClause}
-            GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-            ORDER BY DATE_FORMAT(created_at, '%Y-%m')
+            ${dateCondition}
+            GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+            ORDER BY TO_CHAR(created_at, 'YYYY-MM')
             LIMIT 12
         `;
 
-        console.log('📊 User growth query:', growthQuery);
-        
-        const [rows] = await db.query(growthQuery, dateCondition.params);
+        const growthResult = await db.query(growthQuery, params);
+        const rows = growthResult.rows;
         
         // Format data for charts
-        const labels = result.rows.map(row => {
+        const labels = rows.map(row => {
             const [year, month] = row.period.split('-');
             const date = new Date(year, month - 1);
             return date.toLocaleString('default', { month: 'short', year: 'numeric' });
         });
-        const newUsers = result.rows.map(row => parseInt(row.new_users) || 0);
-        const cumulativeUsers = result.rows.map(row => parseInt(row.cumulative_users) || 0);
+        const newUsers = rows.map(row => parseInt(row.new_users) || 0);
+        const cumulativeUsers = rows.map(row => parseInt(row.cumulative_users) || 0);
 
         // Get detailed user statistics
         const statsQuery = `
             SELECT 
                 COUNT(*) as total_customers,
-                SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) as new_last_30_days,
-                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_customers,
-                SUM(CASE WHEN gender = 'Male' THEN 1 ELSE 0 END) as male_customers,
-                SUM(CASE WHEN gender = 'Female' THEN 1 ELSE 0 END) as female_customers,
+                COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) as new_last_30_days,
+                COUNT(CASE WHEN status = 'active' THEN 1 END) as active_customers,
+                COUNT(CASE WHEN gender = 'Male' THEN 1 END) as male_customers,
+                COUNT(CASE WHEN gender = 'Female' THEN 1 END) as female_customers,
+                COUNT(CASE WHEN EXTRACT(YEAR FROM AGE(dob)) >= 60 THEN 1 END) as senior_customers,
                 (
                     SELECT city 
                     FROM customer 
@@ -324,23 +323,38 @@ async function getUserGrowthReport(range) {
                     LIMIT 1
                 ) as top_city
             FROM customer
-            ${dateCondition.whereClause}
+            ${dateCondition}
         `;
 
-        const [statsResult] = await db.query(statsQuery, dateCondition.params);
-        const stats = statsResult;
+        const statsResult = await db.query(statsQuery, params);
+        const stats = statsResult.rows[0];
+
+        // Get user growth by city
+        const cityQuery = `
+            SELECT 
+                city,
+                COUNT(*) as user_count
+            FROM customer
+            ${dateCondition}
+            GROUP BY city
+            ORDER BY user_count DESC
+            LIMIT 5
+        `;
+
+        const cityResult = await db.query(cityQuery, params);
 
         return {
             labels,
             data: newUsers,
             cumulativeData: cumulativeUsers,
             summary: {
-                total_customers: parseInt(stats.total_customers) || 0,
-                new_last_30_days: parseInt(stats.new_last_30_days) || 0,
-                active_customers: parseInt(stats.active_customers) || 0,
-                male_customers: parseInt(stats.male_customers) || 0,
-                female_customers: parseInt(stats.female_customers) || 0,
-                top_city: stats.top_city || 'N/A'
+                total_customers: parseInt(stats?.total_customers) || 0,
+                new_last_30_days: parseInt(stats?.new_last_30_days) || 0,
+                active_customers: parseInt(stats?.active_customers) || 0,
+                male_customers: parseInt(stats?.male_customers) || 0,
+                female_customers: parseInt(stats?.female_customers) || 0,
+                senior_customers: parseInt(stats?.senior_customers) || 0,
+                top_city: stats?.top_city || 'N/A'
             },
             cityDistribution: cityResult.rows,
             growthRate: calculateGrowthRate(newUsers),
@@ -353,100 +367,139 @@ async function getUserGrowthReport(range) {
     }
 }
 
-// ========== HOSPITAL NETWORK REPORT (MySQL version) ==========
+// ========== HOSPITAL NETWORK REPORT (PostgreSQL) ==========
 async function getHospitalNetworkReport(range) {
     try {
-        console.log('🏥 Generating Hospital Network Report for range:', range);
+        console.log('🏥 Generating Hospital Network Report...');
         
-        const dateCondition = getDateCondition(range, 'created_at');
+        let dateCondition = '';
+        let params = [];
         
-        // First, check what date range of data exists
-        const dateRangeQuery = `
-            SELECT 
-                MIN(created_at) as oldest_date,
-                MAX(created_at) as newest_date,
-                COUNT(*) as total_with_dates
-            FROM hospital 
-            WHERE created_at IS NOT NULL
-        `;
-        const dateRangeResult = await db.query(dateRangeQuery);
-        console.log('📊 Date range in DB:', dateRangeResult.rows[0]);
-        
-        // PostgreSQL date conditions based on range
         switch (range) {
             case 'last-7-days':
-                whereClause = `WHERE created_at IS NOT NULL AND created_at >= CURRENT_DATE - INTERVAL '7 days'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'7 days\'';
                 break;
             case 'last-30-days':
-                whereClause = `WHERE created_at IS NOT NULL AND created_at >= CURRENT_DATE - INTERVAL '30 days'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'30 days\'';
                 break;
             case 'last-quarter':
-                whereClause = `WHERE created_at IS NOT NULL AND created_at >= CURRENT_DATE - INTERVAL '3 months'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'3 months\'';
                 break;
             case 'last-year':
-                whereClause = `WHERE created_at IS NOT NULL AND created_at >= CURRENT_DATE - INTERVAL '1 year'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'1 year\'';
                 break;
             case 'all-time':
-                whereClause = `WHERE created_at IS NOT NULL`; // Only include hospitals with dates
+                dateCondition = '';
                 break;
             default:
-                whereClause = `WHERE created_at IS NOT NULL AND created_at >= CURRENT_DATE - INTERVAL '30 days'`;
+                dateCondition = 'WHERE created_at >= NOW() - INTERVAL \'30 days\'';
                 break;
         }
         
-        console.log('📅 Where clause:', whereClause);
-        
-        // Get hospital statistics by status with date filter
-        let statusQuery = `
+        // Get hospital statistics by status
+        const statusQuery = `
             SELECT 
-                COALESCE(status, 'pending') as status,
+                COALESCE(status, 'Unknown') as status,
                 COUNT(*) as count
             FROM hospital
-            ${whereClause}
+            ${dateCondition}
             GROUP BY status
             ORDER BY count DESC
         `;
 
-        const [statusResult] = await db.query(statusQuery, dateCondition.params);
+        const statusResult = await db.query(statusQuery, params);
 
-        const labels = statusResult.map(row => row.status || 'Unknown');
-        const data = statusResult.map(row => parseInt(row.count) || 0);
+        const labels = statusResult.rows.map(row => row.status || 'Unknown');
+        const data = statusResult.rows.map(row => parseInt(row.count) || 0);
 
         // Get detailed hospital statistics
         const statsQuery = `
             SELECT 
                 COUNT(*) as total_hospitals,
-                SUM(CASE WHEN verified_status = 1 THEN 1 ELSE 0 END) as verified_hospitals,
-                SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) as new_last_30_days,
+                COUNT(CASE WHEN verified_status = true THEN 1 END) as verified_hospitals,
+                COUNT(CASE WHEN status = 'active' THEN 1 END) as active_hospitals,
+                COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END) as new_last_30_days,
                 COUNT(DISTINCT city) as cities_covered,
                 COUNT(DISTINCT state) as states_covered,
                 (
                     SELECT city 
                     FROM hospital 
-                    WHERE city IS NOT NULL AND city != ''
                     GROUP BY city 
                     ORDER BY COUNT(*) DESC 
                     LIMIT 1
                 ) as top_city
             FROM hospital
-            ${dateCondition.whereClause}
+            ${dateCondition}
         `;
 
-        const [statsResult] = await db.query(statsQuery, dateCondition.params);
-        const stats = statsResult;
+        const statsResult = await db.query(statsQuery, params);
+        const stats = statsResult.rows[0];
+
+        // Get hospitals by city
+        const cityQuery = `
+            SELECT 
+                COALESCE(city, 'Unknown') as city,
+                COUNT(*) as hospital_count
+            FROM hospital
+            ${dateCondition}
+            GROUP BY city
+            ORDER BY hospital_count DESC
+            LIMIT 5
+        `;
+
+        const cityResult = await db.query(cityQuery, params);
+
+        // Get hospitals by specialization
+        let specializationData = [];
+        try {
+            const specializationQuery = `
+                SELECT 
+                    COALESCE(specialization, 'General') as specialization,
+                    COUNT(*) as count
+                FROM hospital
+                ${dateCondition}
+                GROUP BY specialization
+                ORDER BY count DESC
+                LIMIT 5
+            `;
+            const specializationResult = await db.query(specializationQuery, params);
+            specializationData = specializationResult.rows;
+        } catch (specError) {
+            console.log('⚠️ Specialization query failed:', specError.message);
+        }
+
+        // Get recent hospital registrations
+        const recentHospitalsQuery = `
+            SELECT 
+                name,
+                city,
+                state,
+                verified_status,
+                created_at
+            FROM hospital
+            ${dateCondition}
+            ORDER BY created_at DESC
+            LIMIT 5
+        `;
+
+        const recentHospitalsResult = await db.query(recentHospitalsQuery, params);
 
         return {
             labels,
             data,
             summary: {
-                total_hospitals: parseInt(stats.total_hospitals) || 0,
-                verified_hospitals: parseInt(stats.verified_hospitals) || 0,
-                new_last_30_days: parseInt(stats.new_last_30_days) || 0,
-                cities_covered: parseInt(stats.cities_covered) || 0,
-                states_covered: parseInt(stats.states_covered) || 0,
-                top_city: stats.top_city || 'N/A'
+                total_hospitals: parseInt(stats?.total_hospitals) || 0,
+                verified_hospitals: parseInt(stats?.verified_hospitals) || 0,
+                active_hospitals: parseInt(stats?.active_hospitals) || 0,
+                new_last_30_days: parseInt(stats?.new_last_30_days) || 0,
+                cities_covered: parseInt(stats?.cities_covered) || 0,
+                states_covered: parseInt(stats?.states_covered) || 0,
+                top_city: stats?.top_city || 'N/A'
             },
-            rawData: statusResult
+            cityDistribution: cityResult.rows,
+            specializationDistribution: specializationData,
+            recentHospitals: recentHospitalsResult.rows,
+            rawData: statusResult.rows
         };
 
     } catch (error) {
@@ -454,45 +507,8 @@ async function getHospitalNetworkReport(range) {
         return getSampleHospitalData();
     }
 }
-// ========== HELPER FUNCTIONS ==========
 
-// Get date condition based on range (PostgreSQL version)
-function getDateCondition(range, dateColumn) {
-    const now = new Date();
-    let startDate;
-    let whereClause = '';
-    let params = [];
-    
-    switch (range) {
-        case 'last-7-days':
-            startDate = new Date(now.setDate(now.getDate() - 7));
-            whereClause = `WHERE ${dateColumn} >= $1`;
-            params = [startDate.toISOString()];
-            break;
-        case 'last-30-days':
-            startDate = new Date(now.setDate(now.getDate() - 30));
-            whereClause = `WHERE ${dateColumn} >= $1`;
-            params = [startDate.toISOString()];
-            break;
-        case 'last-quarter':
-            startDate = new Date(now.setMonth(now.getMonth() - 3));
-            whereClause = `WHERE ${dateColumn} >= $1`;
-            params = [startDate.toISOString()];
-            break;
-        case 'last-year':
-            startDate = new Date(now.setFullYear(now.getFullYear() - 1));
-            whereClause = `WHERE ${dateColumn} >= $1`;
-            params = [startDate.toISOString()];
-            break;
-        case 'all-time':
-        default:
-            whereClause = '';
-            params = [];
-            break;
-    }
-    
-    return { whereClause, params };
-}
+// ========== HELPER FUNCTIONS ==========
 
 // Calculate growth rate from data array
 function calculateGrowthRate(dataArray) {
@@ -541,7 +557,6 @@ function generatePDF(reportData, title, range) {
             doc.font('Helvetica').text(String(value), col2, y);
             y += rowHeight;
             
-            // Add page break if needed
             if (y > 700) {
                 doc.addPage();
                 y = 50;
@@ -558,7 +573,6 @@ function generatePDF(reportData, title, range) {
     if (reportData.rawData && reportData.rawData.length > 0) {
         doc.fontSize(10).font('Helvetica');
         
-        // Create table header
         const headers = Object.keys(reportData.rawData[0]);
         let y = doc.y;
         const colWidth = 120;
@@ -572,14 +586,12 @@ function generatePDF(reportData, title, range) {
         
         y += 20;
         
-        // Add data rows
         reportData.rawData.forEach((row, rowIndex) => {
             headers.forEach((header, colIndex) => {
                 doc.font('Helvetica').text(String(row[header] || ''), 50 + (colIndex * colWidth), y);
             });
             y += 15;
             
-            // Add page break if needed
             if (y > 700) {
                 doc.addPage();
                 y = 50;
@@ -602,12 +614,10 @@ function generatePDF(reportData, title, range) {
 function convertToCSV(reportData, title) {
     const sections = [];
     
-    // Add header section
     sections.push(`"${title}"`);
     sections.push(`"Generated: ${new Date().toLocaleString()}"`);
     sections.push('');
     
-    // Add summary section
     if (reportData.summary) {
         sections.push('"SUMMARY"');
         sections.push('"Metric","Value"');
@@ -620,11 +630,9 @@ function convertToCSV(reportData, title) {
         sections.push('');
     }
     
-    // Add raw data section
     if (reportData.rawData && reportData.rawData.length > 0) {
         sections.push('"DETAILED DATA"');
         
-        // Get headers
         const headers = Object.keys(reportData.rawData[0]);
         const headerRow = headers.map(header => 
             `"${header.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}"`
@@ -632,7 +640,6 @@ function convertToCSV(reportData, title) {
         
         sections.push(headerRow);
         
-        // Add data rows
         reportData.rawData.forEach(row => {
             const dataRow = headers.map(header => `"${row[header] || ''}"`).join(',');
             sections.push(dataRow);
