@@ -4,6 +4,7 @@ const { Pool } = require('pg');
 const { authenticate, adminMiddleware } = require('../middleware/auth');
 const stripePaymentService = require('../services/stripePaymentService');
 const reminderService = require('../services/reminderService');
+const companyAccountService = require('../services/companyAccountService');
 
 // PostgreSQL connection pool
 const pool = new Pool({
@@ -542,17 +543,21 @@ router.get('/agent/clients/:customerId/policies', authenticate, async (req, res)
     }
     
     const policiesQuery = `
-      SELECT 
-        policy_id,
-        policy_type,
-        premium_amount,
-        start_date,
-        end_date,
-        status
-      FROM policy
-      WHERE customer_id = $1 AND status = 'active'
-      ORDER BY start_date DESC
-    `;
+  SELECT DISTINCT
+    p.policy_id,
+    p.policy_type,
+    p.premium_amount,
+    p.start_date,
+    p.end_date,
+    p.status,
+    COALESCE(
+      (SELECT plan_name FROM policy_plans WHERE policy_type = p.policy_type AND status = 'active' LIMIT 1),
+      p.policy_type
+    ) as plan_name
+  FROM policy p
+  WHERE p.customer_id = $1 AND p.status = 'active'
+  ORDER BY p.policy_id
+`;
     
     const result = await pool.query(policiesQuery, [customerId]);
     
@@ -1082,7 +1087,57 @@ router.post('/reminders/trigger-manual', authenticate, async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
-
+// Mark reminder as completed (for admin/agent when payment is made offline)
+router.put('/reminders/:reminderId/complete', authenticate, async (req, res) => {
+    try {
+        const { reminderId } = req.params;
+        const agentId = req.user.userId || req.user.id;
+        const { paymentReference, notes } = req.body;
+        
+        // Verify reminder belongs to agent's customer
+        const verifyQuery = `
+            SELECT r.reminder_id, r.customer_id, r.policy_id, c.email
+            FROM payment_reminders r
+            JOIN customer c ON r.customer_id = c.customer_id
+            WHERE r.reminder_id = $1 AND r.agent_id = $2
+        `;
+        const verifyResult = await pool.query(verifyQuery, [reminderId, agentId]);
+        
+        if (verifyResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Reminder not found' });
+        }
+        
+        const reminder = verifyResult.rows[0];
+        
+        // Update reminder status
+        await pool.query(
+            `UPDATE payment_reminders 
+             SET status = 'completed', 
+                 updated_at = NOW(),
+                 notes = COALESCE(notes, $1)
+             WHERE reminder_id = $2`,
+            [notes || `Payment completed by agent. Reference: ${paymentReference || 'N/A'}`, reminderId]
+        );
+        
+        // Log completion
+        await pool.query(
+            `INSERT INTO reminder_logs (
+                reminder_id, customer_id, customer_email, notification_type, 
+                subject, message, status, sent_at
+            ) VALUES ($1, $2, $3, 'payment_completed', 'Payment Completed', $4, 'success', NOW())`,
+            [reminderId, reminder.customer_id, reminder.email, `Payment completed for policy #${reminder.policy_id}`]
+        );
+        
+        res.json({
+            success: true,
+            message: 'Reminder marked as completed'
+        });
+        
+    } catch (error) {
+        console.error('Error completing reminder:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
 // ============ CLAIM MANAGEMENT ROUTES ============
 
 // Get all claims for a specific client (with policy coverage info)
@@ -1738,5 +1793,526 @@ router.post('/agent/policies/:policyId/renew', authenticate, async (req, res) =>
         client.release();
     }
 });
+// Add these endpoints to your existing paymentRoutes.js
 
+// Create payment intent for customer purchase
+router.post('/create-payment-intent', authenticate, async (req, res) => {
+    try {
+        const { amount, currency = 'usd', policyId } = req.body;
+        const userId = req.user?.userId;
+        
+        const amountNum = parseFloat(amount);
+        if (isNaN(amountNum) || amountNum <= 0) {
+            return res.status(400).json({ success: false, error: 'Valid amount is required' });
+        }
+        
+        // Get customer email for receipt
+        const customerResult = await pool.query(
+            'SELECT email FROM customer WHERE customer_id = $1',
+            [userId]
+        );
+        const customerEmail = customerResult.rows[0]?.email;
+        
+        // Get plan name
+        let planName = null;
+        if (policyId) {
+            const planResult = await pool.query(
+                'SELECT plan_name FROM policy_plans WHERE plan_id = $1',
+                [policyId]
+            );
+            if (planResult.rows.length > 0) {
+                planName = planResult.rows[0].plan_name;
+            }
+        }
+        
+        const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+        
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: Math.round(amountNum * 100),
+            currency: currency.toLowerCase(),
+            metadata: {
+                policy_id: policyId?.toString() || 'unknown',
+                customer_id: userId?.toString() || 'unknown',
+                plan_name: planName || 'Health Insurance'
+            },
+            description: planName ? `Policy purchase: ${planName}` : 'Health insurance policy purchase',
+            receipt_email: customerEmail,
+            payment_method_types: ['card']
+        });
+        
+        console.log(`✅ Payment intent created: ${paymentIntent.id}`);
+        
+        res.json({
+            success: true,
+            clientSecret: paymentIntent.client_secret,
+            paymentIntentId: paymentIntent.id,
+            amount: amountNum,
+            currency: currency
+        });
+        
+    } catch (error) {
+        console.error('Create payment intent error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Confirm payment intent (backend notification)
+router.post('/confirm-payment-intent', authenticate, async (req, res) => {
+    try {
+        const { paymentIntentId } = req.body;
+        
+        if (!paymentIntentId) {
+            return res.status(400).json({ success: false, error: 'Payment intent ID required' });
+        }
+        
+        // For mock payment intents
+        if (paymentIntentId.startsWith('pi_mock_')) {
+            return res.json({ success: true, status: 'succeeded', mock: true });
+        }
+        
+        const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        
+        res.json({
+            success: paymentIntent.status === 'succeeded',
+            status: paymentIntent.status,
+            paymentIntentId: paymentIntent.id,
+            amount: paymentIntent.amount / 100
+        });
+        
+    } catch (error) {
+        console.error('Confirm payment intent error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ============ CUSTOMER POLICY PAYMENT ROUTES ============
+
+// Create payment intent for customer policy purchase
+router.post('/customer/create-payment-intent', authenticate, async (req, res) => {
+    try {
+        const { policyId, amount } = req.body;
+        const customerId = req.user?.userId;
+        
+        if (!customerId) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        if (!policyId || !amount) {
+            return res.status(400).json({ success: false, error: 'Policy ID and amount are required' });
+        }
+        
+        // Verify policy belongs to customer and is in pending status
+        const policyCheck = await pool.query(
+            `SELECT p.*, pp.plan_name 
+             FROM policy p
+             JOIN policy_plans pp ON p.plan_id = pp.plan_id
+             WHERE p.policy_id = $1 AND p.customer_id = $2 AND p.status = 'pending'`,
+            [policyId, customerId]
+        );
+        
+        if (policyCheck.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Policy not found or already activated' 
+            });
+        }
+        
+        // Create payment intent
+        const result = await stripePaymentService.processCustomerPolicyPayment(
+            customerId,
+            policyId,
+            parseFloat(amount)
+        );
+        
+        res.json({
+            success: true,
+            clientSecret: result.clientSecret,
+            paymentIntentId: result.paymentIntentId,
+            requiresAction: result.requiresAction
+        });
+        
+    } catch (error) {
+        console.error('Create customer payment intent error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Confirm payment and credit company account
+router.post('/customer/confirm-payment', authenticate, async (req, res) => {
+    try {
+        const { paymentIntentId } = req.body;
+        const customerId = req.user?.userId;
+        
+        if (!paymentIntentId) {
+            return res.status(400).json({ success: false, error: 'Payment intent ID required' });
+        }
+        
+        // Complete payment and credit company account
+        const result = await stripePaymentService.completeCustomerPolicyPayment(paymentIntentId);
+        
+        // Create notification for customer
+        try {
+            const { createNotification } = require('../routes/notificationRoutes');
+            await createNotification(
+                customerId,
+                'customer',
+                'payment_received',
+                'Payment Successful ✅',
+                `Your payment of $${result.amount} for policy #${result.policyId} has been received successfully. Your policy has been activated.`,
+                result.policyId
+            );
+        } catch (notifError) {
+            console.log('Notification error:', notifError.message);
+        }
+        
+        res.json({
+            success: true,
+            message: 'Payment confirmed and policy activated',
+            data: {
+                paymentId: result.paymentId,
+                amount: result.amount,
+                companyBalance: result.companyBalance
+            }
+        });
+        
+    } catch (error) {
+        console.error('Confirm customer payment error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get payment status
+router.get('/customer/payment-status/:paymentIntentId', authenticate, async (req, res) => {
+    try {
+        const { paymentIntentId } = req.params;
+        
+        const status = await stripePaymentService.getCustomerPaymentStatus(paymentIntentId);
+        
+        res.json({
+            success: true,
+            status: status
+        });
+        
+    } catch (error) {
+        console.error('Get payment status error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get customer payment history
+router.get('/customer/history', authenticate, async (req, res) => {
+    try {
+        const customerId = req.user?.userId;
+        
+        const result = await pool.query(
+            `SELECT 
+                p.payment_id,
+                p.amount,
+                p.method,
+                p.status as payment_status,
+                p.paid_at,
+                pol.policy_id,
+                pol.policy_type,
+                pp.plan_name,
+                t.transaction_id,
+                t.status as transaction_status,
+                t.created_at as transaction_date
+             FROM payment p
+             JOIN policy pol ON p.policy_id = pol.policy_id
+             LEFT JOIN policy_plans pp ON pol.plan_id = pp.plan_id
+             LEFT JOIN transaction t ON p.payment_id = t.related_payment_id
+             WHERE p.customer_id = $1
+             ORDER BY p.paid_at DESC
+             LIMIT 50`,
+            [customerId]
+        );
+        
+        res.json({
+            success: true,
+            payments: result.rows,
+            count: result.rows.length
+        });
+        
+    } catch (error) {
+        console.error('Error fetching payment history:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ============ CUSTOMER PAYMENT PANEL ROUTES ============
+// Get customer's payment history
+router.get('/customer/payments', authenticate, async (req, res) => {
+    try {
+        const customerId = req.user?.userId;
+        
+        if (!customerId) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        // ✅ FIXED: Join on policy_type instead of plan_id
+        const result = await pool.query(
+            `SELECT 
+                p.payment_id,
+                p.policy_id,
+                p.amount,
+                p.method,
+                p.status,
+                p.transaction_ref,
+                p.paid_at,
+                pol.policy_type,
+                pol.premium_amount,
+                pp.plan_name
+             FROM payment p
+             JOIN policy pol ON p.policy_id = pol.policy_id
+             LEFT JOIN policy_plans pp ON pp.policy_type = pol.policy_type
+             WHERE p.customer_id = $1
+             ORDER BY p.paid_at DESC`,
+            [customerId]
+        );
+        
+        res.json({
+            success: true,
+            payments: result.rows,
+            count: result.rows.length
+        });
+        
+    } catch (error) {
+        console.error('Error fetching customer payments:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+router.get('/customer/reminders', authenticate, async (req, res) => {
+    try {
+        const customerId = req.user?.userId;
+        
+        if (!customerId) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        const result = await pool.query(
+            `SELECT DISTINCT
+                r.reminder_id,
+                r.policy_id,
+                r.reminder_type,
+                r.reminder_date,
+                r.reminder_time,
+                r.frequency,
+                r.message,
+                r.status,
+                r.next_reminder_date,
+                p.policy_type,
+                p.premium_amount,
+                COALESCE(
+                    (SELECT plan_name FROM policy_plans WHERE policy_type = p.policy_type AND status = 'active' LIMIT 1),
+                    p.policy_type
+                ) as plan_name,
+                a.first_name as agent_first_name,
+                a.last_name as agent_last_name
+             FROM payment_reminders r
+             JOIN policy p ON r.policy_id = p.policy_id
+             LEFT JOIN agent a ON r.agent_id = a.agent_id
+             WHERE r.customer_id = $1 
+               AND r.status = 'sent'
+               AND r.reminder_date <= CURRENT_DATE + INTERVAL '30 days'
+             ORDER BY r.reminder_date ASC`,
+            [customerId]
+        );
+        
+        console.log(`📊 Found ${result.rows.length} reminders with status 'sent'`);
+        
+        res.json({
+            success: true,
+            reminders: result.rows,
+            count: result.rows.length
+        });
+        
+    } catch (error) {
+        console.error('Error fetching payment reminders:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// Process premium payment
+router.post('/customer/process-payment', authenticate, async (req, res) => {
+    const client = await pool.connect();
+    
+    try {
+        const customerId = req.user?.userId;
+        const { policyId, amount, paymentMethod, reminderId } = req.body;
+        
+        if (!customerId || !policyId || !amount) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+        
+        await client.query('BEGIN');
+        
+        // 1. Verify policy belongs to customer
+        const policyResult = await client.query(
+            `SELECT p.*, pp.plan_name 
+             FROM policy p
+             JOIN policy_plans pp ON pp.policy_type = p.policy_type
+             WHERE p.policy_id = $1 AND p.customer_id = $2 AND p.status = 'active'`,
+            [policyId, customerId]
+        );
+        
+        if (policyResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, error: 'Policy not found' });
+        }
+        
+        const policy = policyResult.rows[0];
+        const paymentAmount = parseFloat(amount);
+        
+        // 2. Create payment record
+        const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        
+        await client.query(
+            `INSERT INTO payment (
+                payment_id, policy_id, customer_id, amount, method, status, 
+                transaction_ref, paid_at
+            ) VALUES ($1, $2, $3, $4, $5, 'Completed', $6, NOW())`,
+            [paymentId, policyId, customerId, paymentAmount, paymentMethod || 'card', transactionId]
+        );
+        
+        // 3. Create transaction record
+        await client.query(
+            `INSERT INTO transaction (
+                transaction_id, related_payment_id, amount, type, status, 
+                created_at, payment_method, notes
+            ) VALUES ($1, $2, $3, 'premium_payment', 'completed', NOW(), $4, $5)`,
+            [transactionId, paymentId, paymentAmount, paymentMethod || 'card', `Premium payment for policy #${policyId}`]
+        );
+        
+        // 4. Credit company account
+        const creditResult = await companyAccountService.creditCompanyAccount(
+            paymentAmount,
+            customerId,
+            policyId,
+            `Premium payment from customer ${customerId} for policy #${policyId} - ${policy.plan_name}`
+        );
+        
+        if (!creditResult.success) {
+            throw new Error('Failed to credit company account');
+        }
+        
+        // 5. Update policy remaining coverage
+        await client.query(
+            `UPDATE policy 
+             SET remaining_coverage = remaining_coverage + $1,
+                 updated_at = NOW()
+             WHERE policy_id = $2`,
+            [paymentAmount, policyId]
+        );
+        
+        // ✅ 6. If this payment was from a reminder, mark reminder as 'completed'
+        if (reminderId) {
+            // First, get the reminder details to log properly
+            const reminderResult = await client.query(
+                `SELECT reminder_date, reminder_type FROM payment_reminders WHERE reminder_id = $1`,
+                [reminderId]
+            );
+            
+            // Update reminder status to 'completed'
+            await client.query(
+                `UPDATE payment_reminders 
+                 SET status = 'completed', 
+                     updated_at = NOW(),
+                     notes = COALESCE(notes, 'Payment completed via customer dashboard')
+                 WHERE reminder_id = $1`,
+                [reminderId]
+            );
+            
+            // Log reminder completion in reminder_logs
+            await client.query(
+                `INSERT INTO reminder_logs (
+                    reminder_id, customer_id, customer_email, notification_type, 
+                    subject, message, status, sent_at
+                ) VALUES ($1, $2, (SELECT email FROM customer WHERE customer_id = $2), 
+                    'payment_completed', 'Payment Completed', $3, 'success', NOW())`,
+                [reminderId, customerId, `Payment of Rs. ${paymentAmount.toLocaleString()} completed for policy #${policyId}`]
+            );
+            
+            console.log(`✅ Reminder ${reminderId} marked as completed after payment`);
+        }
+        
+        await client.query('COMMIT');
+        
+        // 7. Create notification for customer
+        const { createNotification } = require('../routes/notificationRoutes');
+        await createNotification(
+            customerId,
+            'customer',
+            'payment_received',
+            'Payment Successful ✅',
+            `Your payment of Rs. ${paymentAmount.toLocaleString()} for policy "${policy.plan_name}" has been received successfully.`,
+            policyId
+        ).catch(err => console.log('Notification error:', err.message));
+        
+        console.log(`✅ Premium payment processed: ${paymentId} for customer ${customerId}`);
+        
+        res.json({
+            success: true,
+            message: 'Payment processed successfully',
+            data: {
+                payment_id: paymentId,
+                transaction_id: transactionId,
+                amount: paymentAmount,
+                company_balance: creditResult.new_balance,
+                reminder_completed: !!reminderId
+            }
+        });
+        
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error processing premium payment:', error);
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Get upcoming payments summary
+router.get('/customer/upcoming-summary', authenticate, async (req, res) => {
+    try {
+        const customerId = req.user?.userId;
+        
+        if (!customerId) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        // ✅ FIXED: Use 'sent' instead of 'active'
+        const dueResult = await pool.query(
+            `SELECT 
+                COALESCE(SUM(p.premium_amount), 0) as total_due,
+                COUNT(*) as reminders_count
+             FROM payment_reminders r
+             JOIN policy p ON r.policy_id = p.policy_id
+             WHERE r.customer_id = $1 
+               AND r.status = 'sent'
+               AND r.reminder_date <= CURRENT_DATE + INTERVAL '30 days'`,
+            [customerId]
+        );
+        
+        const lastPaymentResult = await pool.query(
+            `SELECT paid_at as last_payment_date
+             FROM payment 
+             WHERE customer_id = $1 
+             ORDER BY paid_at DESC 
+             LIMIT 1`,
+            [customerId]
+        );
+        
+        res.json({
+            success: true,
+            data: {
+                total_due: parseFloat(dueResult.rows[0].total_due) || 0,
+                reminders_count: parseInt(dueResult.rows[0].reminders_count) || 0,
+                last_payment_date: lastPaymentResult.rows[0]?.last_payment_date || null
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error fetching upcoming payments summary:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 module.exports = router;

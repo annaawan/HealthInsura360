@@ -1,4 +1,4 @@
-// src/config/database.js - SIMPLE WORKING VERSION
+// src/config/database.js - FIXED VERSION
 const { Pool } = require('pg');
 require('dotenv').config();
 
@@ -23,7 +23,6 @@ const pool = new Pool({
 pool.query('SELECT NOW()', (err, res) => {
     if (err) {
         console.log('⚠️ Database connection warning:', err.message);
-        console.log('⚠️ Continuing without database - using simulation mode');
     } else {
         console.log('✅ Database connected:', res.rows[0].now);
     }
@@ -34,4 +33,5 @@ module.exports = {
         console.log(`📊 Database query: ${text.substring(0, 50)}...`);
         return pool.query(text, params);
     },
+    pool: pool  // ✅ ADD THIS - export pool for transactions
 };

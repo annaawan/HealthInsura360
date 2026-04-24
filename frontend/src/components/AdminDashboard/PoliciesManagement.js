@@ -64,46 +64,54 @@ function PoliciesManagement() {
     }
   };
 
-  // Fetch policy plans from backend - UPDATED to use insurance-plans with mapping
-  const fetchPolicyPlans = async () => {
-    setIsLoading(true);
-    setError(null);
+  // Fetch policy plans from backend
+const fetchPolicyPlans = async () => {
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    const config = getAxiosConfig();
+    const response = await axios.get(`${API_BASE_URL}/policy-plans`, config);
     
-    try {
-      const config = getAxiosConfig();
-      const response = await axios.get(`${API_BASE_URL}/insurance-plans`, config);
+    if (response.data.success) {
+      // ✅ FIX: Use response.data.data instead of response.data.plans
+      const plansData = response.data.data || [];
       
-      if (response.data.success) {
-        // Map database fields to what frontend expects
-        const mappedPlans = response.data.plans.map(plan => ({
-          ...plan,
-          // Map plan_type to category for frontend display
-          category: mapPlanTypeToCategory(plan.plan_type),
-          // Map is_active to status
-          status: plan.is_active ? 'active' : 'inactive',
-          // Ensure these fields exist with defaults
-          coverage_details: plan.coverage_details || '',
-          max_claim_limit: plan.coverage_amount,
-          waiting_period_days: plan.waiting_period_days || 30,
-          renewal_period_months: plan.renewal_period_months || 12,
-          eligibility_criteria: plan.eligibility_criteria || '',
-          exclusions: plan.exclusions || '',
-          benefits: plan.benefits || ''
-        }));
-        
-        setPlans(mappedPlans);
-        console.log(`✅ Found ${mappedPlans.length} insurance plans`);
-      } else {
-        throw new Error(response.data.message);
-      }
-    } catch (err) {
-      console.error('❌ Error fetching insurance plans:', err);
-      setError(`Error: ${err.response?.data?.message || err.message}`);
-      setPlans(getMockPolicyPlans());
-    } finally {
-      setIsLoading(false);
+      // Map database fields to what frontend expects
+      const mappedPlans = plansData.map(plan => ({
+        plan_id: plan.plan_id,
+        plan_name: plan.plan_name,
+        description: plan.description,
+        plan_type: plan.policy_type || plan.plan_type,
+        category: plan.category || 'basic',
+        premium_amount: parseFloat(plan.premium_amount),
+        coverage_amount: parseFloat(plan.coverage_amount),
+        coverage_details: plan.coverage_details || '',
+        deductible: parseFloat(plan.deductible) || 0,
+        max_claim_limit: parseFloat(plan.max_claim_limit) || parseFloat(plan.coverage_amount),
+        waiting_period_days: plan.waiting_period_days || 30,
+        renewal_period_months: plan.renewal_period_months || 12,
+        eligibility_criteria: plan.eligibility_criteria || '',
+        exclusions: plan.exclusions || '',
+        benefits: plan.benefits || '',
+        status: plan.status || 'active',
+        created_at: plan.created_at,
+        updated_at: plan.updated_at
+      }));
+      
+      setPlans(mappedPlans);
+      console.log(`✅ Found ${mappedPlans.length} policy plans`);
+    } else {
+      throw new Error(response.data.message);
     }
-  };
+  } catch (err) {
+    console.error('❌ Error fetching policy plans:', err);
+    setError(`Error: ${err.response?.data?.message || err.message}`);
+    setPlans(getMockPolicyPlans());
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchPolicyPlans();
@@ -247,7 +255,7 @@ function PoliciesManagement() {
 
     try {
       const config = getAxiosConfig();
-      const response = await axios.delete(`${API_BASE_URL}/insurance-plans/${id}`, config);
+      const response = await axios.delete(`${API_BASE_URL}/policy-plans/${id}`, config);
       
       if (response.data.success) {
         setPlans(prev => prev.filter(plan => plan.plan_id !== id));
@@ -270,76 +278,70 @@ function PoliciesManagement() {
       fetchPolicyPlans();
     }
   };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setWebhookStatus('processing');
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setWebhookStatus('processing');
+  
+  try {
+    const config = getAxiosConfig();
     
-    try {
-      const config = getAxiosConfig();
+    // Map frontend category to database policy_type
+    const dbPolicyType = mapCategoryToPlanType(formData.category);
+    
+    const apiData = {
+      plan_name: formData.plan_name,
+      description: formData.description,
+      policy_type: dbPolicyType,  // ✅ Changed from 'plan_type' to 'policy_type'
+      category: formData.category || 'basic',
+      premium_amount: parseFloat(formData.premium_amount),
+      coverage_amount: parseFloat(formData.coverage_amount),
+      coverage_details: formData.coverage_details,
+      deductible: parseFloat(formData.deductible) || 0,
+      max_claim_limit: parseFloat(formData.max_claim_limit) || parseFloat(formData.coverage_amount),
+      waiting_period_days: parseInt(formData.waiting_period_days) || 30,
+      renewal_period_months: parseInt(formData.renewal_period_months) || 12,
+      eligibility_criteria: formData.eligibility_criteria,
+      exclusions: formData.exclusions,
+      benefits: formData.benefits,
+      status: formData.status || 'active'
+    };
+    
+    let response;
+    
+    if (modalType === 'create') {
+      response = await axios.post(`${API_BASE_URL}/policy-plans`, apiData, config);
       
-      // Map frontend category to database plan_type
-      const dbPlanType = mapCategoryToPlanType(formData.category);
-      
-      const apiData = {
-        plan_name: formData.plan_name,
-        description: formData.description,
-        plan_type: dbPlanType,  // ← Use mapped value
-        premium_amount: parseFloat(formData.premium_amount),
-        coverage_amount: parseFloat(formData.coverage_amount),
-        deductible: parseFloat(formData.deductible) || 0,
-        is_active: formData.status === 'active',
-        // Optional fields if your table has them
-        coverage_details: formData.coverage_details,
-        max_claim_limit: parseFloat(formData.max_claim_limit),
-        waiting_period_days: parseInt(formData.waiting_period_days),
-        renewal_period_months: parseInt(formData.renewal_period_months),
-        eligibility_criteria: formData.eligibility_criteria,
-        exclusions: formData.exclusions,
-        benefits: formData.benefits
-      };
-      
-      let savedPlan;
-      
-      if (modalType === 'create') {
-        const response = await axios.post(`${API_BASE_URL}/insurance-plans`, apiData, config);
-        
-        if (response.data.success) {
-          savedPlan = response.data.data;
-          alert('Insurance plan created successfully!');
-          
-          console.log('✅ Insurance plan created:', savedPlan);
-          
-          setShowModal(false);
-          fetchPolicyPlans();
-        } else {
-          throw new Error(response.data.message || 'Creation failed');
-        }
+      if (response.data.success) {
+        alert('Policy plan created successfully!');
+        setShowModal(false);
+        fetchPolicyPlans();
       } else {
-        // Edit mode
-        const response = await axios.put(
-          `${API_BASE_URL}/insurance-plans/${editingPlan.plan_id}`,
-          apiData,
-          config
-        );
-        
-        if (response.data.success) {
-          alert('Insurance plan updated successfully!');
-          setShowModal(false);
-          fetchPolicyPlans();
-        } else {
-          throw new Error(response.data.message || 'Update failed');
-        }
+        throw new Error(response.data.message || 'Creation failed');
       }
-    } catch (err) {
-      console.error('❌ Error:', err);
-      setWebhookStatus('error');
-      alert(`Failed to save policy plan: ${err.response?.data?.message || err.message}`);
-    } finally {
-      setTimeout(() => setWebhookStatus(null), 3000);
+    } else {
+      // Edit mode
+      response = await axios.put(
+        `${API_BASE_URL}/policy-plans/${editingPlan.plan_id}`,
+        apiData,
+        config
+      );
+      
+      if (response.data.success) {
+        alert('Policy plan updated successfully!');
+        setShowModal(false);
+        fetchPolicyPlans();
+      } else {
+        throw new Error(response.data.message || 'Update failed');
+      }
     }
-  };
-
+  } catch (err) {
+    console.error('❌ Error:', err);
+    setWebhookStatus('error');
+    alert(`Failed to save policy plan: ${err.response?.data?.message || err.message}`);
+  } finally {
+    setTimeout(() => setWebhookStatus(null), 3000);
+  }
+};
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
@@ -375,7 +377,7 @@ function PoliciesManagement() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading insurance plans...</p>
+            <p className="text-gray-600">Loading policy plans...</p>
           </div>
         </div>
       </div>
@@ -386,8 +388,8 @@ function PoliciesManagement() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Insurance Plans Management</h1>
-          <p className="text-gray-600">Create and manage health insurance plans</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Policy Plans Management</h1>
+          <p className="text-gray-600">Create and manage health policy plans</p>
         </div>
         <button 
           onClick={handleCreatePlan}
@@ -424,7 +426,7 @@ function PoliciesManagement() {
             webhookStatus === 'success' ? 'bg-green-600' : 'bg-red-600'
           }`}></div>
           <p className="text-sm">
-            {webhookStatus === 'processing' && 'Processing insurance plan...'}
+            {webhookStatus === 'processing' && 'Processing policy plan...'}
             {webhookStatus === 'triggering' && 'Processing...'}
             {webhookStatus === 'success' && '✓ Plan saved successfully!'}
             {webhookStatus === 'error' && '✗ Failed to save plan'}
@@ -439,7 +441,7 @@ function PoliciesManagement() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search insurance plans..."
+              placeholder="Search policy plans..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

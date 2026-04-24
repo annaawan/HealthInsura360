@@ -1,11 +1,17 @@
 // ==================== ALL IMPORTS ====================
-import React, { useState, useEffect, useRef } from 'react';
+
+import jsPDF from 'jspdf';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import StripePayment from './Payment/StripePayment';
+import PaymentPanel from './PaymentPanel';
+import AIRecommendations from './AIRecommendations';
+import ChatbotFloating from './ChatbotFloating';
+
 import Logo from "../assets/HealthInsura360.png";
-import { auditLogger } from '../utils/auditLogger';
+// import { auditLogger } from '../utils/auditLogger'; // Removed - not used
 import {
   LogOut,
   Menu,
@@ -19,27 +25,20 @@ import {
   ChevronDown,
   Edit,
   Eye,
-  Printer,
   Heart,
   DollarSign,
   Check,
   X,
+  Clock,
   ClipboardList,
-  Calendar,
-  Zap,
   Trash2
 } from 'lucide-react';
 import {
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
   ResponsiveContainer,
   Tooltip,
-  XAxis,
-  YAxis,
-  CartesianGrid,
 } from 'recharts';
 
 // ==================== CONSTANTS & HELPERS ====================
@@ -79,6 +78,7 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
 
   useEffect(() => {
     fetchPolicies();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger]);
 
   const fetchPolicies = async () => {
@@ -103,7 +103,9 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
           end_date: '2025-01-15',
           premium: 5000,
           coverage_amount: 500000,
-          policy_type: 'Individual'
+          policy_type: 'Individual',
+          no_claim_bonus: 20,
+          renewal_count: 2
         },
         {
           id: 2,
@@ -114,7 +116,9 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
           end_date: '2024-12-25',
           premium: 3000,
           coverage_amount: 300000,
-          policy_type: 'Family'
+          policy_type: 'Family',
+          no_claim_bonus: 0,
+          renewal_count: 0
         }
       ]);
     } finally {
@@ -122,9 +126,54 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
     }
   };
 
-  const downloadPolicyDoc = (policyId) => {
-    console.log('Downloading policy document for:', policyId);
-    alert('Policy document download initiated');
+  const downloadPolicyDoc = (policy) => {
+    console.log('Downloading policy:', policy);
+    
+    try {
+      const doc = new jsPDF();
+      
+      doc.setFontSize(20);
+      doc.text('HealthInsura360', 20, 20);
+      
+      doc.setFontSize(16);
+      doc.text('Policy Document', 20, 35);
+      
+      doc.setFontSize(12);
+      doc.text(`Policy Number: ${policy.policy_number || 'N/A'}`, 20, 55);
+      doc.text(`Plan Name: ${policy.plan_name || 'N/A'}`, 20, 65);
+      doc.text(`Policy Type: ${policy.policy_type || 'N/A'}`, 20, 75);
+      
+      doc.text('Coverage Details:', 20, 95);
+      doc.text(`  Coverage Amount: ${formatCurrency(policy.coverage_amount || 0)}`, 20, 105);
+      doc.text(`  Annual Premium: ${formatCurrency(policy.premium || 0)}`, 20, 115);
+      
+      doc.text('Validity Period:', 20, 135);
+      doc.text(`  Start Date: ${policy.start_date ? new Date(policy.start_date).toLocaleDateString() : 'N/A'}`, 20, 145);
+      doc.text(`  End Date: ${policy.end_date ? new Date(policy.end_date).toLocaleDateString() : 'N/A'}`, 20, 155);
+      
+      doc.text(`Status: ${policy.status || 'N/A'}`, 20, 175);
+      
+      if (policy.remaining_coverage) {
+        doc.text(`Remaining Coverage: ${formatCurrency(policy.remaining_coverage)}`, 20, 195);
+      }
+      
+      // ✅ Add NCB info to PDF if available
+      if (policy.no_claim_bonus > 0) {
+        doc.text(`No Claim Bonus: ${policy.no_claim_bonus}%`, 20, 215);
+        doc.text(`Renewal Count: ${policy.renewal_count || 0}`, 20, 225);
+      }
+      
+      doc.setFontSize(10);
+      doc.text('This is an electronically generated document.', 20, 280);
+      doc.text('For any queries, please contact support@healthinsura360.com', 20, 290);
+      
+      doc.save(`Policy_${policy.policy_number || policy.id}.pdf`);
+      
+      alert('Policy document downloaded successfully!');
+    } catch (err) {
+      console.error('Error downloading policy:', err);
+      alert('Failed to download policy document');
+    }
   };
 
   const handleRenewal = async () => {
@@ -135,19 +184,28 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
 
     try {
       const config = getAxiosConfig();
-      await axios.post(`${API_BASE_URL}/policies/renew`, {
+      const response = await axios.post(`${API_BASE_URL}/policies/renew`, {
         policyId: selectedRenewalPolicy.id,
         startDate: renewalData.startDate,
         endDate: renewalData.endDate
       }, config);
 
-      alert('Policy renewal initiated successfully!');
+      if (response.data.success) {
+        // ✅ Show NCB details in success message
+        const ncbMessage = response.data.policy?.no_claim_bonus 
+          ? ` 🎉 You earned ${response.data.policy.no_claim_bonus}% No Claim Bonus! New premium: ${formatCurrency(response.data.policy.premium_amount)}`
+          : '';
+        alert(`Policy renewed successfully!${ncbMessage}`);
+      } else {
+        alert('Policy renewal initiated successfully!');
+      }
+      
       setShowRenewalModal(false);
       setSelectedRenewalPolicy(null);
       fetchPolicies();
     } catch (err) {
       console.error('Error renewing policy:', err);
-      alert('Failed to renew policy. Please try again.');
+      alert(err.response?.data?.error || 'Failed to renew policy. Please try again.');
     }
   };
 
@@ -157,7 +215,8 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Policies</h2>
         <button 
           onClick={() => setCurrentView('buy-policies')}
-          className="w-full sm:w-auto px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors flex items-center justify-center gap-2">
+          className="w-full sm:w-auto px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors flex items-center justify-center gap-2"
+        >
           <ShoppingCart className="h-5 w-5" />
           <span>Purchase New Policy</span>
         </button>
@@ -165,7 +224,7 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
 
       {loading ? (
         <div className="text-center py-8">
-          <div className="w-12 h-12 border-4 border-burgundy-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-gray-600 mt-4">Loading policies...</p>
         </div>
       ) : error ? (
@@ -181,7 +240,8 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
           <p className="text-gray-600 mb-4">You haven't purchased any policies yet</p>
           <button 
             onClick={() => setCurrentView('buy-policies')}
-            className="px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors">
+            className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors"
+          >
             Browse Plans
           </button>
         </div>
@@ -192,89 +252,157 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
             <p className="text-green-700 text-sm">These are the policies you have purchased and own</p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {policies.map((policy) => (
-              <div key={policy.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                <div className="p-4 sm:p-6">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
-                    <div className="min-w-0">
-                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words">{policy.plan_name}</h3>
-                      <p className="text-xs sm:text-sm text-gray-600">{policy.policy_number}</p>
+            {policies.map((policy) => {
+              const endDate = new Date(policy.end_date);
+              const today = new Date();
+              const daysUntilExpiry = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+              const isExpired = endDate < today;
+              const isWithin30Days = daysUntilExpiry <= 30 && daysUntilExpiry >= 0;
+              const isEligibleForRenewal = isExpired || isWithin30Days;
+              
+              return (
+                <div key={policy.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                  <div className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                      <div className="min-w-0">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words">{policy.plan_name}</h3>
+                        <p className="text-xs sm:text-sm text-gray-600">{policy.policy_number}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${
+                        policy.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : policy.status === 'expiring_soon'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {policy.status.replace('_', ' ')}
+                      </span>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${
-                      policy.status === 'active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : policy.status === 'expiring_soon'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {policy.status.replace('_', ' ')}
-                    </span>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <p className="text-xs text-gray-600">Coverage Amount</p>
-                      <p className="text-base sm:text-lg font-bold text-burgundy-600">{formatCurrency(policy.coverage_amount)}</p>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <p className="text-xs text-gray-600">Coverage Amount</p>
+                        <p className="text-base sm:text-lg font-bold text-sky-600">{formatCurrency(policy.coverage_amount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Annual Premium</p>
+                        <p className="text-base sm:text-lg font-bold text-gray-900">{formatCurrency(policy.premium)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Valid From</p>
+                        <p className="text-xs sm:text-sm text-gray-900">{new Date(policy.start_date).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Valid Till</p>
+                        <p className="text-xs sm:text-sm text-gray-900">{new Date(policy.end_date).toLocaleDateString()}</p>
+                        {!isEligibleForRenewal && daysUntilExpiry > 30 && (
+                          <p className="text-xs text-orange-600 mt-1">
+                            {daysUntilExpiry} days remaining
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-600">Annual Premium</p>
-                      <p className="text-base sm:text-lg font-bold text-gray-900">{formatCurrency(policy.premium)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-600">Valid From</p>
-                      <p className="text-xs sm:text-sm text-gray-900">{new Date(policy.start_date).toLocaleDateString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-600">Valid Till</p>
-                      <p className="text-xs sm:text-sm text-gray-900">{new Date(policy.end_date).toLocaleDateString()}</p>
-                    </div>
-                  </div>
 
-                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                    <button
-                      onClick={() => {
-                        setSelectedPolicy(policy);
-                        setShowPolicyDetail(true);
-                      }}
-                      className="flex-1 px-3 py-2 border border-burgundy-600 text-burgundy-600 rounded-lg hover:bg-burgundy-50 transition-colors flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Eye className="h-4 w-4" />
-                      <span>View</span>
-                    </button>
-                    <button
-                      onClick={() => downloadPolicyDoc(policy.id)}
-                      className="flex-1 px-3 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>Download</span>
-                    </button>
-                    {(policy.status === 'active' || policy.status === 'expiring_soon') && (
-                      <button 
+                    {/* ✅ NO CLAIM BONUS DISPLAY - ADD THIS SECTION */}
+                    <div className="mb-4">
+                      {policy.no_claim_bonus > 0 ? (
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">🎉</span>
+                            <p className="text-sm font-semibold text-green-700">
+                              No Claim Bonus: {policy.no_claim_bonus}% off on renewal
+                            </p>
+                          </div>
+                          <p className="text-xs text-green-600 ml-6">
+                            Renewal count: {policy.renewal_count || 0} times • 
+                            Save {policy.no_claim_bonus}% on next premium + get {policy.no_claim_bonus}% extra coverage
+                          </p>
+                          {policy.renewal_count > 0 && (
+                            <div className="mt-2 pt-2 border-t border-green-200">
+                              <p className="text-xs text-green-600 ml-6">
+                                💰 Next renewal premium: {formatCurrency(policy.premium * (1 - policy.no_claim_bonus / 100))}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ) : policy.renewal_count === 0 ? (
+                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">✨</span>
+                            <p className="text-xs text-blue-700">
+                              Make no claims this year to get No Claim Bonus! Up to 50% off on renewal.
+                            </p>
+                          </div>
+                        </div>
+                      ) : policy.used_coverage > policy.coverage_amount * 0.7 ? (
+                        <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">⚠️</span>
+                            <p className="text-xs text-yellow-700">
+                              High usage detected ({Math.round((policy.used_coverage / policy.coverage_amount) * 100)}%). 
+                              No Claim Bonus may be affected on renewal.
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                      <button
                         onClick={() => {
-                          setSelectedRenewalPolicy(policy);
-                          setRenewalData({
-                            startDate: policy.end_date,
-                            endDate: ''
-                          });
-                          setShowRenewalModal(true);
+                          setSelectedPolicy(policy);
+                          setShowPolicyDetail(true);
                         }}
-                        className="flex-1 px-3 py-2 bg-burgundy-100 text-burgundy-600 rounded-lg hover:bg-burgundy-200 transition-colors flex items-center justify-center gap-2 text-sm">
-                        <RefreshCw className="h-4 w-4" />
-                        <span>Renew</span>
+                        className="flex-1 px-3 py-2 border border-sky-600 text-sky-600 rounded-lg hover:bg-sky-50 transition-colors flex items-center justify-center gap-2 text-sm"
+                      >
+                        <Eye className="h-4 w-4" />
+                        <span>View</span>
                       </button>
-                    )}
+                      <button
+                        onClick={() => downloadPolicyDoc(policy)}
+                        className="flex-1 px-3 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors flex items-center justify-center gap-2 text-sm"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span>Download</span>
+                      </button>
+                      {(policy.status === 'active' || policy.status === 'expiring_soon') && (
+                        <button 
+                          onClick={() => {
+                            if (isEligibleForRenewal) {
+                              setSelectedRenewalPolicy(policy);
+                              setRenewalData({
+                                startDate: policy.end_date,
+                                endDate: ''
+                              });
+                              setShowRenewalModal(true);
+                            } else {
+                              alert(`Policy cannot be renewed yet. It expires on ${new Date(policy.end_date).toLocaleDateString()}. Renewal is only allowed within 30 days of expiry or after expiry.`);
+                            }
+                          }}
+                          className={`flex-1 px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm ${
+                            isEligibleForRenewal
+                              ? 'bg-sky-100 text-sky-600 hover:bg-sky-200'
+                              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          }`}
+                          disabled={!isEligibleForRenewal}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          <span>Renew</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
 
-      {/* Policy Details Modal */}
+      {/* Policy Details Modal - Add NCB info */}
       {showPolicyDetail && selectedPolicy && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
               <h3 className="text-xl font-bold text-gray-900">Policy Details</h3>
               <button
@@ -296,7 +424,7 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Coverage Amount</p>
-                  <p className="font-semibold text-burgundy-600">{formatCurrency(selectedPolicy.coverage_amount)}</p>
+                  <p className="font-semibold text-sky-600">{formatCurrency(selectedPolicy.coverage_amount)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Annual Premium</p>
@@ -310,13 +438,38 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
                   <p className="text-sm text-gray-600">Type</p>
                   <p className="font-semibold text-gray-900">{selectedPolicy.policy_type}</p>
                 </div>
+                {selectedPolicy.remaining_coverage && (
+                  <div>
+                    <p className="text-sm text-gray-600">Remaining Coverage</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(selectedPolicy.remaining_coverage)}</p>
+                  </div>
+                )}
+                {selectedPolicy.used_coverage && selectedPolicy.used_coverage > 0 && (
+                  <div>
+                    <p className="text-sm text-gray-600">Used Coverage</p>
+                    <p className="font-semibold text-orange-600">{formatCurrency(selectedPolicy.used_coverage)}</p>
+                  </div>
+                )}
+                {/* ✅ Add NCB info to modal */}
+                {selectedPolicy.no_claim_bonus !== undefined && (
+                  <>
+                    <div>
+                      <p className="text-sm text-gray-600">No Claim Bonus</p>
+                      <p className="font-semibold text-green-600">{selectedPolicy.no_claim_bonus}%</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Times Renewed</p>
+                      <p className="font-semibold text-gray-900">{selectedPolicy.renewal_count || 0}</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Renewal Modal */}
+      {/* Renewal Modal - Show NCB preview */}
       {showRenewalModal && selectedRenewalPolicy && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
@@ -339,7 +492,7 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
                   type="date"
                   value={renewalData.startDate}
                   onChange={(e) => setRenewalData({ ...renewalData, startDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-burgundy-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 />
               </div>
 
@@ -349,13 +502,28 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
                   type="date"
                   value={renewalData.endDate}
                   onChange={(e) => setRenewalData({ ...renewalData, endDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-burgundy-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 />
               </div>
 
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-600 mb-2">Annual Premium: {formatCurrency(selectedRenewalPolicy.premium)}</p>
                 <p className="text-sm text-gray-600">Coverage: {formatCurrency(selectedRenewalPolicy.coverage_amount)}</p>
+                
+                {/* ✅ Show NCB preview if applicable */}
+                {selectedRenewalPolicy.no_claim_bonus > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-sm font-semibold text-green-600">
+                      🎉 No Claim Bonus: {selectedRenewalPolicy.no_claim_bonus}% discount!
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">
+                      New premium will be: {formatCurrency(selectedRenewalPolicy.premium * (1 - selectedRenewalPolicy.no_claim_bonus / 100))}
+                    </p>
+                    <p className="text-xs text-green-600">
+                      + Extra {selectedRenewalPolicy.no_claim_bonus}% coverage bonus
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -368,7 +536,7 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
               </button>
               <button
                 onClick={handleRenewal}
-                className="flex-1 px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors font-medium"
+                className="flex-1 px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium"
               >
                 Renew Policy
               </button>
@@ -382,7 +550,7 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
 
 // ==================== BUY POLICIES SECTION ====================
 function BuyPoliciesSection({ onBack }) {
-  const [availablePolicies, setAvailablePolicies] = useState([]);
+  const [allPolicies, setAllPolicies] = useState([]);  // Changed from availablePolicies
   const [customerPolicies, setCustomerPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -394,56 +562,151 @@ function BuyPoliciesSection({ onBack }) {
   });
 
   useEffect(() => {
-    fetchPlansAndCustomerPolicies();
+    // Check if a plan was pre-selected from AI recommendations
+    const selectedPlanStr = sessionStorage.getItem('selectedPlanForPurchase');
+    if (selectedPlanStr) {
+      const selectedPlanData = JSON.parse(selectedPlanStr);
+      sessionStorage.removeItem('selectedPlanForPurchase');
+      
+      const today = new Date();
+      const startDate = today.toISOString().split('T')[0];
+      const endDate = new Date(today);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+      
+      setSelectedPlan(selectedPlanData);
+      setPurchaseData({
+        startDate: startDate,
+        endDate: endDate.toISOString().split('T')[0]
+      });
+      setShowPurchaseForm(true);
+    }
   }, []);
 
-  const fetchPlansAndCustomerPolicies = async () => {
+  const fetchPlansAndCustomerPolicies = useCallback(async () => {
     setLoading(true);
     try {
       const config = getAxiosConfig();
       
+      // Get ALL plans
       const plansResponse = await axios.get(`${API_BASE_URL}/insurance-plans`, config);
       const allPlans = plansResponse.data.plans || [];
 
+      // Get customer's purchased policies
       const customerResponse = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
       const customerPolicyList = customerResponse.data.policies || [];
       setCustomerPolicies(customerPolicyList);
 
-      const purchasedPlanIds = new Set(customerPolicyList.map(p => p.plan_id));
-      const available = allPlans.filter(plan => !purchasedPlanIds.has(plan.plan_id));
+      // ✅ Create a Set of purchased plan_ids
+      const purchasedPlanIds = new Set(
+        customerPolicyList
+          .filter(p => p && p.plan_id)
+          .map(p => p.plan_id)
+      );
+      
+      // ✅ Mark each plan as purchased or not
+      const plansWithStatus = allPlans.map(plan => ({
+        ...plan,
+        isPurchased: purchasedPlanIds.has(plan.plan_id),
+        purchasedDate: customerPolicyList.find(p => p.plan_id === plan.plan_id)?.start_date || null
+      }));
 
-      setAvailablePolicies(available);
+      // Sort: Show non-purchased first, then purchased
+      plansWithStatus.sort((a, b) => {
+        if (a.isPurchased === b.isPurchased) return 0;
+        return a.isPurchased ? 1 : -1;
+      });
+
+      setAllPolicies(plansWithStatus);
       setError(null);
+      
+      console.log('📊 Purchased plan IDs:', [...purchasedPlanIds]);
+      console.log('📊 All plans with status:', plansWithStatus.map(p => ({ 
+        name: p.plan_name, 
+        purchased: p.isPurchased 
+      })));
+      
     } catch (err) {
       console.error('Error fetching policies:', err);
       setError('Failed to load available policies');
+      setAllPolicies([]);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchPlansAndCustomerPolicies();
+  }, [fetchPlansAndCustomerPolicies]);
+
+  const checkPolicyOwnership = async (plan) => {
+    if (!plan || !plan.plan_id) {
+      return { alreadyOwned: false, existingPolicies: [] };
+    }
+    
+    try {
+      const config = getAxiosConfig();
+      const response = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
+      const existingPolicies = response.data.policies || [];
+      
+      const alreadyOwned = existingPolicies.some(policy => {
+        if (!policy || !policy.plan_id) return false;
+        return policy.plan_id === plan.plan_id && policy.status === 'active';
+      });
+      
+      return { alreadyOwned, existingPolicies };
+    } catch (err) {
+      console.error('Error checking policy ownership:', err);
+      return { alreadyOwned: false, existingPolicies: [] };
+    }
   };
 
-  const handlePurchaseClick = (plan) => {
-    const today = new Date();
-    const startDate = today.toISOString().split('T')[0];
+  const handlePurchaseClick = async (plan) => {
+    // ✅ Don't allow purchase if already owned
+    if (plan.isPurchased) {
+      alert(`You already own the ${plan.plan_name} policy.`);
+      return;
+    }
     
-    const endDate = new Date(today);
-    endDate.setFullYear(endDate.getFullYear() + 1);
-    const endDateStr = endDate.toISOString().split('T')[0];
+    if (!plan || !plan.plan_id) {
+      alert('Invalid plan data. Please contact support.');
+      return;
+    }
     
-    console.log('📅 Setting dates:', { startDate, endDate: endDateStr });
-    
-    setSelectedPlan(plan);
-    setPurchaseData({
-      startDate: startDate,
-      endDate: endDateStr
-    });
-    setShowPurchaseForm(true);
+    try {
+      const config = getAxiosConfig();
+      const customerResponse = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
+      const existingPolicies = customerResponse.data.policies || [];
+      
+      const alreadyOwned = existingPolicies.some(policy => {
+        if (!policy || !policy.plan_id) return false;
+        return policy.plan_id === plan.plan_id && policy.status === 'active';
+      });
+      
+      if (alreadyOwned) {
+        alert(`You already own the ${plan.plan_name} policy.`);
+        return;
+      }
+      
+      const today = new Date();
+      const startDate = today.toISOString().split('T')[0];
+      const endDate = new Date(today);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+      const endDateStr = endDate.toISOString().split('T')[0];
+      
+      setSelectedPlan(plan);
+      setPurchaseData({ startDate, endDate: endDateStr });
+      setShowPurchaseForm(true);
+      
+    } catch (err) {
+      console.error('Error checking policy ownership:', err);
+      alert('Unable to verify policy ownership. Please try again.');
+    }
   };
 
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="w-12 h-12 border-4 border-burgundy-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
         <p className="text-gray-600 mt-4">Loading available policies...</p>
       </div>
     );
@@ -458,7 +721,7 @@ function BuyPoliciesSection({ onBack }) {
         >
           ← Back to My Policies
         </button>
-        <h2 className="text-2xl font-bold text-gray-900">Available Policies</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Insurance Plans</h2>
       </div>
 
       {error && (
@@ -470,23 +733,40 @@ function BuyPoliciesSection({ onBack }) {
         </div>
       )}
 
-      {availablePolicies.length === 0 ? (
+      {allPolicies.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <Check className="h-12 w-12 text-green-500 mx-auto mb-4" />
-          <p className="text-gray-600 mb-2 font-medium">All Set!</p>
-          <p className="text-gray-500">You have purchased all available policies</p>
+          <p className="text-gray-600 mb-2 font-medium">No Plans Available</p>
+          <p className="text-gray-500">Check back later for new insurance plans</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {availablePolicies.map((plan) => (
-            <div key={plan.plan_id} className="bg-white rounded-lg shadow-md border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+          {allPolicies.map((plan) => (
+            <div 
+              key={plan.plan_id} 
+              className={`bg-white rounded-lg shadow-md border p-6 transition-all ${
+                plan.isPurchased 
+                  ? 'border-green-300 bg-green-50 opacity-75' 
+                  : 'border-gray-200 hover:shadow-lg'
+              }`}
+            >
+              {/* Purchased Badge */}
+              {plan.isPurchased && (
+                <div className="flex justify-end mb-2">
+                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full flex items-center gap-1">
+                    <Check className="h-3 w-3" />
+                    Already Purchased
+                  </span>
+                </div>
+              )}
+              
               <h3 className="text-lg font-bold text-gray-900 mb-2">{plan.plan_name}</h3>
               <p className="text-sm text-gray-600 mb-4">{plan.description}</p>
               
               <div className="space-y-3 mb-6 p-3 bg-gray-50 rounded-lg">
                 <div className="flex justify-between">
                   <span className="text-gray-600 text-sm">Monthly Premium</span>
-                  <span className="font-bold text-burgundy-600">{formatCurrency(plan.premium_amount)}</span>
+                  <span className="font-bold text-sky-600">{formatCurrency(plan.premium_amount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 text-sm">Coverage</span>
@@ -500,17 +780,22 @@ function BuyPoliciesSection({ onBack }) {
 
               <button
                 onClick={() => handlePurchaseClick(plan)}
-                className="w-full px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors font-medium"
+                disabled={plan.isPurchased}
+                className={`w-full px-4 py-2 rounded-lg transition-colors font-medium ${
+                  plan.isPurchased
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-sky-600 text-white hover:bg-sky-700'
+                }`}
               >
-                Purchase Now
+                {plan.isPurchased ? 'Already Purchased' : 'Purchase Now'}
               </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Purchase Form Modal with Stripe */}
-      {showPurchaseForm && selectedPlan && (
+      {/* Purchase Form Modal with Stripe - Keep as is */}
+      {showPurchaseForm && selectedPlan && !selectedPlan.isPurchased && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <h3 className="text-xl font-bold text-gray-900 mb-4">
@@ -523,26 +808,16 @@ function BuyPoliciesSection({ onBack }) {
                 amount={selectedPlan.premium_amount}
                 policyName={selectedPlan.plan_name}
                 onSuccess={async (paymentIntent) => {
-                  console.log('='.repeat(50));
-                  console.log('✅ PAYMENT SUCCEEDED');
-                  console.log('='.repeat(50));
-                  
                   try {
                     const config = getAxiosConfig();
-                    
-                    config.headers = {
-                      ...config.headers,
-                      'Content-Type': 'application/json',
-                      'Accept': 'application/json'
-                    };
                     
                     const payload = {
                       planId: selectedPlan.plan_id,
                       startDate: purchaseData.startDate,
-                      endDate: purchaseData.endDate
+                      endDate: purchaseData.endDate,
+                      paymentIntentId: paymentIntent.id,
+                      amount: selectedPlan.premium_amount
                     };
-                    
-                    console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
                     
                     const response = await axios.post(
                       `${API_BASE_URL}/policies/purchase`, 
@@ -550,15 +825,23 @@ function BuyPoliciesSection({ onBack }) {
                       config
                     );
                     
-                    console.log('✅ Policy activated:', response.data);
-                    alert('Payment successful! Your policy has been activated.');
-                    setShowPurchaseForm(false);
-                    setSelectedPlan(null);
-                    onBack();
+                    if (response.data.success) {
+                      alert('✅ Payment successful! Your policy has been activated.');
+                      setShowPurchaseForm(false);
+                      setSelectedPlan(null);
+                      fetchPlansAndCustomerPolicies(); // Refresh the list
+                      onBack(); // Go back to policies list
+                    } else {
+                      alert(`⚠️ ${response.data.error || 'Policy activation failed'}`);
+                    }
                     
                   } catch (err) {
                     console.error('❌ Activation error:', err);
-                    alert(`Payment succeeded but policy activation failed: ${err.response?.data?.error}`);
+                    let errorMessage = 'Policy activation failed';
+                    if (err.response?.data?.error) {
+                      errorMessage = err.response.data.error;
+                    }
+                    alert(`⚠️ Payment succeeded but policy activation failed: ${errorMessage}\n\nPlease contact support.`);
                   }
                 }}
                 onCancel={() => {
@@ -574,7 +857,7 @@ function BuyPoliciesSection({ onBack }) {
   );
 }
 
-// ==================== CLAIMS SECTION WITH DOCUMENT UPLOAD ====================
+// ==================== CLAIMS SECTION ====================
 function ClaimsSection({ customerPolicies = [] }) {
   const [claims, setClaims] = useState([]);
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -625,11 +908,7 @@ function ClaimsSection({ customerPolicies = [] }) {
     }
   ];
 
-  useEffect(() => {
-    fetchClaims();
-  }, []);
-
-  const fetchClaims = async () => {
+  const fetchClaims = useCallback(async () => {
     setLoading(true);
     try {
       const config = getAxiosConfig();
@@ -644,7 +923,11 @@ function ClaimsSection({ customerPolicies = [] }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchClaims();
+  }, [fetchClaims]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -822,7 +1105,7 @@ function ClaimsSection({ customerPolicies = [] }) {
         <h2 className="text-2xl font-bold text-gray-900">My Claims</h2>
         <button
           onClick={() => setShowClaimForm(!showClaimForm)}
-          className="px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors flex items-center gap-2"
+          className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors flex items-center gap-2"
         >
           <ClipboardList className="h-5 w-5" />
           File New Claim
@@ -846,7 +1129,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                   name="policy_id"
                   value={claimFormData.policy_id}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 >
                   <option value="">Choose a policy</option>
                   {customerPolicies.map((policy) => (
@@ -868,7 +1151,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                     value={claimFormData.patient_name}
                     onChange={handleInputChange}
                     placeholder="Full name"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                   />
                 </div>
                 <div>
@@ -881,7 +1164,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                     value={claimFormData.hospital_name}
                     onChange={handleInputChange}
                     placeholder="Hospital name"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                   />
                 </div>
               </div>
@@ -897,7 +1180,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                     value={claimFormData.diagnosis}
                     onChange={handleInputChange}
                     placeholder="Diagnosis"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                   />
                 </div>
                 <div>
@@ -909,7 +1192,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                     name="service_date"
                     value={claimFormData.service_date}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                   />
                 </div>
               </div>
@@ -927,7 +1210,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                     placeholder="Enter amount"
                     min="0"
                     step="0.01"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                   />
                 </div>
               </div>
@@ -942,7 +1225,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                   onChange={handleInputChange}
                   placeholder="Describe the claim details, treatment, etc..."
                   rows="3"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 />
               </div>
 
@@ -951,7 +1234,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                   Supporting Documents <span className="text-gray-500 text-xs">(PDF, Images, DOC - Max 10MB each)</span>
                 </label>
                 
-                <div className="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-burgundy-500 transition-colors">
+                <div className="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-sky-500 transition-colors">
                   <div className="space-y-1 text-center">
                     <svg
                       className="mx-auto h-12 w-12 text-gray-400"
@@ -969,7 +1252,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                     <div className="flex text-sm text-gray-600">
                       <label
                         htmlFor="file-upload"
-                        className="relative cursor-pointer bg-white rounded-md font-medium text-burgundy-600 hover:text-burgundy-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-burgundy-500"
+                        className="relative cursor-pointer bg-white rounded-md font-medium text-sky-600 hover:text-sky-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-sky-500"
                       >
                         <span>Upload files</span>
                         <input
@@ -1023,7 +1306,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                   <div className="mt-4">
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
-                        className="bg-burgundy-600 h-2.5 rounded-full transition-all duration-300"
+                        className="bg-sky-600 h-2.5 rounded-full transition-all duration-300"
                         style={{ width: `${uploadProgress}%` }}
                       ></div>
                     </div>
@@ -1036,7 +1319,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                 <button
                   onClick={submitClaim}
                   disabled={loading}
-                  className={`flex-1 px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors ${
+                  className={`flex-1 px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors ${
                     loading ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
@@ -1069,7 +1352,7 @@ function ClaimsSection({ customerPolicies = [] }) {
 
       {loading ? (
         <div className="text-center py-8">
-          <div className="w-12 h-12 border-4 border-burgundy-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-gray-600 mt-4">Loading claims...</p>
         </div>
       ) : error ? (
@@ -1130,7 +1413,7 @@ function ClaimsSection({ customerPolicies = [] }) {
                   )}
                 </div>
                 <div className="text-right ml-4">
-                  <p className="text-lg font-bold text-burgundy-600">{formatCurrency(claim.claim_amount)}</p>
+                  <p className="text-lg font-bold text-sky-600">{formatCurrency(claim.claim_amount)}</p>
                 </div>
               </div>
             </div>
@@ -1141,7 +1424,7 @@ function ClaimsSection({ customerPolicies = [] }) {
   );
 }
 
-// ==================== PROFILE SECTION WITH PICTURE UPLOAD ====================
+// ==================== PROFILE SECTION ====================
 function ProfileSection() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1164,22 +1447,15 @@ function ProfileSection() {
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    fetchUserProfile();
-  }, []);
-
- const fetchUserProfile = async () => {
+  const fetchUserProfile = useCallback(async () => {
     try {
       const config = getAxiosConfig();
       const response = await axios.get(`${API_BASE_URL}/auth/profile`, config);
-      console.log('🔍 Fetch profile response:', response.data);
       
       if (response.data.success) {
         const user = response.data.profile || response.data.user || response.data.data;
-        console.log('🔍 User object from backend:', user);
-        console.log('🔍 Profile picture URL from backend:', user.profile_picture);
         
-        const profileData = {
+        setProfileData({
           first_name: user.firstName || user.first_name || '',
           last_name: user.lastName || user.last_name || '',
           email: user.email || '',
@@ -1191,12 +1467,20 @@ function ProfileSection() {
           gender: user.gender || '',
           dob: user.dob || user.dateOfBirth || '',
           profile_picture: user.profile_picture || ''
-        };
-        
-        console.log('📸 Setting profileData with picture path:', profileData.profile_picture);
-        
-        setProfileData(profileData);
-        setEditFormData(profileData);
+        });
+        setEditFormData({
+          first_name: user.firstName || user.first_name || '',
+          last_name: user.lastName || user.last_name || '',
+          email: user.email || '',
+          phone: user.phone || '',
+          street: user.street || '',
+          city: user.city || '',
+          state: user.state || '',
+          zipcode: user.zipcode || '',
+          gender: user.gender || '',
+          dob: user.dob || user.dateOfBirth || '',
+          profile_picture: user.profile_picture || ''
+        });
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -1209,7 +1493,11 @@ function ProfileSection() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, [fetchUserProfile]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -1256,17 +1544,11 @@ function ProfileSection() {
         formData.append('profilePicture', selectedFile);
       }
 
-      console.log('📤 Uploading profile with picture:', selectedFile ? selectedFile.name : 'No new picture');
-
       const response = await axios.put(
         `${API_BASE_URL}/profile/update`,
         formData,
         config
       );
-
-      console.log('🔍 Full backend response:', response.data);
-      console.log('🔍 Response user object:', response.data.user);
-      console.log('🔍 Profile picture from backend after save:', response.data.user?.profile_picture);
 
       if (response.data.success) {
         setProfileData(response.data.user);
@@ -1275,7 +1557,6 @@ function ProfileSection() {
         setPreviewUrl(null);
         setShowEditForm(false);
         
-        console.log('✅ Profile updated successfully. New profile picture:', response.data.user?.profile_picture);
         alert('Profile updated successfully!');
         
         if (response.data.user.first_name) {
@@ -1319,24 +1600,16 @@ function ProfileSection() {
   };
 
   const getProfileImageUrl = () => {
-  if (previewUrl) {
-    console.log('📸 Using preview URL:', previewUrl);
-    return previewUrl;
-  }
-  
-  if (profileData.profile_picture) {
-    let picturePath = profileData.profile_picture;
-    if (!picturePath.startsWith('/')) {
-      picturePath = '/' + picturePath;
+    if (previewUrl) return previewUrl;
+    if (profileData.profile_picture) {
+      let picturePath = profileData.profile_picture;
+      if (!picturePath.startsWith('/')) {
+        picturePath = '/' + picturePath;
+      }
+      return `http://localhost:5000${picturePath}`;
     }
-    const fullUrl = `http://localhost:5000${picturePath}`;
-    console.log('📸 Using saved profile picture URL:', fullUrl);
-    return fullUrl;
-  }
-  
-  console.log('📸 No profile picture available');
-  return null;
-};
+    return null;
+  };
 
   return (
     <div className="space-y-6">
@@ -1344,7 +1617,7 @@ function ProfileSection() {
         <h2 className="text-2xl font-bold text-gray-900">My Profile</h2>
         <button
           onClick={() => setShowEditForm(!showEditForm)}
-          className="px-4 py-2 border border-burgundy-600 text-burgundy-600 rounded-lg hover:bg-burgundy-50 transition-colors flex items-center gap-2"
+          className="px-4 py-2 border border-sky-600 text-sky-600 rounded-lg hover:bg-sky-50 transition-colors flex items-center gap-2"
         >
           <Edit className="h-5 w-5" />
           Edit Profile
@@ -1357,28 +1630,27 @@ function ProfileSection() {
           
           <div className="mb-6 flex items-center gap-6">
             <div className="relative">
-              <div className="w-24 h-24 bg-burgundy-100 rounded-full overflow-hidden border-4 border-white shadow-lg">
+              <div className="w-24 h-24 bg-sky-100 rounded-full overflow-hidden border-4 border-white shadow-lg">
                 {getProfileImageUrl() ? (
                   <img 
                     src={getProfileImageUrl()} 
                     alt="Profile" 
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      console.error('❌ Image failed to load:', getProfileImageUrl());
                       e.target.style.display = 'none';
-                      e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg class="h-12 w-12 text-burgundy-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg></div>';
+                      e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg class="h-12 w-12 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg></div>';
                     }}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <User className="h-12 w-12 text-burgundy-600" />
+                    <User className="h-12 w-12 text-sky-600" />
                   </div>
                 )}
               </div>
               <button
                 type="button"
                 onClick={triggerFileInput}
-                className="absolute bottom-0 right-0 w-8 h-8 bg-burgundy-600 rounded-full flex items-center justify-center text-white hover:bg-burgundy-700 transition-colors"
+                className="absolute bottom-0 right-0 w-8 h-8 bg-sky-600 rounded-full flex items-center justify-center text-white hover:bg-sky-700 transition-colors"
                 title="Change profile picture"
               >
                 <Edit className="h-4 w-4" />
@@ -1417,7 +1689,7 @@ function ProfileSection() {
                   type="text"
                   value={editFormData.first_name}
                   onChange={(e) => setEditFormData({ ...editFormData, first_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 />
               </div>
               <div>
@@ -1426,7 +1698,7 @@ function ProfileSection() {
                   type="text"
                   value={editFormData.last_name}
                   onChange={(e) => setEditFormData({ ...editFormData, last_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 />
               </div>
             </div>
@@ -1446,7 +1718,7 @@ function ProfileSection() {
                   type="tel"
                   value={editFormData.phone}
                   onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 />
               </div>
             </div>
@@ -1456,7 +1728,7 @@ function ProfileSection() {
                 <select
                   value={editFormData.gender}
                   onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 >
                   <option value="">Select Gender</option>
                   <option value="male">Male</option>
@@ -1470,7 +1742,7 @@ function ProfileSection() {
                   type="date"
                   value={editFormData.dob}
                   onChange={(e) => setEditFormData({ ...editFormData, dob: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 />
               </div>
             </div>
@@ -1480,7 +1752,7 @@ function ProfileSection() {
                 type="text"
                 value={editFormData.street}
                 onChange={(e) => setEditFormData({ ...editFormData, street: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
               />
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -1490,7 +1762,7 @@ function ProfileSection() {
                   type="text"
                   value={editFormData.city}
                   onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 />
               </div>
               <div>
@@ -1499,7 +1771,7 @@ function ProfileSection() {
                   type="text"
                   value={editFormData.state}
                   onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 />
               </div>
               <div>
@@ -1508,7 +1780,7 @@ function ProfileSection() {
                   type="text"
                   value={editFormData.zipcode}
                   onChange={(e) => setEditFormData({ ...editFormData, zipcode: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-600"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
                 />
               </div>
             </div>
@@ -1518,7 +1790,7 @@ function ProfileSection() {
             <button
               onClick={updateProfile}
               disabled={uploading}
-              className={`flex-1 px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors ${
+              className={`flex-1 px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors ${
                 uploading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -1544,22 +1816,21 @@ function ProfileSection() {
           ) : (
             <div className="space-y-4">
               <div className="flex items-center gap-6 pb-4 border-b border-gray-200">
-                <div className="w-20 h-20 bg-burgundy-100 rounded-full overflow-hidden border-2 border-burgundy-200">
+                <div className="w-20 h-20 bg-sky-100 rounded-full overflow-hidden border-2 border-sky-200">
                   {profileData.profile_picture ? (
                     <img 
                       src={`http://localhost:5000${profileData.profile_picture.startsWith('/') ? profileData.profile_picture : `/${profileData.profile_picture}`}`}
                       alt="Profile"
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        console.error('❌ Image failed to load in view mode:', profileData.profile_picture);
                         e.target.onerror = null;
                         e.target.style.display = 'none';
-                        e.target.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center"><svg class="h-10 w-10 text-burgundy-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg></div>`;
+                        e.target.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center"><svg class="h-10 w-10 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg></div>`;
                       }}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <User className="h-10 w-10 text-burgundy-600" />
+                      <User className="h-10 w-10 text-sky-600" />
                     </div>
                   )}
                 </div>
@@ -1633,11 +1904,7 @@ function NotificationsSection() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     setLoading(true);
     try {
       const config = getAxiosConfig();
@@ -1655,7 +1922,11 @@ function NotificationsSection() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
 
   const markAsRead = async (id) => {
     try {
@@ -1721,7 +1992,7 @@ function NotificationsSection() {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="w-12 h-12 border-4 border-burgundy-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
         <p className="text-gray-600 mt-4">Loading notifications...</p>
       </div>
     );
@@ -1767,7 +2038,7 @@ function NotificationsSection() {
               className={`p-4 rounded-lg border transition-colors ${
                 notif.is_read
                   ? 'bg-white border-gray-200'
-                  : 'bg-burgundy-50 border-burgundy-200'
+                  : 'bg-sky-50 border-sky-200'
               }`}
             >
               <div className="flex items-start justify-between">
@@ -1776,7 +2047,7 @@ function NotificationsSection() {
                     <span className="text-xl">{getNotificationIcon(notif.type)}</span>
                     <h4 className="font-semibold text-gray-900">{notif.title}</h4>
                     {!notif.is_read && (
-                      <span className="px-2 py-0.5 text-xs bg-burgundy-600 text-white rounded-full">New</span>
+                      <span className="px-2 py-0.5 text-xs bg-sky-600 text-white rounded-full">New</span>
                     )}
                   </div>
                   <p className="text-sm text-gray-600 mt-1">{notif.message}</p>
@@ -1820,13 +2091,14 @@ function Sidebar({ currentView, setCurrentView, isSidebarOpen, setIsSidebarOpen 
     { id: 'dashboard', label: 'Dashboard', icon: Heart },
     { id: 'policies', label: 'My Policies', icon: FileText },
     { id: 'claims', label: 'My Claims', icon: ClipboardList },
+    { id: 'payments', label: 'Payments', icon: DollarSign },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'profile', label: 'My Profile', icon: User },
   ];
 
   return (
-    <div className={`${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:static lg:flex-shrink-0 left-0 top-0 h-screen w-64 bg-burgundy-900 text-white transition-transform duration-300 z-40 overflow-y-auto`}>
-      <div className="p-4 sm:p-6 border-b border-burgundy-800 sticky top-0 bg-burgundy-900">
+    <div className={`${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:static lg:flex-shrink-0 left-0 top-0 h-screen w-64 bg-sky-900 text-white transition-transform duration-300 z-40 overflow-y-auto`}>
+      <div className="p-4 sm:p-6 border-b border-sky-800 sticky top-0 bg-sky-900">
         <img src={Logo} alt="HealthInsura360" className="h-8 mb-2" />
         <h1 className="text-lg sm:text-xl font-bold break-words">HealthInsura360</h1>
       </div>
@@ -1843,8 +2115,8 @@ function Sidebar({ currentView, setCurrentView, isSidebarOpen, setIsSidebarOpen 
               }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 currentView === item.id
-                  ? 'bg-burgundy-700 text-white'
-                  : 'text-burgundy-100 hover:bg-burgundy-800'
+                  ? 'bg-sky-700 text-white'
+                  : 'text-sky-100 hover:bg-sky-800'
               }`}
             >
               <Icon className="h-5 w-5" />
@@ -1854,10 +2126,10 @@ function Sidebar({ currentView, setCurrentView, isSidebarOpen, setIsSidebarOpen 
         })}
       </nav>
 
-      <div className="p-4 sm:p-6 border-t border-burgundy-800">
+      <div className="p-4 sm:p-6 border-t border-sky-800">
         <button
           onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-burgundy-700 hover:bg-burgundy-600 text-white rounded-lg transition-colors text-sm sm:text-base"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-sky-700 hover:bg-sky-600 text-white rounded-lg transition-colors text-sm sm:text-base"
         >
           <LogOut className="h-5 w-5" />
           <span className="hidden sm:inline">Logout</span>
@@ -1873,6 +2145,7 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
   const [policies, setPolicies] = useState([]);
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshRecommendations, setRefreshRecommendations] = useState(0);
 
   useEffect(() => {
     fetchDashboardData();
@@ -1893,48 +2166,59 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
-      setPolicies([
-        { id: 1, plan_name: 'Premium Health Coverage', status: 'active', premium: 5000, coverage: 500000 },
-        { id: 2, plan_name: 'Basic Health Plan', status: 'expiring_soon', premium: 3000, coverage: 300000 }
-      ]);
-      setClaims([
-        { id: 1, status: 'approved', amount: 25000 },
-        { id: 2, status: 'approved', amount: 15000 },
-        { id: 3, status: 'processing', amount: 35000 }
-      ]);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSelectPlan = (plan) => {
+    setCurrentView('buy-policies');
+    sessionStorage.setItem('selectedPlanForPurchase', JSON.stringify(plan));
+  };
+
   const activePolicies = policies.filter(p => p.status === 'active').length;
+  const paidClaims = claims.filter(c => c.status === 'paid').length;
+  const pendingClaims = claims.filter(c => ['pending', 'processing', 'submitted'].includes(c.status)).length;
   const approvedClaims = claims.filter(c => c.status === 'approved').length;
-  const pendingClaims = claims.filter(c => c.status === 'processing' || c.status === 'pending').length;
+  const rejectedClaims = claims.filter(c => ['rejected', 'disapproved'].includes(c.status)).length;
+  
+  // eslint-disable-next-line no-unused-vars
   const totalPremium = policies.reduce((sum, p) => sum + (p.premium || 0), 0);
+  // eslint-disable-next-line no-unused-vars
   const totalCoverage = policies.reduce((sum, p) => sum + (p.coverage_amount || p.coverage || 0), 0);
 
   const chartData = [
-    { name: 'Approved', value: approvedClaims, color: '#10b981' },
+    { name: 'Paid', value: paidClaims, color: '#10b981' },
     { name: 'Pending', value: pendingClaims, color: '#f59e0b' },
-    { name: 'Rejected', value: claims.filter(c => c.status === 'rejected').length, color: '#ef4444' }
+    { name: 'Rejected', value: rejectedClaims, color: '#ef4444' },
+    { name: 'Approved', value: approvedClaims, color: '#3b82f6' }
   ].filter(item => item.value > 0);
 
   const displayName = customerName.first_name || customerName.last_name 
     ? `${customerName.first_name} ${customerName.last_name}`.trim()
     : 'Guest';
 
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <p className="text-gray-600 mt-4">Loading dashboard...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
-      <div className="bg-gradient-to-r from-burgundy-600 to-burgundy-800 rounded-lg p-8 text-white shadow-lg">
+      <div className="bg-gradient-to-r from-sky-600 to-sky-800 rounded-lg p-8 text-white shadow-lg">
         <h1 className="text-4xl font-bold mb-2">Welcome back, {displayName}!</h1>
-        <p className="text-burgundy-100">Manage your health insurance policies with ease</p>
+        <p className="text-sky-100">Manage your health insurance policies with ease</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-burgundy-100 rounded-lg flex items-center justify-center">
-              <FileText className="h-6 w-6 text-burgundy-600" />
+            <div className="w-12 h-12 bg-sky-100 rounded-lg flex items-center justify-center">
+              <FileText className="h-6 w-6 text-sky-600" />
             </div>
             <span className="text-sm text-gray-600">Active</span>
           </div>
@@ -1944,8 +2228,8 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
 
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-burgundy-100 rounded-lg flex items-center justify-center">
-              <ClipboardList className="h-6 w-6 text-burgundy-600" />
+            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+              <Clock className="h-6 w-6 text-yellow-600" />
             </div>
             <span className="text-sm text-gray-600">Pending</span>
           </div>
@@ -1955,37 +2239,44 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
 
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-burgundy-100 rounded-lg flex items-center justify-center">
-              <Check className="h-6 w-6 text-burgundy-600" />
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <DollarSign className="h-6 w-6 text-green-600" />
+            </div>
+            <span className="text-sm text-gray-600">Paid</span>
+          </div>
+          <div className="text-3xl font-bold text-gray-900">{paidClaims}</div>
+          <div className="text-gray-600 text-sm mt-1">Claims Paid</div>
+        </div>
+
+        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Check className="h-6 w-6 text-blue-600" />
             </div>
             <span className="text-sm text-gray-600">Approved</span>
           </div>
           <div className="text-3xl font-bold text-gray-900">{approvedClaims}</div>
-          <div className="text-gray-600 text-sm mt-1">Approved Claims</div>
+          <div className="text-gray-600 text-sm mt-1">Claims Approved</div>
         </div>
 
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-burgundy-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="h-6 w-6 text-burgundy-600" />
+            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+              <X className="h-6 w-6 text-red-600" />
             </div>
-            <span className="text-sm text-gray-600">Total</span>
+            <span className="text-sm text-gray-600">Rejected</span>
           </div>
-          <div className="text-3xl font-bold text-gray-900">{formatCurrency(totalPremium)}</div>
-          <div className="text-gray-600 text-sm mt-1">Annual Premium</div>
-        </div>
-
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-burgundy-100 rounded-lg flex items-center justify-center">
-              <Heart className="h-6 w-6 text-burgundy-600" />
-            </div>
-            <span className="text-sm text-gray-600">Coverage</span>
-          </div>
-          <div className="text-3xl font-bold text-gray-900">{formatCurrency(totalCoverage)}</div>
-          <div className="text-gray-600 text-sm mt-1">Total Coverage</div>
+          <div className="text-3xl font-bold text-gray-900">{rejectedClaims}</div>
+          <div className="text-gray-600 text-sm mt-1">Claims Rejected</div>
         </div>
       </div>
+
+      {/* AI Recommendations Section */}
+      <AIRecommendations 
+        onSelectPlan={handleSelectPlan}
+            onViewPolicies={() => setCurrentView('policies')}  // ✅ Add this line
+        refreshTrigger={refreshRecommendations}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
@@ -1993,7 +2284,7 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
             <h3 className="text-lg font-semibold text-gray-900">Claims Overview</h3>
             <button
               onClick={() => setCurrentView('claims')}
-              className="text-burgundy-600 hover:text-burgundy-700 text-sm font-medium flex items-center gap-1"
+              className="text-sky-600 hover:text-sky-700 text-sm font-medium flex items-center gap-1"
             >
               View All <ChevronDown className="h-4 w-4 rotate-270" />
             </button>
@@ -2004,22 +2295,22 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
               <p className="text-gray-600">No claims yet</p>
               <button
                 onClick={() => setCurrentView('claims')}
-                className="mt-3 px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors text-sm"
+                className="mt-3 px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors text-sm"
               >
                 File Your First Claim
               </button>
             </div>
           ) : (
             <>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={250}>
                 <PieChart>
                   <Pie
                     data={chartData}
                     cx="50%"
                     cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}`}
-                    outerRadius={70}
+                    labelLine={true}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
                   >
@@ -2027,10 +2318,10 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(value) => `${value} claims`} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="flex justify-center gap-4 mt-4">
+              <div className="flex justify-center gap-4 mt-4 flex-wrap">
                 {chartData.map((item, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
@@ -2047,7 +2338,7 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
             <h3 className="text-lg font-semibold text-gray-900">Your Policies</h3>
             <button
               onClick={() => setCurrentView('policies')}
-              className="text-burgundy-600 hover:text-burgundy-700 text-sm font-medium flex items-center gap-1"
+              className="text-sky-600 hover:text-sky-700 text-sm font-medium flex items-center gap-1"
             >
               View All <ChevronDown className="h-4 w-4 rotate-270" />
             </button>
@@ -2076,7 +2367,7 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
                 <p className="text-gray-600">No policies yet</p>
                 <button
                   onClick={() => setCurrentView('buy-policies')}
-                  className="mt-3 px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors text-sm"
+                  className="mt-3 px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors text-sm"
                 >
                   Browse Plans
                 </button>
@@ -2089,26 +2380,30 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <button 
           onClick={() => setCurrentView('buy-policies')}
-          className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow text-center group hover:border-burgundy-200">
-          <ShoppingCart className="h-8 w-8 text-burgundy-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+          className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow text-center group hover:border-sky-200"
+        >
+          <ShoppingCart className="h-8 w-8 text-sky-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
           <p className="font-medium text-gray-900">Buy Policy</p>
         </button>
         <button 
           onClick={() => setCurrentView('policies')}
-          className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow text-center group hover:border-burgundy-200">
-          <RefreshCw className="h-8 w-8 text-burgundy-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+          className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow text-center group hover:border-sky-200"
+        >
+          <RefreshCw className="h-8 w-8 text-sky-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
           <p className="font-medium text-gray-900">Renew Policy</p>
         </button>
         <button 
           onClick={() => setCurrentView('claims')}
-          className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow text-center group hover:border-burgundy-200">
-          <ClipboardList className="h-8 w-8 text-burgundy-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+          className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow text-center group hover:border-sky-200"
+        >
+          <ClipboardList className="h-8 w-8 text-sky-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
           <p className="font-medium text-gray-900">File New Claim</p>
         </button>
         <button 
           onClick={() => setCurrentView('claims')}
-          className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow text-center group hover:border-burgundy-200">
-          <Eye className="h-8 w-8 text-burgundy-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+          className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow text-center group hover:border-sky-200"
+        >
+          <Eye className="h-8 w-8 text-sky-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
           <p className="font-medium text-gray-900">View My Claims</p>
         </button>
       </div>
@@ -2156,7 +2451,6 @@ function CustomerDashboard() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
 
-  // Handle click outside to close profile menu
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
@@ -2170,7 +2464,6 @@ function CustomerDashboard() {
     };
   }, []);
 
-  // Fetch unread count and recent notifications
   const fetchUnreadCount = async () => {
     try {
       const config = getAxiosConfig();
@@ -2184,7 +2477,6 @@ function CustomerDashboard() {
     }
   };
 
-  // Fetch customer profile on mount
   useEffect(() => {
     const fetchCustomerProfile = async () => {
       try {
@@ -2216,7 +2508,6 @@ function CustomerDashboard() {
     fetchUnreadCount();
   }, []);
 
-  // Fetch customer policies
   useEffect(() => {
     const fetchCustomerPolicies = async () => {
       try {
@@ -2243,10 +2534,12 @@ function CustomerDashboard() {
         return <BuyPoliciesSection onBack={() => {
           setCurrentView('policies');
           setRefreshPolicies(prev => prev + 1);
-          fetchUnreadCount(); // Refresh notifications after purchase
+          fetchUnreadCount();
         }} />;
       case 'claims':
         return <ClaimsSection customerPolicies={policies} />;
+      case 'payments':
+        return <PaymentPanel />;
       case 'notifications':
         return <NotificationsSection />;
       case 'profile':
@@ -2315,17 +2608,13 @@ function CustomerDashboard() {
               >
                 <Menu className="h-5 sm:h-6 w-5 sm:w-6" />
               </button>
-              <h1 className="text-lg sm:text-2xl font-bold text-burgundy-900 truncate">HealthInsura360</h1>
+              <h1 className="text-lg sm:text-2xl font-bold text-sky-900 truncate">HealthInsura360</h1>
             </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-              {/* Notifications */}
               <div className="relative">
                 <button
                   onClick={() => {
                     setShowNotifications(!showNotifications);
-                    if (!showNotifications && unreadCount > 0) {
-                      // Mark as seen when opening? Optional
-                    }
                   }}
                   className="relative p-1 sm:p-2 text-gray-600 hover:text-gray-900 flex-shrink-0"
                 >
@@ -2346,7 +2635,7 @@ function CustomerDashboard() {
                         recentNotifications.map((notif) => (
                           <div 
                             key={notif.notification_id} 
-                            className={`p-2 rounded-lg cursor-pointer ${!notif.is_read ? 'bg-burgundy-50' : 'hover:bg-gray-50'}`}
+                            className={`p-2 rounded-lg cursor-pointer ${!notif.is_read ? 'bg-sky-50' : 'hover:bg-gray-50'}`}
                             onClick={() => {
                               markNotificationAsRead(notif.notification_id);
                               setShowNotifications(false);
@@ -2366,7 +2655,7 @@ function CustomerDashboard() {
                           setShowNotifications(false);
                           setCurrentView('notifications');
                         }}
-                        className="w-full mt-3 text-center text-sm text-burgundy-600 hover:text-burgundy-700 font-medium"
+                        className="w-full mt-3 text-center text-sm text-sky-600 hover:text-sky-700 font-medium"
                       >
                         View All Notifications →
                       </button>
@@ -2375,11 +2664,10 @@ function CustomerDashboard() {
                 )}
               </div>
 
-              {/* Profile Dropdown with Picture Support */}
               <div className="relative" ref={profileMenuRef}>
                 <button
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="w-9 sm:w-10 h-9 sm:h-10 bg-burgundy-100 rounded-full overflow-hidden flex items-center justify-center text-burgundy-600 flex-shrink-0 hover:bg-burgundy-200 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-burgundy-500"
+                  className="w-9 sm:w-10 h-9 sm:h-10 bg-sky-100 rounded-full overflow-hidden flex items-center justify-center text-sky-600 flex-shrink-0 hover:bg-sky-200 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500"
                 >
                   {customerName.profile_picture ? (
                     <img 
@@ -2401,7 +2689,7 @@ function CustomerDashboard() {
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                     <div className="px-4 py-3 border-b border-gray-100">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-burgundy-100 rounded-full overflow-hidden flex-shrink-0">
+                        <div className="w-10 h-10 bg-sky-100 rounded-full overflow-hidden flex-shrink-0">
                           {customerName.profile_picture ? (
                             <img 
                               src={`http://localhost:5000${customerName.profile_picture}`}
@@ -2410,7 +2698,7 @@ function CustomerDashboard() {
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <User className="h-5 w-5 text-burgundy-600" />
+                              <User className="h-5 w-5 text-sky-600" />
                             </div>
                           )}
                         </div>
@@ -2472,9 +2760,9 @@ function CustomerDashboard() {
           </div>
         </div>
       </div>
+      <ChatbotFloating />
     </div>
   );
 }
 
-// ==================== EXPORT ====================
 export default CustomerDashboard;

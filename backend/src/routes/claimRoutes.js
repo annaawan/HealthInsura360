@@ -69,4 +69,11 @@ router.get('/:id',
     claimController.getClaimById
 );
 
+// ============================================
+// Serve claim document (Agent/Admin/Hospital access)
+// ============================================
+router.get('/:claimId/documents/:filename',
+    authMiddleware,
+    claimController.getClaimDocument
+);
 module.exports = router;

@@ -4,15 +4,17 @@ const policyController = require('../controllers/policyController');
 const { authenticate } = require('../middleware/auth');
 const db = require('../config/database');
 
-// Public
-router.get('/plans', policyController.getPlans);
+// ✅ FIXED: Use the correct function name 'getInsurancePlans' instead of 'getPlans'
+router.get('/plans', policyController.getInsurancePlans);
 
-// Protected
-router.get('/my-policies', authenticate, policyController.getUserPolicies);
+// Protected routes (require authentication)
+router.get('/my-policies', authenticate, policyController.getMyPolicies);
+router.get('/insurance-plans', authenticate, policyController.getInsurancePlans);
 router.post('/purchase', authenticate, policyController.purchasePolicy);
+router.post('/renew', authenticate, policyController.renewPolicy);
 
 // ============================================
-// SEARCH POLICIES - FINAL FIXED VERSION
+// SEARCH POLICIES
 // ============================================
 router.get('/search', authenticate, async (req, res) => {
   try {
@@ -28,7 +30,6 @@ router.get('/search', authenticate, async (req, res) => {
 
     console.log('🔍 Searching policies with query:', query);
 
-    // FIXED: Removed p.policy_type (doesn't exist) and get it from insurance_plans instead
     const sqlQuery = `
 SELECT 
   p.id as policy_id,
@@ -43,7 +44,7 @@ SELECT
   c.email,
   c.phone,
   ip.plan_name,
-  ip.plan_type as policy_type,  -- Get policy_type from insurance_plans
+  ip.plan_type as policy_type,
   ip.coverage_amount
 FROM policies p
 LEFT JOIN customer c ON CAST(p.customer_id AS INTEGER) = c.customer_id
@@ -65,7 +66,7 @@ LIMIT 20
     const policies = result.rows.map(row => ({
       policy_id: row.policy_id,
       policy_number: row.policy_number,
-      policy_type: row.policy_type || 'Standard', // Now comes from insurance_plans
+      policy_type: row.policy_type || 'Standard',
       premium_amount: parseFloat(row.premium_amount) || 0,
       start_date: row.start_date,
       end_date: row.end_date,
@@ -87,8 +88,6 @@ LIMIT 20
 
   } catch (error) {
     console.error('❌ Error in search endpoint:', error);
-    console.error('❌ Error code:', error.code);
-    console.error('❌ Error position:', error.position);
     
     res.status(200).json({
       success: true,

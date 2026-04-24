@@ -140,7 +140,7 @@ class ReminderScheduler {
                 UPDATE payment_reminders 
                 SET last_sent_at = NOW(), 
                     status = CASE 
-                        WHEN frequency = 'one-time' THEN 'completed'
+                        WHEN frequency = 'one-time' THEN 'sent'
                         ELSE 'active'
                     END
                 WHERE reminder_id = $1

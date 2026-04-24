@@ -158,7 +158,39 @@ function PaymentReminders({ agent }) {
       alert(error.response?.data?.message || 'Failed to delete reminder');
     }
   };
-
+  const formatCurrency = (amount) => {
+  if (!amount) return 'Rs. 0';
+  return `Rs. ${Math.floor(amount).toLocaleString('en-PK')}`;
+};
+// Mark reminder as completed (when client pays offline)
+const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
+    const paymentReference = prompt('Enter payment reference number (optional):');
+    
+    if (!window.confirm(`Mark this reminder as PAID? This will record the payment for policy #${policyId} for $${parseFloat(amount).toLocaleString()}.`)) {
+        return;
+    }
+    
+    try {
+        const response = await axios.put(
+            `http://localhost:5000/api/payments/reminders/${reminderId}/complete`,
+            { 
+                paymentReference: paymentReference || 'MANUAL_PAYMENT',
+                notes: `Payment marked as completed by agent. Reference: ${paymentReference || 'Manual'}`
+            },
+            { headers: getAuthHeaders() }
+        );
+        
+        if (response.data.success) {
+            alert('✅ Payment recorded successfully! Reminder marked as completed.');
+            fetchReminders(); // Refresh the list
+        } else {
+            alert(response.data.message || 'Failed to mark as completed');
+        }
+    } catch (error) {
+        console.error('Error marking reminder as completed:', error);
+        alert(error.response?.data?.message || 'Failed to mark payment as completed');
+    }
+};
   // Handle client selection change
   const handleClientChange = async (customerId) => {
     setReminderForm({ ...reminderForm, customer_id: customerId, policy_id: '' });
@@ -293,7 +325,7 @@ function PaymentReminders({ agent }) {
                     </div>
                     <div>
                       <div className="text-xs text-gray-500">Amount</div>
-                      <div className="text-sm font-medium">${parseFloat(reminder.premium_amount).toLocaleString()}</div>
+                      <div className="text-sm font-medium">{formatCurrency(reminder.premium_amount)}</div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500">Notification</div>
@@ -312,6 +344,7 @@ function PaymentReminders({ agent }) {
                 </div>
                 
                 <div className="flex gap-2 ml-4">
+                  {/* Send Reminder Button (only for active reminders) */}
                   {reminder.status === 'active' && (
                     <button
                       onClick={() => handleSendReminder(reminder.reminder_id)}
@@ -326,6 +359,19 @@ function PaymentReminders({ agent }) {
                       )}
                     </button>
                   )}
+                  
+                  {/* Mark as Paid Button (for active or sent reminders) */}
+                  {(reminder.status === 'active' || reminder.status === 'sent') && (
+                    <button
+                      onClick={() => handleMarkAsCompleted(reminder.reminder_id, reminder.policy_id, reminder.premium_amount)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Mark as Paid (Record Payment)"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                    </button>
+                  )}
+                  
+                  {/* Delete Reminder Button */}
                   <button
                     onClick={() => handleDeleteReminder(reminder.reminder_id)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -371,7 +417,7 @@ function PaymentReminders({ agent }) {
                   </select>
                 </div>
                 
-                {/* Select Policy */}
+                {/* Select Policy - IMPROVED DISPLAY */}
                 <div>
                   <label className="block text-gray-700 mb-2">Select Policy *</label>
                   <select
@@ -384,10 +430,15 @@ function PaymentReminders({ agent }) {
                     <option value="">-- Select a policy --</option>
                     {policies.map(policy => (
                       <option key={policy.policy_id} value={policy.policy_id}>
-                        {policy.policy_type} - ${(policy.premium_amount || 0).toLocaleString()}
+                        Policy #{policy.policy_id} - {policy.plan_name || policy.policy_type} - {formatCurrency(policy.premium_amount)}/month
                       </option>
                     ))}
                   </select>
+                  {policies.length === 0 && reminderForm.customer_id && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      No active policies found for this client
+                    </p>
+                  )}
                 </div>
                 
                 {/* Reminder Date & Time */}

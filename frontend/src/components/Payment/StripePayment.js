@@ -10,76 +10,47 @@ const StripePayment = ({ policyId, amount, policyName, onSuccess, onCancel }) =>
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);
 
- const handleSubmit = async (event) => {
-  event.preventDefault();
-  setProcessing(true);
+  // Add this debug code
+console.log('🔍 DEBUG - Stripe Keys:');
+console.log('  Publishable Key from env:', process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
+console.log('  Stripe object exists:', !!stripe);
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setProcessing(true);
+    setError(null);
 
-  if (!stripe || !elements) {
-    return;
-  }
-
-  try {
-    // Get auth token
-    const token = localStorage.getItem('healthinsura360_token');
-    if (!token) {
-      setError('Please login again');
+    if (!stripe || !elements) {
+      setError('Stripe not initialized. Please refresh the page.');
       setProcessing(false);
       return;
     }
 
-    // DEBUG: Log what we're sending
-    console.log('📤 Sending payment request with:', {
-      policyId: policyId,
-      amount: amount,
-      policyIdType: typeof policyId,
-      policyIdValue: policyId
-    });
-
-    // Make sure policyId is valid
-    if (!policyId) {
-      setError('Policy ID is missing. Please try again.');
-      setProcessing(false);
-      return;
-    }
-
-    // Create payment intent on backend
-    const response = await axios.post(
-      `${API_BASE_URL}/payments/create-payment-intent`,
-      {
-        policyId: policyId,  // Send as policyId
-        amount: amount
-      },
-      {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+    try {
+      // Get auth token
+      const token = localStorage.getItem('healthinsura360_token');
+      if (!token) {
+        setError('Please login again');
+        setProcessing(false);
+        return;
       }
-    );
 
-    const { clientSecret } = response.data;
+      // Validate policyId
+      if (!policyId) {
+        setError('Policy ID is missing. Please try again.');
+        setProcessing(false);
+        return;
+      }
 
-    // Confirm payment with Stripe
-    const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
-      clientSecret,
-      {
-        payment_method: {
-          card: elements.getElement(CardElement),
-          billing_details: {
-            name: localStorage.getItem('customerName') || 'Customer',
-          },
+      console.log('📤 Creating payment intent for:', { policyId, amount });
+
+      // Create payment intent on backend
+      const response = await axios.post(
+        `${API_BASE_URL}/payments/create-payment-intent`,
+        {
+          policyId: policyId,
+          amount: amount,
+          currency: 'usd'
         },
-      }
-    );
-
-    if (stripeError) {
-      setError(stripeError.message);
-      setProcessing(false);
-    } else if (paymentIntent.status === 'succeeded') {
-      // Confirm payment on backend
-      await axios.post(
-        `${API_BASE_URL}/payments/confirm-payment`,
-        { paymentIntentId: paymentIntent.id },
         {
           headers: { 
             'Authorization': `Bearer ${token}`,
@@ -88,15 +59,81 @@ const StripePayment = ({ policyId, amount, policyName, onSuccess, onCancel }) =>
         }
       );
 
-      onSuccess(paymentIntent);
+      console.log('📦 Payment intent response:', response.data);
+
+      const { clientSecret, paymentIntentId } = response.data;
+
+      if (!clientSecret) {
+        throw new Error('No client secret received from server');
+      }
+
+      console.log('💰 Confirming payment with client secret...');
+
+      // Confirm payment with Stripe
+      const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
+        clientSecret,
+        {
+          payment_method: {
+            card: elements.getElement(CardElement),
+            billing_details: {
+              name: localStorage.getItem('customerName') || 'Customer',
+            },
+          },
+        }
+      );
+
+      if (stripeError) {
+        console.error('❌ Stripe error:', stripeError);
+        setError(stripeError.message);
+        setProcessing(false);
+        return;
+      }
+
+      console.log('✅ Payment confirmed:', paymentIntent.status);
+
+      if (paymentIntent.status === 'succeeded') {
+        // Notify backend that payment succeeded
+        try {
+          await axios.post(
+            `${API_BASE_URL}/payments/confirm-payment-intent`,
+            { 
+              paymentIntentId: paymentIntent.id 
+            },
+            {
+              headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          console.log('✅ Backend notified of successful payment');
+        } catch (confirmError) {
+          console.error('Error notifying backend:', confirmError);
+          // Don't fail the payment if backend notification fails
+        }
+
+        onSuccess(paymentIntent);
+      } else {
+        setError(`Payment ${paymentIntent.status}. Please try again.`);
+        setProcessing(false);
+      }
+    } catch (err) {
+      console.error('❌ Payment error:', err);
+      console.error('Error response:', err.response?.data);
+      
+      let errorMessage = 'Payment failed. Please try again.';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      setProcessing(false);
     }
-  } catch (err) {
-    console.error('Payment error:', err);
-    console.error('Error response:', err.response?.data);
-    setError(err.response?.data?.error || 'Payment failed. Please try again.');
-    setProcessing(false);
-  }
-};
+  };
 
   // Format currency
   const formatCurrency = (amount) => {

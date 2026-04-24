@@ -281,4 +281,268 @@ exports.handleStripeWebhook = async (req, res) => {
     console.error('❌ Webhook error:', error.message);
     return res.status(400).send(`Webhook Error: ${error.message}`);
   }
+  // ============ GET CUSTOMER PAYMENT HISTORY ============
+exports.getCustomerPayments = async (req, res) => {
+    try {
+        const customerId = req.user?.userId;
+        
+        if (!customerId) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        const result = await db.query(
+            `SELECT 
+                p.payment_id,
+                p.policy_id,
+                p.amount,
+                p.method,
+                p.status,
+                p.transaction_ref,
+                p.paid_at,
+                pol.policy_type,
+                pol.premium_amount,
+                pp.plan_name
+             FROM payment p
+             JOIN policy pol ON p.policy_id = pol.policy_id
+             LEFT JOIN policy_plans pp ON pol.plan_id = pp.plan_id
+             WHERE p.customer_id = $1
+             ORDER BY p.paid_at DESC`,
+            [customerId]
+        );
+        
+        res.json({
+            success: true,
+            payments: result.rows,
+            count: result.rows.length
+        });
+        
+    } catch (error) {
+        console.error('Error fetching customer payments:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// ============ GET PAYMENT REMINDERS ============
+exports.getPaymentReminders = async (req, res) => {
+    try {
+        const customerId = req.user?.userId;
+        
+        if (!customerId) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        const result = await db.query(
+            `SELECT 
+                r.reminder_id,
+                r.policy_id,
+                r.reminder_type,
+                r.reminder_date,
+                r.reminder_time,
+                r.frequency,
+                r.message,
+                r.status,
+                r.next_reminder_date,
+                p.policy_type,
+                p.premium_amount,
+                pp.plan_name,
+                a.first_name as agent_first_name,
+                a.last_name as agent_last_name
+             FROM payment_reminders r
+             JOIN policy p ON r.policy_id = p.policy_id
+             LEFT JOIN policy_plans pp ON p.plan_id = pp.plan_id
+             LEFT JOIN agent a ON r.agent_id = a.agent_id
+             WHERE r.customer_id = $1 AND r.status = 'active'
+               AND r.reminder_date <= CURRENT_DATE + INTERVAL '30 days'
+             ORDER BY r.reminder_date ASC`,
+            [customerId]
+        );
+        
+        res.json({
+            success: true,
+            reminders: result.rows,
+            count: result.rows.length
+        });
+        
+    } catch (error) {
+        console.error('Error fetching payment reminders:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// ============ PROCESS PREMIUM PAYMENT ============
+exports.processPremiumPayment = async (req, res) => {
+    const client = await db.pool.connect();
+    const companyAccountService = require('../services/companyAccountService');
+    
+    try {
+        const customerId = req.user?.userId;
+        const { policyId, amount, paymentMethod, reminderId } = req.body;
+        
+        if (!customerId || !policyId || !amount) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+        
+        await client.query('BEGIN');
+        
+        // 1. Verify policy belongs to customer
+        const policyResult = await client.query(
+            `SELECT p.*, pp.plan_name 
+             FROM policy p
+             JOIN policy_plans pp ON p.plan_id = pp.plan_id
+             WHERE p.policy_id = $1 AND p.customer_id = $2 AND p.status = 'active'`,
+            [policyId, customerId]
+        );
+        
+        if (policyResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, error: 'Policy not found' });
+        }
+        
+        const policy = policyResult.rows[0];
+        const paymentAmount = parseFloat(amount);
+        
+        // 2. Create payment record
+        const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        
+        await client.query(
+            `INSERT INTO payment (
+                payment_id, policy_id, customer_id, amount, method, status, 
+                transaction_ref, paid_at
+            ) VALUES ($1, $2, $3, $4, $5, 'Completed', $6, NOW())`,
+            [paymentId, policyId, customerId, paymentAmount, paymentMethod || 'card', transactionId]
+        );
+        
+        // 3. Create transaction record
+        await client.query(
+            `INSERT INTO transaction (
+                transaction_id, related_payment_id, amount, type, status, 
+                created_at, payment_method, notes
+            ) VALUES ($1, $2, $3, 'premium_payment', 'completed', NOW(), $4, $5)`,
+            [transactionId, paymentId, paymentAmount, paymentMethod || 'card', `Premium payment for policy #${policyId}`]
+        );
+        
+        // 4. Credit company account
+        const creditResult = await companyAccountService.creditCompanyAccount(
+            paymentAmount,
+            customerId,
+            policyId,
+            `Premium payment from customer ${customerId} for policy #${policyId} - ${policy.plan_name}`
+        );
+        
+        if (!creditResult.success) {
+            throw new Error('Failed to credit company account');
+        }
+        
+        // 5. Update policy remaining coverage (add the payment amount to coverage)
+        await client.query(
+            `UPDATE policy 
+             SET remaining_coverage = remaining_coverage + $1,
+                 updated_at = NOW()
+             WHERE policy_id = $2`,
+            [paymentAmount, policyId]
+        );
+        
+        // 6. If this payment was from a reminder, mark reminder as completed
+        if (reminderId) {
+            await client.query(
+                `UPDATE payment_reminders 
+                 SET status = 'completed', 
+                     updated_at = NOW(),
+                     notes = COALESCE(notes, 'Payment completed via customer dashboard')
+                 WHERE reminder_id = $1`,
+                [reminderId]
+            );
+            
+            // Log reminder completion
+            await client.query(
+                `INSERT INTO reminder_logs (
+                    reminder_id, customer_id, customer_email, notification_type, 
+                    subject, message, status, sent_at
+                ) VALUES ($1, $2, (SELECT email FROM customer WHERE customer_id = $2), 
+                    'payment_completed', 'Payment Completed', $3, 'success', NOW())`,
+                [reminderId, customerId, `Payment of Rs. ${paymentAmount.toLocaleString()} completed for policy #${policyId}`]
+            );
+        }
+        
+        await client.query('COMMIT');
+        
+        // 7. Create notification for customer
+        await createNotification(
+            customerId,
+            'customer',
+            'payment_received',
+            'Payment Successful ✅',
+            `Your payment of Rs. ${paymentAmount.toLocaleString()} for policy "${policy.plan_name}" has been received successfully.`,
+            policyId
+        ).catch(err => console.log('Notification error:', err.message));
+        
+        console.log(`✅ Premium payment processed: ${paymentId} for customer ${customerId}`);
+        
+        res.json({
+            success: true,
+            message: 'Payment processed successfully',
+            data: {
+                payment_id: paymentId,
+                transaction_id: transactionId,
+                amount: paymentAmount,
+                company_balance: creditResult.new_balance
+            }
+        });
+        
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error processing premium payment:', error);
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        client.release();
+    }
+};
+
+// ============ GET UPCOMING PAYMENTS SUMMARY ============
+exports.getUpcomingPaymentsSummary = async (req, res) => {
+    try {
+        const customerId = req.user?.userId;
+        
+        if (!customerId) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        // Get total due amount from active reminders
+        const dueResult = await db.query(
+            `SELECT 
+                COALESCE(SUM(p.premium_amount), 0) as total_due,
+                COUNT(*) as reminders_count
+             FROM payment_reminders r
+             JOIN policy p ON r.policy_id = p.policy_id
+             WHERE r.customer_id = $1 
+               AND r.status = 'active'
+               AND r.reminder_date <= CURRENT_DATE + INTERVAL '30 days'`,
+            [customerId]
+        );
+        
+        // Get last payment date
+        const lastPaymentResult = await db.query(
+            `SELECT paid_at as last_payment_date
+             FROM payment 
+             WHERE customer_id = $1 
+             ORDER BY paid_at DESC 
+             LIMIT 1`,
+            [customerId]
+        );
+        
+        res.json({
+            success: true,
+            data: {
+                total_due: parseFloat(dueResult.rows[0].total_due) || 0,
+                reminders_count: parseInt(dueResult.rows[0].reminders_count) || 0,
+                last_payment_date: lastPaymentResult.rows[0]?.last_payment_date || null
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error fetching upcoming payments summary:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
 };

@@ -3,12 +3,25 @@ const router = express.Router();
 const db = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 
-// GET all insurance plans (customers + admin can view)
+// Replace the GET '/' route in insurancePlans.js
+
 router.get('/', authenticate, async (req, res) => {
     try {
+        // ✅ Query YOUR policy_plans table, not insurance_plans
         const result = await db.query(`
-            SELECT * FROM insurance_plans 
-            WHERE is_active = true 
+            SELECT 
+                plan_id,
+                plan_name,
+                policy_type AS plan_type,
+                description,
+                premium_amount,
+                coverage_amount,
+                deductible,
+                CASE WHEN status = 'active' THEN true ELSE false END AS is_active,
+                created_at,
+                updated_at
+            FROM policy_plans 
+            WHERE status = 'active' 
             ORDER BY premium_amount
         `);
         
@@ -24,7 +37,6 @@ router.get('/', authenticate, async (req, res) => {
         });
     }
 });
-
 // CREATE new insurance plan (admin only)
 router.post('/', authenticate, authorize('admin'), async (req, res) => {
     try {

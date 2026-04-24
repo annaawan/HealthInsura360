@@ -26,7 +26,11 @@ exports.registerCustomer = async (req, res) => {
     street,
     city,
     state,
-    zipcode
+    zipcode,
+    monthly_budget,    // ✅ ADD THIS
+    family_size,       // ✅ ADD THIS
+    annual_income,     // ✅ ADD THIS
+    health_score       // ✅ ADD THIS
   } = req.body;
 
   try {
@@ -35,6 +39,38 @@ exports.registerCustomer = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please fill all required fields'
+      });
+    }
+
+    // Validate numeric fields
+    const validatedMonthlyBudget = monthly_budget && !isNaN(monthly_budget) ? parseFloat(monthly_budget) : 10000;
+    const validatedFamilySize = family_size && !isNaN(family_size) ? parseInt(family_size) : 1;
+    const validatedAnnualIncome = annual_income && !isNaN(annual_income) ? parseFloat(annual_income) : 0;
+    const validatedHealthScore = health_score && !isNaN(health_score) ? parseFloat(health_score) : 0.7;
+
+    // Validate ranges
+    if (validatedMonthlyBudget < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Monthly budget cannot be negative'
+      });
+    }
+    if (validatedFamilySize < 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Family size must be at least 1'
+      });
+    }
+    if (validatedAnnualIncome < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Annual income cannot be negative'
+      });
+    }
+    if (validatedHealthScore < 0 || validatedHealthScore > 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Health score must be between 0 and 10'
       });
     }
 
@@ -56,7 +92,6 @@ exports.registerCustomer = async (req, res) => {
     // ========== ROUND-ROBIN AGENT ASSIGNMENT ==========
     let assignedAgentId = null;
     
-    // Get all active agents ordered by current customer count (lowest first)
     const agents = await db.query(
       `SELECT 
          agent_id, 
@@ -69,7 +104,6 @@ exports.registerCustomer = async (req, res) => {
     );
 
     if (agents.rows.length > 0) {
-      // Select the agent with the fewest customers
       assignedAgentId = agents.rows[0].agent_id;
       console.log(`✅ Round-robin assigned agent ID: ${assignedAgentId} (${agents.rows[0].first_name} ${agents.rows[0].last_name}) - Current customers: ${agents.rows[0].total_sales}`);
     } else {
@@ -85,14 +119,15 @@ exports.registerCustomer = async (req, res) => {
     // Start transaction
     await db.query('BEGIN');
 
-    // Insert into customer table WITH agent_id
+    // ✅ UPDATED INSERT with new fields
     const result = await db.query(
       `INSERT INTO customer (
         first_name, last_name, gender, email, phone, dob, 
         password_hash, street, city, state, zipcode,
-        agent_id, created_at, updated_at, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), 'active')
-      RETURNING customer_id, first_name, last_name, email, created_at, updated_at, agent_id`,
+        agent_id, monthly_budget, family_size, annual_income, health_score,
+        created_at, updated_at, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW(), 'active')
+      RETURNING customer_id, first_name, last_name, email, created_at, updated_at, agent_id, monthly_budget, family_size, annual_income, health_score`,
       [
         firstName,
         lastName,
@@ -105,27 +140,42 @@ exports.registerCustomer = async (req, res) => {
         city || null,
         state || null,
         zipcode || null,
-        assignedAgentId
+        assignedAgentId,
+        validatedMonthlyBudget,
+        validatedFamilySize,
+        validatedAnnualIncome,
+        validatedHealthScore
       ]
     );
 
     const customerId = result.rows[0].customer_id;
 
-  // After getting customerId, ADD THIS:
-const tokenData = {
-  userId: customerId,
-  email: result.rows[0].email,
-  userType: 'customer'
-};
+    // Update agent's total_sales
+    if (assignedAgentId) {
+      await db.query(
+        `UPDATE agent 
+         SET total_sales = COALESCE(total_sales, 0) + 1,
+             updated_at = NOW()
+         WHERE agent_id = $1`,
+        [assignedAgentId]
+      );
+      console.log(`✅ Agent ${assignedAgentId} total_sales incremented for new customer ${customerId}`);
+    }
 
-const token = jwt.sign(
-  tokenData,
-  process.env.JWT_SECRET || 'Allahuakbar786',
-  { expiresIn: '7d' }
-);
+    // Create token
+    const tokenData = {
+      userId: customerId,
+      email: result.rows[0].email,
+      userType: 'customer'
+    };
 
+    const token = jwt.sign(
+      tokenData,
+      process.env.JWT_SECRET || 'Allahuakbar786',
+      { expiresIn: '7d' }
+    );
 
-    // Log audit with TIMESTAMP column
+    // Log audit
     await db.query(
       `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
        VALUES ('customer', $1, 'register', 'customer', $1, NOW())`,
@@ -145,6 +195,10 @@ const token = jwt.sign(
         email: result.rows[0].email,
         userType: 'customer',
         assignedAgentId: result.rows[0].agent_id,
+        monthly_budget: parseFloat(result.rows[0].monthly_budget),
+        family_size: parseInt(result.rows[0].family_size),
+        annual_income: parseFloat(result.rows[0].annual_income),
+        health_score: parseFloat(result.rows[0].health_score),
         createdAt: result.rows[0].created_at,
         updatedAt: result.rows[0].updated_at
       }
@@ -154,7 +208,7 @@ const token = jwt.sign(
     await db.query('ROLLBACK');
     console.error('Customer registration error:', error);
     
-    if (error.code === '23505') { // Unique constraint violation
+    if (error.code === '23505') {
       return res.status(400).json({
         success: false,
         message: 'Email already exists'
@@ -167,7 +221,6 @@ const token = jwt.sign(
     });
   }
 };
-
 // Agent Registration
 exports.registerAgent = async (req, res) => {
   const {
@@ -851,133 +904,6 @@ exports.login = async (req, res) => {
     });
   }
 };
-
-//   const { email, password, userType } = req.body;
-
-//   try {
-//     // ADD THESE DEBUG LOGS:
-//     console.log('=== LOGIN ATTEMPT ===');
-//     console.log('Email:', email);
-//     console.log('User Type:', userType);
-//     console.log('Password provided:', password ? '[PROVIDED]' : '[MISSING]');
-//     // Validate inputs
-//     if (!email || !password || !userType) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Please provide email, password, and user type'
-//       });
-//     }
-
-//     let tableName, idField;
-
-//     // Determine which table to query based on userType
-//     switch (userType) {
-//       case 'customer':
-//         tableName = 'customer';
-//         idField = 'customer_id';
-//         break;
-//       case 'agent':
-//         tableName = 'agent';
-//         idField = 'agent_id';
-//         break;
-//       case 'admin':
-//         tableName = 'admin';
-//         idField = 'admin_id';
-//         break;
-//       default:
-//         return res.status(400).json({
-//           success: false,
-//           message: 'Invalid user type'
-//         });
-//     }
-
-//     // Find user
-//     const result = await db.query(
-//       `SELECT * FROM ${tableName} WHERE email = $1`,
-//       [email.toLowerCase()]
-//     );
-
-//     if (result.rows.length === 0) {
-//       return res.status(401).json({
-//         success: false,
-//         message: 'Invalid credentials'
-//       });
-//     }
-
-//     const dbUser = result.rows[0];
-
-//     // Verify password
-//     const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
-//     if (!isValidPassword) {
-//       return res.status(401).json({
-//         success: false,
-//         message: 'Invalid credentials'
-//       });
-//     }
-
-//     // Prepare user data for token
-//     const tokenData = {
-//       userId: dbUser[idField],
-//       email: dbUser.email,
-//       userType: userType
-//     };
-
-//     // Add role for admin
-//     if (userType === 'admin') {
-//       tokenData.role = dbUser.role;
-//     }
-
-//     // Create JWT token
-//     const token = jwt.sign(
-//       tokenData,
-//       process.env.JWT_SECRET || 'Allahuakbar786',
-//       { expiresIn: '7d' }
-//     );
-
-//     // Prepare user data for response
-//     const userData = {
-//       id: dbUser[idField],
-//       email: dbUser.email,
-//       userType: userType
-//     };
-
-//     // Add user-specific fields
-//     if (userType === 'customer' || userType === 'agent') {
-//       userData.firstName = dbUser.first_name;
-//       userData.lastName = dbUser.last_name;
-//       userData.fullName = `${dbUser.first_name} ${dbUser.last_name}`;
-      
-//       if (userType === 'agent') {
-//         userData.licenseNumber = dbUser.license_number;
-//       }
-//     } else if (userType === 'admin') {
-//       userData.fullName = dbUser.full_name;
-//       userData.role = dbUser.role;
-//     }
-
-//     // Log audit with timestamp column
-//     await db.query(
-//       `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
-//        VALUES ($1, $2, 'login', $1, $2, NOW())`,
-//       [userType, dbUser[idField]]
-//     );
-
-//     res.json({
-//       success: true,
-//       message: 'Login successful',
-//       token,
-//       user: userData
-//     });
-
-//   } catch (error) {
-//     console.error('Login error:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'Server error during login'
-//     });
-//   }
-// };
-
 // SEPARATE HOSPITAL LOGIN (no password, uses registration number)
 exports.loginHospital = async (req, res) => {
   const { email, registrationNumber } = req.body;
@@ -1172,11 +1098,12 @@ exports.getProfile = async (req, res) => {
         });
     }
 
-    // ✅ MAKE SURE profile_picture IS IN THE SELECT
+    // ✅ ADDED new fields to SELECT
     const result = await db.query(
       `SELECT customer_id, first_name, last_name, email, phone, 
               street, city, state, zipcode, gender, dob, 
-              profile_picture, created_at, updated_at 
+              profile_picture, monthly_budget, family_size, annual_income, health_score,
+              created_at, updated_at 
        FROM ${tableName} 
        WHERE ${idField} = $1`,
       [userId]
@@ -1191,11 +1118,10 @@ exports.getProfile = async (req, res) => {
 
     const user = result.rows[0];
     
-    // ✅ DEBUG - Check what's in the database
     console.log('🔍 DATABASE ROW:', user);
     console.log('🔍 profile_picture VALUE:', user.profile_picture);
 
-    // Build response
+    // ✅ ADDED new fields to response
     const profileData = {
       id: user[idField],
       email: user.email,
@@ -1209,7 +1135,11 @@ exports.getProfile = async (req, res) => {
       city: user.city,
       state: user.state,
       zipcode: user.zipcode,
-      profile_picture: user.profile_picture || null,  // ✅ KEY LINE
+      profile_picture: user.profile_picture || null,
+      monthly_budget: user.monthly_budget || 0,
+      family_size: user.family_size || 1,
+      annual_income: user.annual_income || 0,
+      health_score: user.health_score || 0.7,
       createdAt: user.created_at,
       updatedAt: user.updated_at
     };
@@ -1610,8 +1540,11 @@ exports.testEmailEndpoint = async (req, res) => {
 
 // Update user profile (with profile picture support)
 exports.updateProfile = async (req, res) => {
-  const { userId, userType } = req.user; // From middleware
-  const { first_name, last_name, phone, street, city, state, zipcode, gender, dob } = req.body;
+  const { userId, userType } = req.user;
+  const { 
+    first_name, last_name, phone, street, city, state, zipcode, gender, dob,
+    monthly_budget, family_size, annual_income, health_score  // ✅ ADD THESE
+  } = req.body;
 
   try {
     let tableName, idField;
@@ -1647,11 +1580,11 @@ exports.updateProfile = async (req, res) => {
       console.log('📸 Profile picture uploaded:', profilePicturePath);
     }
 
-    // Build update query based on user type
     let updateQuery;
     let params = [];
 
     if (userType === 'customer') {
+      // ✅ ADDED new fields to UPDATE
       updateQuery = `
         UPDATE ${tableName}
         SET 
@@ -1664,12 +1597,21 @@ exports.updateProfile = async (req, res) => {
           zipcode = $7,
           gender = $8,
           dob = $9,
-          profile_picture = COALESCE($10, profile_picture),
+          monthly_budget = $10,
+          family_size = $11,
+          annual_income = $12,
+          health_score = $13,
+          profile_picture = COALESCE($14, profile_picture),
           updated_at = NOW()
-        WHERE ${idField} = $11
+        WHERE ${idField} = $15
         RETURNING *
       `;
-      params = [first_name, last_name, phone, street, city, state, zipcode, gender, dob, profilePicturePath, userId];
+      params = [
+        first_name, last_name, phone, street, city, state, zipcode, 
+        gender, dob, 
+        monthly_budget, family_size, annual_income, health_score,
+        profilePicturePath, userId
+      ];
     } else if (userType === 'agent') {
       updateQuery = `
         UPDATE ${tableName}
@@ -1727,7 +1669,7 @@ exports.updateProfile = async (req, res) => {
       id: user[idField],
       email: user.email,
       userType: userType,
-      profile_picture: user.profile_picture || null  // ✅ ADD THIS
+      profile_picture: user.profile_picture || null
     };
 
     // Add user-specific fields to response
@@ -1743,8 +1685,13 @@ exports.updateProfile = async (req, res) => {
       profileData.zipcode = user.zipcode;
       profileData.updatedAt = user.updated_at;
       
+      // ✅ ADDED for customer
       if (userType === 'customer') {
         profileData.dob = user.dob;
+        profileData.monthly_budget = parseFloat(user.monthly_budget) || 0;
+        profileData.family_size = parseInt(user.family_size) || 1;
+        profileData.annual_income = parseFloat(user.annual_income) || 0;
+        profileData.health_score = parseFloat(user.health_score) || 0.7;
       }
     } else if (userType === 'hospital') {
       profileData.name = user.name;
@@ -1762,7 +1709,7 @@ exports.updateProfile = async (req, res) => {
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      user: profileData  // ✅ Return as 'user' to match frontend expectation
+      user: profileData
     });
 
   } catch (error) {

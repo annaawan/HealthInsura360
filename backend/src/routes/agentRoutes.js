@@ -4,6 +4,7 @@ const router = express.Router();
 const db = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');  // ← ADD THIS LINE
+const claimController = require('../controllers/claimController');  // ✅ ADD THIS LINE
 
 
 // Get agent profile
@@ -619,75 +620,75 @@ router.get('/clients/:clientId/policies', authMiddleware, async (req, res) => {
   }
 });
 
-// Get claims history for a client
-router.get('/clients/:clientId/claims', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.userType !== 'agent') {
-      console.log('❌ Access denied - Not an agent');
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Access denied. Agent only.' 
-      });
-    }
+// // Get claims history for a client
+// router.get('/clients/:clientId/claims', authMiddleware, async (req, res) => {
+//   try {
+//     if (req.user.userType !== 'agent') {
+//       console.log('❌ Access denied - Not an agent');
+//       return res.status(403).json({ 
+//         success: false, 
+//         message: 'Access denied. Agent only.' 
+//       });
+//     }
 
-    const { clientId } = req.params;
-    console.log(`📋 Fetching claims for client ID: ${clientId}, Agent ID: ${req.user.userId}`);
+//     const { clientId } = req.params;
+//     console.log(`📋 Fetching claims for client ID: ${clientId}, Agent ID: ${req.user.userId}`);
 
-    // Verify client belongs to this agent
-    const clientCheck = await db.query(
-      'SELECT customer_id, first_name, last_name FROM customer WHERE customer_id = $1 AND agent_id = $2',
-      [clientId, req.user.userId]
-    );
+//     // Verify client belongs to this agent
+//     const clientCheck = await db.query(
+//       'SELECT customer_id, first_name, last_name FROM customer WHERE customer_id = $1 AND agent_id = $2',
+//       [clientId, req.user.userId]
+//     );
 
-    if (clientCheck.rows.length === 0) {
-      console.log(`❌ Client ${clientId} not found or not assigned to agent ${req.user.userId}`);
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Client not found or not assigned to you' 
-      });
-    }
+//     if (clientCheck.rows.length === 0) {
+//       console.log(`❌ Client ${clientId} not found or not assigned to agent ${req.user.userId}`);
+//       return res.status(404).json({ 
+//         success: false, 
+//         message: 'Client not found or not assigned to you' 
+//       });
+//     }
 
-    console.log(`✅ Client verified: ${clientCheck.rows[0].first_name} ${clientCheck.rows[0].last_name}`);
+//     console.log(`✅ Client verified: ${clientCheck.rows[0].first_name} ${clientCheck.rows[0].last_name}`);
 
-    // Fetch claims for this client
-    const result = await db.query(
-      `SELECT 
-         c.claim_id,
-         c.claim_type,
-         c.claim_amount,
-         c.approved_amount,
-         c.status,
-         c.filing_date,
-         c.updated_at,
-         p.policy_type,
-         p.policy_id,
-         h.name as hospital_name
-       FROM claim c
-       LEFT JOIN policy p ON c.policy_id = p.policy_id
-       LEFT JOIN hospital h ON c.hospital_id = h.hospital_id
-       WHERE c.customer_id = $1
-       ORDER BY c.filing_date DESC`,
-      [clientId]
-    );
+//     // Fetch claims for this client
+//     const result = await db.query(
+//       `SELECT 
+//          c.claim_id,
+//          c.claim_type,
+//          c.claim_amount,
+//          c.approved_amount,
+//          c.status,
+//          c.filing_date,
+//          c.updated_at,
+//          p.policy_type,
+//          p.policy_id,
+//          h.name as hospital_name
+//        FROM claim c
+//        LEFT JOIN policy p ON c.policy_id = p.policy_id
+//        LEFT JOIN hospital h ON c.hospital_id = h.hospital_id
+//        WHERE c.customer_id = $1
+//        ORDER BY c.filing_date DESC`,
+//       [clientId]
+//     );
 
-    if (result.rows.length === 0) {
-      console.log(`📊 No claims found for client ID: ${clientId}`);
-    } else {
-      console.log(`✅ Found ${result.rows.length} claims for client ID: ${clientId}`);
-      result.rows.forEach((claim, index) => {
-        console.log(`   Claim ${index + 1}: ID=${claim.claim_id}, Type=${claim.claim_type}, Amount=$${claim.claim_amount}, Status=${claim.status}`);
-      });
-    }
+//     if (result.rows.length === 0) {
+//       console.log(`📊 No claims found for client ID: ${clientId}`);
+//     } else {
+//       console.log(`✅ Found ${result.rows.length} claims for client ID: ${clientId}`);
+//       result.rows.forEach((claim, index) => {
+//         console.log(`   Claim ${index + 1}: ID=${claim.claim_id}, Type=${claim.claim_type}, Amount=$${claim.claim_amount}, Status=${claim.status}`);
+//       });
+//     }
 
-    res.json(result.rows);
-  } catch (error) {
-    console.error('❌ Error fetching claims:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error: ' + error.message 
-    });
-  }
-});
+//     res.json(result.rows);
+//   } catch (error) {
+//     console.error('❌ Error fetching claims:', error);
+//     res.status(500).json({ 
+//       success: false, 
+//       message: 'Server error: ' + error.message 
+//     });
+//   }
+// });
 
 // Get payment history for a client
 router.get('/clients/:clientId/payments', authMiddleware, async (req, res) => {
@@ -1358,4 +1359,10 @@ router.get('/commissions/:commissionId', authMiddleware, async (req, res) => {
     });
   }
 });
+
+// Get client claims with documents
+router.get('/clients/:customerId/claims', authMiddleware, claimController.getAgentClientClaims);
+
+// Get claim document
+router.get('/claims/:claimId/documents/:filename', authMiddleware, claimController.getClaimDocument);
 module.exports = router;

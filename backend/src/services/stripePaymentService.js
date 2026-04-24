@@ -1,19 +1,100 @@
 // backend/src/services/stripePaymentService.js
 
 const Stripe = require('stripe');
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_51TJO4rJ7UpNEGAgNjbgp4ms6Oi6qqjYQH5vnHGm892IYR2MPhbjtaBxSjvBKzcIM6Lg9Py4iNXm7EE9K8gYjcmfi004DipyhY4');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const db = require('../config/database');
 const emailService = require('./emailServices');
 const auditLogService = require('./auditLogServices');
 
 class StripePaymentService {
     
-    // Create a payment intent for commission payout
-    async createCommissionPaymentIntent(commissionId, agentId, amount, currency = 'usd') {
+    // ============ GENERIC PAYMENT INTENT (For Customer Policy Purchases) ============
+    async createPaymentIntent(amount, currency = 'usd', metadata = {}) {
+        try {
+            console.log('💰 Creating payment intent for customer purchase:', { amount, currency, metadata });
+            
+            const amountInCents = Math.round(amount * 100);
+            
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amountInCents,
+                currency: currency.toLowerCase(),
+                metadata: {
+                    ...metadata,
+                    purpose: 'policy_purchase'
+                },
+                description: metadata.policy_name ? `Policy purchase: ${metadata.policy_name}` : 'Health insurance policy purchase',
+                receipt_email: metadata.customer_email,
+                automatic_payment_methods: {
+                    enabled: true,
+                },
+            });
+            
+            console.log(`✅ Payment intent created: ${paymentIntent.id}`);
+            
+            return {
+                clientSecret: paymentIntent.client_secret,
+                paymentIntentId: paymentIntent.id,
+                amount: amount,
+                currency: currency
+            };
+            
+        } catch (error) {
+            console.error('❌ Error creating payment intent:', error);
+            throw error;
+        }
+    }
+
+    // ============ CONFIRM PAYMENT INTENT ============
+    async confirmPaymentIntent(paymentIntentId) {
+        try {
+            console.log('💰 Confirming payment intent:', paymentIntentId);
+            
+            const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+            
+            console.log(`📊 Payment intent status: ${paymentIntent.status}`);
+            
+            if (paymentIntent.status === 'succeeded') {
+                console.log('✅ Payment already succeeded');
+                return paymentIntent;
+            }
+            
+            if (paymentIntent.status === 'requires_confirmation') {
+                const confirmed = await stripe.paymentIntents.confirm(paymentIntentId);
+                console.log(`✅ Payment confirmed: ${confirmed.status}`);
+                return confirmed;
+            }
+            
+            if (paymentIntent.status === 'requires_capture') {
+                const captured = await stripe.paymentIntents.capture(paymentIntentId);
+                console.log(`✅ Payment captured: ${captured.status}`);
+                return captured;
+            }
+            
+            return paymentIntent;
+            
+        } catch (error) {
+            console.error('❌ Error confirming payment intent:', error);
+            throw error;
+        }
+    }
+
+    // ============ RETRIEVE PAYMENT INTENT ============
+    async retrievePaymentIntent(paymentIntentId) {
+        try {
+            const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+            return paymentIntent;
+        } catch (error) {
+            console.error('❌ Error retrieving payment intent:', error);
+            throw error;
+        }
+    }
+
+    // ============ COMMISSION PAYOUT METHODS (Existing) ============
+    
+    async createCommissionPaymentIntent(commissionId, agentId, amount, currency = 'pkr') {
         try {
             console.log('🔍 Looking for commission:', commissionId);
             
-            // PostgreSQL query - Fixed: changed 'ending' to 'pending'
             const commissionResult = await db.query(
                 `SELECT c.*, a.email, a.first_name, a.last_name 
                  FROM commission c
@@ -22,7 +103,6 @@ class StripePaymentService {
                 [commissionId]
             );
             
-            // Handle both possible return structures
             const commission = commissionResult.rows ? commissionResult.rows[0] : commissionResult[0];
             
             if (!commission) {
@@ -32,7 +112,6 @@ class StripePaymentService {
             
             console.log('✅ Commission found:', commission.commission_id);
             
-            // Create Stripe payment intent
             const paymentIntent = await stripe.paymentIntents.create({
                 amount: Math.round(amount * 100),
                 currency: currency,
@@ -47,7 +126,6 @@ class StripePaymentService {
                 receipt_email: commission.email
             });
             
-            // Record payment transaction in PostgreSQL
             await db.query(
                 `INSERT INTO transaction (
                     related_commission_id, amount, type, status, created_at
@@ -71,12 +149,10 @@ class StripePaymentService {
         }
     }
     
-    // Confirm payment and update commission status
     async confirmCommissionPayment(paymentIntentId) {
         try {
             console.log('🔍 Confirming payment:', paymentIntentId);
             
-            // Retrieve payment intent from Stripe
             const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
             
             if (paymentIntent.status !== 'succeeded') {
@@ -85,24 +161,18 @@ class StripePaymentService {
             
             const commissionId = paymentIntent.metadata.commission_id;
             
-            // Start transaction in PostgreSQL
             await db.query('BEGIN');
             
-            // Update commission status
-            const updateResult = await db.query(
+            await db.query(
                 `UPDATE commission 
                  SET status = 'paid', 
                      paid_at = CURRENT_DATE,
                      payment_reference = $1,
                      updated_at = NOW()
-                 WHERE commission_id = $2
-                 RETURNING *`,
+                 WHERE commission_id = $2`,
                 [paymentIntentId, commissionId]
             );
             
-            console.log('📊 Update result:', updateResult.rows ? updateResult.rows[0] : updateResult);
-            
-            // Update transaction status
             await db.query(
                 `UPDATE transaction 
                  SET status = 'completed'
@@ -110,7 +180,6 @@ class StripePaymentService {
                 [commissionId]
             );
             
-            // Get agent details for email
             const agentResult = await db.query(
                 `SELECT a.email, a.first_name, a.last_name, c.* 
                  FROM commission c
@@ -131,7 +200,6 @@ class StripePaymentService {
                     payment_reference: paymentIntentId
                 };
                 
-                // Send email notification (don't await - let it run in background)
                 emailService.sendCommissionPaymentNotification(
                     commissionId,
                     agent.email,
@@ -157,15 +225,10 @@ class StripePaymentService {
         }
     }
     
-    // Process a commission payment (full flow)
     async processCommissionPayment(commissionId, agentId, amount) {
         try {
             console.log('💰 Processing payment for commission:', commissionId);
-            const paymentIntent = await this.createCommissionPaymentIntent(
-                commissionId, 
-                agentId, 
-                amount
-            );
+            const paymentIntent = await this.createCommissionPaymentIntent(commissionId, agentId, amount);
             return paymentIntent;
         } catch (error) {
             console.error('❌ Process payment error:', error.message);
@@ -173,7 +236,6 @@ class StripePaymentService {
         }
     }
     
-    // Get payment status
     async getPaymentStatus(paymentIntentId) {
         try {
             const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -188,88 +250,81 @@ class StripePaymentService {
             throw error;
         }
     }
-    // Create a payout for approved claim
-async createClaimPayout(claimData) {
-    try {
-        console.log('💰 Processing claim payout for:', claimData.claim_id);
-        
-        // For now, we'll create a PaymentIntent or Transfer
-        // In production, you would need to have the customer's Stripe account ID
-        
-        // Option 1: If you have customer's Stripe account ID stored
-        if (claimData.stripe_account_id) {
-            const transfer = await stripe.transfers.create({
-                amount: Math.round(claimData.amount * 100),
-                currency: 'usd',
-                destination: claimData.stripe_account_id,
-                transfer_group: `CLAIM_${claimData.claim_id}`,
-                metadata: {
-                    claim_id: claimData.claim_id,
-                    customer_id: claimData.customer_id,
-                    policy_id: claimData.policy_id,
-                    claim_type: claimData.claim_type
-                },
-                description: `Claim payout for claim #${claimData.claim_id} - ${claimData.claim_type}`
-            });
+    
+    async createClaimPayout(claimData) {
+        try {
+            console.log('💰 Processing claim payout for:', claimData.claim_id);
             
-            console.log(`✅ Claim payout created: ${transfer.id}`);
+            if (claimData.stripe_account_id) {
+                const transfer = await stripe.transfers.create({
+                    amount: Math.round(claimData.amount * 100),
+                    currency: 'pkr',
+                    destination: claimData.stripe_account_id,
+                    transfer_group: `CLAIM_${claimData.claim_id}`,
+                    metadata: {
+                        claim_id: claimData.claim_id,
+                        customer_id: claimData.customer_id,
+                        policy_id: claimData.policy_id,
+                        claim_type: claimData.claim_type
+                    },
+                    description: `Claim payout for claim #${claimData.claim_id} - ${claimData.claim_type}`
+                });
+                
+                console.log(`✅ Claim payout created: ${transfer.id}`);
+                
+                return {
+                    success: true,
+                    transfer_id: transfer.id,
+                    amount: claimData.amount,
+                    status: transfer.status
+                };
+            } else {
+                console.log('⚠️ No Stripe account ID found, creating payment record only');
+                return {
+                    success: true,
+                    payment_record: true,
+                    amount: claimData.amount,
+                    message: 'Payment recorded in system. Stripe payout requires customer Stripe account.'
+                };
+            }
+            
+        } catch (error) {
+            console.error('❌ Claim payout error:', error.message);
+            throw error;
+        }
+    }
+    
+    async getClaimPayoutStatus(claimId) {
+        try {
+            const result = await db.query(
+                `SELECT payment_status, payment_transfer_date, payment_intent_id 
+                 FROM claim 
+                 WHERE claim_id = $1`,
+                [claimId]
+            );
+            
+            const claim = result.rows ? result.rows[0] : result[0];
+            
+            if (claim && claim.payment_intent_id) {
+                const paymentIntent = await stripe.paymentIntents.retrieve(claim.payment_intent_id);
+                return {
+                    status: paymentIntent.status,
+                    amount: paymentIntent.amount / 100,
+                    transfer_date: claim.payment_transfer_date
+                };
+            }
             
             return {
-                success: true,
-                transfer_id: transfer.id,
-                amount: claimData.amount,
-                status: transfer.status
+                status: claim?.payment_status || 'pending',
+                amount: null,
+                transfer_date: claim?.payment_transfer_date
             };
-        } 
-        // Option 2: Create a payment record without actual Stripe transfer (for testing)
-        else {
-            console.log('⚠️ No Stripe account ID found, creating payment record only');
-            return {
-                success: true,
-                payment_record: true,
-                amount: claimData.amount,
-                message: 'Payment recorded in system. Stripe payout requires customer Stripe account.'
-            };
+            
+        } catch (error) {
+            console.error('❌ Get payout status error:', error.message);
+            throw error;
         }
-        
-    } catch (error) {
-        console.error('❌ Claim payout error:', error.message);
-        throw error;
     }
-}
-
-// Get claim payout status
-async getClaimPayoutStatus(claimId) {
-    try {
-        const result = await db.query(
-            `SELECT payment_status, payment_transfer_date, payment_intent_id 
-             FROM claim 
-             WHERE claim_id = $1`,
-            [claimId]
-        );
-        
-        const claim = result.rows ? result.rows[0] : result[0];
-        
-        if (claim && claim.payment_intent_id) {
-            const paymentIntent = await stripe.paymentIntents.retrieve(claim.payment_intent_id);
-            return {
-                status: paymentIntent.status,
-                amount: paymentIntent.amount / 100,
-                transfer_date: claim.payment_transfer_date
-            };
-        }
-        
-        return {
-            status: claim?.payment_status || 'pending',
-            amount: null,
-            transfer_date: claim?.payment_transfer_date
-        };
-        
-    } catch (error) {
-        console.error('❌ Get payout status error:', error.message);
-        throw error;
-    }
-}
 }
 
 module.exports = new StripePaymentService();

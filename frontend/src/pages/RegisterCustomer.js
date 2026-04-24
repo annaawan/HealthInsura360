@@ -17,7 +17,7 @@ import {
   StepLabel,
   Card,
   IconButton,
-  Stack, // ADDED
+  Stack,
 } from "@mui/material";
 import {
   Email,
@@ -34,6 +34,10 @@ import {
   MedicalServices,
   Visibility,
   VisibilityOff,
+  AttachMoney,
+  People,
+  MonetizationOn,
+  Favorite,
 } from "@mui/icons-material";
 
 const steps = ['Account Details', 'Personal Information', 'Confirmation'];
@@ -66,6 +70,12 @@ const Register = () => {
     city: "",
     state: "",
     zipCode: "",
+    
+    // NEW: Financial & Health Information for AI Recommendations
+    monthlyBudget: "",
+    familySize: "",
+    annualIncome: "",
+    healthScore: "",
   });
 
   // Password validation function
@@ -151,7 +161,7 @@ const Register = () => {
       }
       setError("");
     } else if (activeStep === 1) {
-      // Step 2 validations
+      // Step 2 validations - existing required fields
       if (!formData.gender || !formData.dob || !formData.phone || !formData.street || !formData.city || !formData.state || !formData.zipCode) {
         setError("Please fill all required fields in Step 2");
         return;
@@ -168,6 +178,25 @@ const Register = () => {
         setError("Zip code must be 5-6 digits");
         return;
       }
+      
+      // Optional: Validate new fields (not required, but validate if provided)
+      if (formData.monthlyBudget && parseFloat(formData.monthlyBudget) < 0) {
+        setError("Monthly budget cannot be negative");
+        return;
+      }
+      if (formData.familySize && parseInt(formData.familySize) < 1) {
+        setError("Family size must be at least 1");
+        return;
+      }
+      if (formData.annualIncome && parseFloat(formData.annualIncome) < 0) {
+        setError("Annual income cannot be negative");
+        return;
+      }
+      if (formData.healthScore && (parseFloat(formData.healthScore) < 0 || parseFloat(formData.healthScore) > 10)) {
+        setError("Health score must be between 0 and 10");
+        return;
+      }
+      
       setError("");
     }
     setActiveStep((prevStep) => prevStep + 1);
@@ -178,60 +207,62 @@ const Register = () => {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError("");
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-  try {
-    // Prepare data for backend - MATCHING YOUR BACKEND EXPECTATIONS
-    const customerData = {
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      gender: formData.gender,
-      email: formData.email,
-      phone: formData.phone,
-      dob: formData.dob,  // Changed from dateOfBirth to dob
-      password: formData.password,
-      street: formData.street,
-      city: formData.city,
-      state: formData.state,
-      zipcode: formData.zipCode // Make sure this matches (zipcode vs zipCode)
-    };
+    try {
+      // Prepare data for backend - MATCHING YOUR BACKEND EXPECTATIONS
+      const customerData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        gender: formData.gender,
+        email: formData.email,
+        phone: formData.phone,
+        dob: formData.dob,
+        password: formData.password,
+        street: formData.street,
+        city: formData.city,
+        state: formData.state,
+        zipcode: formData.zipCode,
+        // NEW: Financial & Health Information for AI Recommendations
+        monthly_budget: formData.monthlyBudget ? parseFloat(formData.monthlyBudget) : 10000,
+        family_size: formData.familySize ? parseInt(formData.familySize) : 1,
+        annual_income: formData.annualIncome ? parseFloat(formData.annualIncome) : 0,
+        health_score: formData.healthScore ? parseFloat(formData.healthScore) : 0.7
+      };
 
-    console.log('Sending to backend:', customerData);
+      console.log('Sending to backend:', customerData);
 
-    // REAL API CALL to your backend
-    const response = await fetch('http://localhost:5000/api/auth/register/customer', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(customerData),
-    });
+      const response = await fetch('http://localhost:5000/api/auth/register/customer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(customerData),
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.message || 'Registration failed');
+      if (!response.ok) {
+        throw new Error(data.message || 'Registration failed');
+      }
+
+      setLoading(false);
+      setSuccess('Account created successfully! Redirecting to login...');
+      
+      localStorage.setItem('tempUserEmail', formData.email);
+      
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please try again.');
+      setLoading(false);
     }
+  };
 
-    // Success - data saved to database
-    setLoading(false);
-    setSuccess('Account created successfully! Redirecting to login...');
-    
-    // Optional: Store temporary data for login page
-    localStorage.setItem('tempUserEmail', formData.email);
-    
-    // Redirect to login page
-    setTimeout(() => {
-      navigate('/login');
-    }, 2000);
-
-  } catch (err) {
-    setError(err.message || 'Registration failed. Please try again.');
-    setLoading(false);
-  }
-};
 
   const renderStepContent = (step) => {
     switch (step) {
@@ -662,6 +693,106 @@ const Register = () => {
                 ),
               }}
             />
+
+            {/* NEW SECTION: Financial & Health Information */}
+            <Typography variant="subtitle1" sx={{ mt: 2, mb: 1, fontWeight: 600, color: '#0a2540' }}>
+              Financial & Health Information (Optional - Improves AI Recommendations)
+            </Typography>
+
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Monthly Budget (Rs.)"
+                name="monthlyBudget"
+                type="number"
+                value={formData.monthlyBudget}
+                onChange={handleChange}
+                variant="outlined"
+                size="medium"
+                helperText="Recommended monthly premium budget"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <MonetizationOn sx={{ color: "#94a3b8", mr: 1 }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Family Size"
+                name="familySize"
+                type="number"
+                value={formData.familySize}
+                onChange={handleChange}
+                variant="outlined"
+                size="medium"
+                helperText="Number of family members"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <People sx={{ color: "#94a3b8", mr: 1 }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Annual Income (Rs.)"
+                name="annualIncome"
+                type="number"
+                value={formData.annualIncome}
+                onChange={handleChange}
+                variant="outlined"
+                size="medium"
+                helperText="Your yearly income"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <AttachMoney sx={{ color: "#94a3b8", mr: 1 }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <TextField
+                select
+                fullWidth
+                label="Health Score"
+                name="healthScore"
+                value={formData.healthScore}
+                onChange={handleChange}
+                variant="outlined"
+                size="medium"
+                helperText="Rate your overall health (1-10)"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Favorite sx={{ color: "#94a3b8", mr: 1 }} />
+                    </InputAdornment>
+                  ),
+                }}
+              >
+                <MenuItem value="10">Excellent (10) - Very healthy, no issues</MenuItem>
+                <MenuItem value="9">Very Good (9) - Minor issues only</MenuItem>
+                <MenuItem value="8">Good (8) - Generally healthy</MenuItem>
+                <MenuItem value="7">Above Average (7) - Some minor concerns</MenuItem>
+                <MenuItem value="6">Fair (6) - Occasional health issues</MenuItem>
+                <MenuItem value="5">Average (5) - Some health concerns</MenuItem>
+                <MenuItem value="4">Below Average (4) - Regular health issues</MenuItem>
+                <MenuItem value="3">Poor (3) - Existing conditions</MenuItem>
+                <MenuItem value="2">Very Poor (2) - Multiple conditions</MenuItem>
+                <MenuItem value="1">Critical (1) - Chronic conditions</MenuItem>
+              </TextField>
+            </Box>
+
+            <Typography variant="caption" color="textSecondary" sx={{ mt: 1, textAlign: 'center' }}>
+              💡 Providing this information helps our AI recommend the most suitable policies for you.
+            </Typography>
           </Stack>
         );
 
@@ -702,6 +833,35 @@ const Register = () => {
               <Typography variant="subtitle1" gutterBottom>
                 <strong style={{ color: '#0a2540' }}>Address:</strong> {formData.street}, {formData.city}, {formData.state} {formData.zipCode}
               </Typography>
+              
+              {/* NEW: Show Financial & Health Information if provided */}
+              {(formData.monthlyBudget || formData.familySize || formData.annualIncome || formData.healthScore) && (
+                <>
+                  <Typography variant="subtitle1" sx={{ mt: 2, fontWeight: 600, color: '#0a2540' }}>
+                    Financial & Health Profile:
+                  </Typography>
+                  {formData.monthlyBudget && (
+                    <Typography variant="subtitle1" gutterBottom>
+                      <strong>Monthly Budget:</strong> Rs. {parseInt(formData.monthlyBudget).toLocaleString()}
+                    </Typography>
+                  )}
+                  {formData.familySize && (
+                    <Typography variant="subtitle1" gutterBottom>
+                      <strong>Family Size:</strong> {formData.familySize}
+                    </Typography>
+                  )}
+                  {formData.annualIncome && (
+                    <Typography variant="subtitle1" gutterBottom>
+                      <strong>Annual Income:</strong> Rs. {parseInt(formData.annualIncome).toLocaleString()}
+                    </Typography>
+                  )}
+                  {formData.healthScore && (
+                    <Typography variant="subtitle1" gutterBottom>
+                      <strong>Health Score:</strong> {formData.healthScore}/10
+                    </Typography>
+                  )}
+                </>
+              )}
             </Card>
           </Box>
         );
@@ -717,7 +877,7 @@ const Register = () => {
       bgcolor: "#f8fafc", 
       display: 'flex', 
       alignItems: 'center', 
-      justifyContent: 'center', // ADDED for vertical centering
+      justifyContent: 'center',
       py: 4 
     }}>
       <Container maxWidth="md">
@@ -729,9 +889,9 @@ const Register = () => {
             borderRadius: 3,
             border: "1px solid #e2e8f0",
             bgcolor: "white",
-            display: 'flex', // ADDED
-            flexDirection: 'column', // ADDED
-            alignItems: 'center', // ADDED - this centers everything horizontally
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
           }}
         >
           {/* LOGO AREA */}
@@ -789,7 +949,7 @@ const Register = () => {
 
           {/* STEPPER - Centered */}
           <Box sx={{ width: '100%', mb: 5, display: 'flex', justifyContent: 'center' }}>
-            <Stepper activeStep={activeStep} sx={{ maxWidth: 600 }}>
+            <Stepper activeStep={activeStep} sx={{ maxWidth: 600, width: '100%' }}>
               {steps.map((label) => (
                 <Step key={label}>
                   <StepLabel>{label}</StepLabel>
@@ -812,7 +972,7 @@ const Register = () => {
             )}
           </Box>
 
-          {/* FORM CONTENT - Already centered by parent Paper */}
+          {/* FORM CONTENT */}
           <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
             <Box sx={{ width: '100%', maxWidth: 500 }}>
               <form onSubmit={activeStep === steps.length - 1 ? handleSubmit : (e) => { e.preventDefault(); handleNext(); }}>
@@ -880,7 +1040,7 @@ const Register = () => {
             </Box>
           </Box>
 
-          {/* ALTERNATIVE REGISTRATION OPTIONS - Centered */}
+          {/* ALTERNATIVE REGISTRATION OPTIONS */}
           <Box sx={{ width: '100%', maxWidth: 500, mt: 5, pt: 3, borderTop: "1px solid #e2e8f0", textAlign: 'center' }}>
             <Typography variant="h6" fontWeight={600} color="#0a2540" gutterBottom>
               Looking for a different account?
@@ -931,7 +1091,7 @@ const Register = () => {
             </Stack>
           </Box>
 
-          {/* ALREADY HAVE ACCOUNT - Centered */}
+          {/* ALREADY HAVE ACCOUNT */}
           <Box sx={{ width: '100%', maxWidth: 500, mt: 4, textAlign: 'center' }}>
             <Typography variant="body2" color="#64748b" sx={{ mb: 2 }}>
               Already have an account?
