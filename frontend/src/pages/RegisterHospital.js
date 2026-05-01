@@ -1,4 +1,5 @@
 import { hospitalAPI } from '../services/api';
+import { API_BASE_URL } from '../config';
 import React, { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -104,7 +105,7 @@ const RegisterHospital = () => {
         }
       } else {
         // If no hospital ID (new registration), upload to temporary endpoint
-        response = await fetch('http://localhost:5000/api/hospitals/upload-documents', {
+        response = await fetch(`${API_BASE_URL}/hospitals/upload-documents`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -195,7 +196,7 @@ const RegisterHospital = () => {
       // If document is already uploaded to server (has ID), delete it
       if (documentId) {
         const token = localStorage.getItem('healthinsura360_token');
-        const response = await fetch(`http://localhost:5000/api/documents/${documentId}`, {
+        const response = await fetch(`${API_BASE_URL}/documents/${documentId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -348,7 +349,7 @@ const RegisterHospital = () => {
       console.log('Sending hospital data to backend:', hospitalData);
 
       // API call to backend
-      const response = await fetch('http://localhost:5000/api/auth/register/hospital', {
+      const response = await fetch(`${API_BASE_URL}/auth/register/hospital`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

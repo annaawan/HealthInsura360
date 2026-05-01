@@ -4,19 +4,62 @@ const db = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const auditController = require('../controllers/auditController');
 
-// Get all policy plans - Allow both admin AND customers to view
+// // Get all policy plans - Allow both admin AND customers to view
+// router.get('/', authenticate, async (req, res) => {
+//   try {
+//     const result = await db.query(`
+//       SELECT * FROM policy_plans 
+//       WHERE status = 'active'
+//       ORDER BY created_at DESC
+//     `);
+    
+//     res.json({
+//       success: true,
+//       data: result.rows,
+//       count: result.rowCount
+//     });
+//   } catch (error) {
+//     console.error('Error fetching policy plans:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to fetch policy plans',
+//       error: error.message
+//     });
+//   }
+// });
+// Get all policy plans - With case-insensitive status filtering
 router.get('/', authenticate, async (req, res) => {
   try {
-    const result = await db.query(`
-      SELECT * FROM policy_plans 
-      WHERE status = 'active'
-      ORDER BY created_at DESC
-    `);
+    const { status } = req.query;
+    const userType = req.user?.userType;
+    
+    let query = `SELECT * FROM policy_plans`;
+    let params = [];
+    let whereClauses = [];
+    
+    // For customers, only show active plans
+    if (userType === 'customer') {
+      whereClauses.push(`LOWER(status) = 'active'`);
+    } 
+    // For admin, apply status filter if provided
+    else if (status && status !== 'all') {
+      whereClauses.push(`LOWER(status) = LOWER($1)`);
+      params.push(status);
+    }
+    
+    if (whereClauses.length > 0) {
+      query += ` WHERE ${whereClauses.join(' AND ')}`;
+    }
+    
+    query += ` ORDER BY created_at DESC`;
+    
+    const result = await db.query(query, params);
     
     res.json({
       success: true,
       data: result.rows,
-      count: result.rowCount
+      count: result.rowCount,
+      filter_applied: status || 'all'
     });
   } catch (error) {
     console.error('Error fetching policy plans:', error);
@@ -27,7 +70,6 @@ router.get('/', authenticate, async (req, res) => {
     });
   }
 });
-
 // Create new policy plan
 router.post('/', authenticate, authorize('admin'), async (req, res) => {
   try {

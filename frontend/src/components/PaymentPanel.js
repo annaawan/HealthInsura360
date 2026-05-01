@@ -125,7 +125,7 @@ function PaymentPanel() {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="w-12 h-12 border-4 border-burgundy-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
         <p className="text-gray-600 mt-4">Loading payment information...</p>
       </div>
     );
@@ -198,7 +198,7 @@ function PaymentPanel() {
       {/* Payment Reminders Section */}
       <div>
         <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Bell className="h-5 w-5 text-burgundy-600" />
+          <Bell className="h-5 w-5 text-sky-600" />
           Payment Reminders
         </h3>
         
@@ -229,7 +229,7 @@ function PaymentPanel() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Amount</span>
-                    <span className="font-bold text-burgundy-600">{formatCurrency(reminder.premium_amount)}</span>
+                    <span className="font-bold text-sky-600">{formatCurrency(reminder.premium_amount)}</span>
                   </div>
                   {reminder.agent_first_name && (
                     <div className="flex justify-between text-sm">
@@ -247,7 +247,7 @@ function PaymentPanel() {
                 <button
                   onClick={() => handlePayNow(reminder)}
                   disabled={processing}
-                  className="w-full mt-2 px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full mt-2 px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <CreditCard className="h-4 w-4" />
                   Pay Now
@@ -261,7 +261,7 @@ function PaymentPanel() {
       {/* Payment History Section */}
       <div>
         <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <DollarSign className="h-5 w-5 text-burgundy-600" />
+          <DollarSign className="h-5 w-5 text-sky-600" />
           Payment History
         </h3>
         
@@ -289,7 +289,7 @@ function PaymentPanel() {
                   <tr key={payment.payment_id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm text-gray-900">{formatDate(payment.paid_at)}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{payment.plan_name || payment.policy_type}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-burgundy-600">{formatCurrency(payment.amount)}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-sky-600">{formatCurrency(payment.amount)}</td>
                     <td className="px-6 py-4 text-sm text-gray-600 capitalize">{payment.method || 'card'}</td>
                     <td className="px-6 py-4">{getStatusBadge(payment.status)}</td>
                     <td className="px-6 py-4 text-sm text-gray-500 font-mono">{payment.transaction_ref?.substring(0, 12)}...</td>

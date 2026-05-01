@@ -13,8 +13,8 @@ console.log('🔵 Environment variables loaded');
 
 const app = express();
 
+// This should point to the correct uploads folder
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 // Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -235,6 +235,8 @@ try { if (claimRoutes) app.use('/api/claims', claimRoutes); } catch (err) { cons
 try { if (userRoutes) app.use('/api/users', userRoutes); } catch (err) { console.error('Error mounting users:', err.message); }
 try { if (policyPlansRoutes) app.use('/api/policy-plans', policyPlansRoutes); } catch (err) { console.error('Error mounting policy-plans:', err.message); }
 try { if (analyticsRoutes) app.use('/api/analytics', analyticsRoutes); } catch (err) { console.error('Error mounting analytics:', err.message); }
+// Add this line to also mount analytics under reports for backward compatibility
+try { if (analyticsRoutes) app.use('/api/reports/analytics', analyticsRoutes); } catch (err) { console.error('Error mounting analytics under reports:', err.message); }
 try { if (reportsRoutes) app.use('/api/reports', reportsRoutes); } catch (err) { console.error('Error mounting reports:', err.message); }
 try { if (webhookRoutes) app.use('/api/webhooks', webhookRoutes); } catch (err) { console.error('Error mounting webhooks:', err.message); }
 try { if (stripeWebhookRoutes) app.use('/api/webhooks/stripe', stripeWebhookRoutes); } catch (err) { console.error('Error mounting stripe:', err.message); }

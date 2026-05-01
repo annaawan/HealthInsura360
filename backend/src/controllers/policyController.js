@@ -85,6 +85,216 @@ exports.getInsurancePlans = async (req, res) => {
     }
 };
 
+// // Purchase a new policy (after payment)
+// exports.purchasePolicy = async (req, res) => {
+//     const client = await db.pool.connect();
+//     const companyAccountService = require('../services/companyAccountService');
+    
+//     try {
+//         const userId = req.user?.userId;
+//         const { planId, startDate, endDate, paymentIntentId, amount } = req.body;
+        
+//         if (!userId || !planId) {
+//             return res.status(400).json({ success: false, error: 'Missing required fields' });
+//         }
+        
+//         await client.query('BEGIN');
+        
+//         // ✅ Get customer details including agent_id
+//         const customerResult = await client.query(
+//             `SELECT customer_id, agent_id FROM customer WHERE customer_id = $1 AND status = 'active'`,
+//             [userId]
+//         );
+        
+//         if (customerResult.rows.length === 0) {
+//             await client.query('ROLLBACK');
+//             return res.status(404).json({ success: false, error: 'Customer not found' });
+//         }
+        
+//         const customer = customerResult.rows[0];
+//         const assignedAgentId = customer.agent_id; // ✅ Inherit agent from customer
+        
+//         // Get plan details
+//         const planResult = await client.query(
+//             `SELECT plan_id, plan_name, policy_type, coverage_amount, premium_amount, deductible
+//              FROM policy_plans WHERE plan_id = $1 AND status = 'active'`,
+//             [planId]
+//         );
+        
+//         if (planResult.rows.length === 0) {
+//             await client.query('ROLLBACK');
+//             return res.status(404).json({ success: false, error: 'Plan not found' });
+//         }
+        
+//         const plan = planResult.rows[0];
+//         const premiumAmount = parseFloat(plan.premium_amount);
+        
+//         // Check if customer already has active policy
+//         const existingResult = await client.query(
+//             `SELECT policy_id, status, end_date 
+//              FROM policy 
+//              WHERE customer_id = $1 AND policy_type = $2 AND status = 'active'`,
+//             [userId, plan.policy_type]
+//         );
+        
+//         if (existingResult.rows.length > 0) {
+//             await client.query('ROLLBACK');
+//             return res.status(400).json({ 
+//                 success: false, 
+//                 error: `You already have an active ${plan.policy_type} policy.` 
+//             });
+//         }
+        
+//         // Calculate dates
+//         const startDateObj = startDate ? new Date(startDate) : new Date();
+//         const endDateObj = endDate ? new Date(endDate) : new Date();
+//         if (!endDate) {
+//             endDateObj.setFullYear(endDateObj.getFullYear() + 1);
+//         }
+        
+//         // Create policy
+//         const policyResult = await client.query(
+//             `INSERT INTO policy (
+//                 customer_id, agent_id, policy_type, plan_id, sum_insured, premium_amount,
+//                 start_date, end_date, status, remaining_coverage, used_coverage,
+//                 deductible_amount, co_pay_percentage, no_claim_bonus, renewal_count,
+//                 created_at, updated_at
+//             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, 0, $10, 0, 0, 0, NOW(), NOW())
+//             RETURNING policy_id`,
+//             [userId, assignedAgentId, plan.policy_type, plan.plan_id, plan.coverage_amount, premiumAmount,
+//              startDateObj, endDateObj, plan.coverage_amount, plan.deductible || 0]
+//         );
+        
+//         const policyId = policyResult.rows[0].policy_id;
+        
+//         // ============================================
+//         // ✅ COMMISSION CALCULATION (ADD THIS BLOCK)
+//         // ============================================
+//         let commissionAmount = 0;
+//         let commissionRate = 0;
+        
+//         if (assignedAgentId) {
+//             // Get agent's commission rate
+//             const agentResult = await client.query(
+//                 `SELECT commission_rate, first_name, last_name FROM agent WHERE agent_id = $1`,
+//                 [assignedAgentId]
+//             );
+            
+//             if (agentResult.rows.length > 0) {
+//                 commissionRate = parseFloat(agentResult.rows[0].commission_rate) || 0;
+//                 const agentName = `${agentResult.rows[0].first_name} ${agentResult.rows[0].last_name}`;
+                
+//                 // Calculate commission amount (percentage of premium)
+//                 commissionAmount = (premiumAmount * commissionRate) / 100;
+                
+//                 if (commissionAmount > 0) {
+//                     // Insert commission record
+//                     await client.query(
+//                         `INSERT INTO commission (
+//                             agent_id, policy_id, amount, rate, premium_amount, 
+//                             status, created_at, agent_name
+//                         ) VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6)`,
+//                         [assignedAgentId, policyId, commissionAmount.toFixed(2), commissionRate, premiumAmount, agentName]
+//                     );
+                    
+//                     console.log(`✅ Commission recorded: $${commissionAmount.toFixed(2)} (${commissionRate}%) for agent ${assignedAgentId} on policy ${policyId}`);
+//                 } else {
+//                     console.log(`⚠️ Commission amount is $0 for policy ${policyId} (${commissionRate}% of $${premiumAmount})`);
+//                 }
+//             } else {
+//                 console.log(`⚠️ Agent ${assignedAgentId} not found, no commission recorded`);
+//             }
+//         } else {
+//             console.log(`⚠️ No agent assigned to customer ${userId}, no commission recorded`);
+//         }
+//         // ============================================
+        
+//         // Credit company account if payment info provided
+//         if (paymentIntentId && amount) {
+//             const creditResult = await companyAccountService.creditCompanyAccount(
+//                 parseFloat(amount),
+//                 userId,
+//                 policyId,
+//                 `Premium payment from customer ${userId} for policy #${policyId} - ${plan.plan_name}`
+//             );
+            
+//             if (creditResult.success) {
+//                 const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+//                 const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+                
+//                 await client.query(
+//                     `INSERT INTO payment (
+//                         payment_id, policy_id, customer_id, amount, method, status, 
+//                         transaction_ref, paid_at
+//                     ) VALUES ($1, $2, $3, $4, 'stripe', 'Completed', $5, NOW())`,
+//                     [paymentId, policyId, userId, amount, transactionId]
+//                 );
+                
+//                 await client.query(
+//                     `INSERT INTO transaction (
+//                         transaction_id, related_payment_id, amount, type, status, 
+//                         created_at, payment_method, notes
+//                     ) VALUES ($1, $2, $3, 'premium_payment', 'completed', NOW(), 'stripe', $4)`,
+//                     [transactionId, paymentId, amount, `Premium payment for policy #${policyId} - ${plan.plan_name}`]
+//                 );
+//             }
+//         }
+        
+//         // ✅ Update agent's total_sales count
+//         if (assignedAgentId) {
+//             await client.query(
+//                 `UPDATE agent 
+//                  SET total_sales = COALESCE(total_sales, 0) + 1,
+//                      updated_at = NOW()
+//                  WHERE agent_id = $1`,
+//                 [assignedAgentId]
+//             );
+//             console.log(`✅ Agent ${assignedAgentId} total_sales incremented for policy ${policyId}`);
+//         }
+        
+//         await client.query('COMMIT');
+        
+//         // Create notification
+//         try {
+//             await db.query(
+//                 `INSERT INTO notifications (user_id, user_type, type, title, message, related_id, created_at)
+//                  VALUES ($1, 'customer', 'policy_purchased', 'New Policy Activated', 
+//                          'Your ${plan.plan_name} policy has been activated successfully.', $2, NOW())`,
+//                 [userId, policyId]
+//             );
+//         } catch (notifError) {
+//             console.log('Notification not created:', notifError.message);
+//         }
+        
+//         res.json({
+//             success: true,
+//             message: 'Policy purchased successfully',
+//             policy: {
+//                 policy_id: policyId,
+//                 plan_name: plan.plan_name,
+//                 policy_type: plan.policy_type,
+//                 coverage_amount: plan.coverage_amount,
+//                 premium_amount: premiumAmount,
+//                 start_date: startDateObj,
+//                 end_date: endDateObj,
+//                 agent_id: assignedAgentId
+//             },
+//             // ✅ Include commission info in response
+//             commission: {
+//                 amount: commissionAmount,
+//                 rate: commissionRate,
+//                 status: commissionAmount > 0 ? 'pending' : 'none'
+//             }
+//         });
+        
+//     } catch (error) {
+//         await client.query('ROLLBACK');
+//         console.error('Error purchasing policy:', error);
+//         res.status(500).json({ success: false, error: error.message });
+//     } finally {
+//         client.release();
+//     }
+// };
 // Purchase a new policy (after payment)
 exports.purchasePolicy = async (req, res) => {
     const client = await db.pool.connect();
@@ -152,63 +362,62 @@ exports.purchasePolicy = async (req, res) => {
             endDateObj.setFullYear(endDateObj.getFullYear() + 1);
         }
         
-        // In purchasePolicy function, update the INSERT query:
-const policyResult = await client.query(
-    `INSERT INTO policy (
-        customer_id, agent_id, policy_type, plan_id, sum_insured, premium_amount,
-        start_date, end_date, status, remaining_coverage, used_coverage,
-        deductible_amount, co_pay_percentage, no_claim_bonus, renewal_count,
-        created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, 0, $10, 0, 0, 0, NOW(), NOW())
-    RETURNING policy_id`,
-    [userId, assignedAgentId, plan.policy_type, plan.plan_id, plan.coverage_amount, premiumAmount,
-     startDateObj, endDateObj, plan.coverage_amount, plan.deductible || 0]
-);
+        // Create policy
+        const policyResult = await client.query(
+            `INSERT INTO policy (
+                customer_id, agent_id, policy_type, plan_id, sum_insured, premium_amount,
+                start_date, end_date, status, remaining_coverage, used_coverage,
+                deductible_amount, co_pay_percentage, no_claim_bonus, renewal_count,
+                created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, 0, $10, 0, 0, 0, NOW(), NOW())
+            RETURNING policy_id`,
+            [userId, assignedAgentId, plan.policy_type, plan.plan_id, plan.coverage_amount, premiumAmount,
+             startDateObj, endDateObj, plan.coverage_amount, plan.deductible || 0]
+        );
         
         const policyId = policyResult.rows[0].policy_id;
         
-        // Credit company account if payment info provided
-        if (paymentIntentId && amount) {
-            const creditResult = await companyAccountService.creditCompanyAccount(
-                parseFloat(amount),
-                userId,
-                policyId,
-                `Premium payment from customer ${userId} for policy #${policyId} - ${plan.plan_name}`
-            );
-            
-            if (creditResult.success) {
-                const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-                const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-                
-                await client.query(
-                    `INSERT INTO payment (
-                        payment_id, policy_id, customer_id, amount, method, status, 
-                        transaction_ref, paid_at
-                    ) VALUES ($1, $2, $3, $4, 'stripe', 'Completed', $5, NOW())`,
-                    [paymentId, policyId, userId, amount, transactionId]
-                );
-                
-                await client.query(
-                    `INSERT INTO transaction (
-                        transaction_id, related_payment_id, amount, type, status, 
-                        created_at, payment_method, notes
-                    ) VALUES ($1, $2, $3, 'premium_payment', 'completed', NOW(), 'stripe', $4)`,
-                    [transactionId, paymentId, amount, `Premium payment for policy #${policyId} - ${plan.plan_name}`]
-                );
-            }
-        }
+        // ============================================
+        // ✅ COMMISSION CALCULATION (ADD THIS BLOCK)
+        // ============================================
+        let commissionAmount = 0;
+        let commissionRate = 0;
         
-        // ✅ Update agent's total_sales count
         if (assignedAgentId) {
-            await client.query(
-                `UPDATE agent 
-                 SET total_sales = COALESCE(total_sales, 0) + 1,
-                     updated_at = NOW()
-                 WHERE agent_id = $1`,
+            // Get agent's commission rate
+            const agentResult = await client.query(
+                `SELECT commission_rate, first_name, last_name FROM agent WHERE agent_id = $1`,
                 [assignedAgentId]
             );
-            console.log(`✅ Agent ${assignedAgentId} total_sales incremented for policy ${policyId}`);
+            
+            if (agentResult.rows.length > 0) {
+                commissionRate = parseFloat(agentResult.rows[0].commission_rate) || 0;
+                const agentName = `${agentResult.rows[0].first_name} ${agentResult.rows[0].last_name}`;
+                
+                // Calculate commission amount (percentage of premium)
+                commissionAmount = (premiumAmount * commissionRate) / 100;
+                
+                if (commissionAmount > 0) {
+                    // Insert commission record
+                    await client.query(
+                        `INSERT INTO commission (
+                            agent_id, policy_id, amount, rate, premium_amount, 
+                            status, created_at, agent_name
+                        ) VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6)`,
+                        [assignedAgentId, policyId, commissionAmount.toFixed(2), commissionRate, premiumAmount, agentName]
+                    );
+                    
+                    console.log(`✅ Commission recorded: $${commissionAmount.toFixed(2)} (${commissionRate}%) for agent ${assignedAgentId} on policy ${policyId}`);
+                } else {
+                    console.log(`⚠️ Commission amount is $0 for policy ${policyId} (${commissionRate}% of $${premiumAmount})`);
+                }
+            } else {
+                console.log(`⚠️ Agent ${assignedAgentId} not found, no commission recorded`);
+            }
+        } else {
+            console.log(`⚠️ No agent assigned to customer ${userId}, no commission recorded`);
         }
+        
         
         await client.query('COMMIT');
         
@@ -235,7 +444,13 @@ const policyResult = await client.query(
                 premium_amount: premiumAmount,
                 start_date: startDateObj,
                 end_date: endDateObj,
-                agent_id: assignedAgentId  // ✅ Include agent_id in response
+                agent_id: assignedAgentId
+            },
+            // ✅ Include commission info in response
+            commission: {
+                amount: commissionAmount,
+                rate: commissionRate,
+                status: commissionAmount > 0 ? 'pending' : 'none'
             }
         });
         
@@ -247,7 +462,6 @@ const policyResult = await client.query(
         client.release();
     }
 };
-
 // Renew a policy with NCB calculation
 exports.renewPolicy = async (req, res) => {
     try {

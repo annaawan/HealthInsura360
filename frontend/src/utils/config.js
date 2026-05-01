@@ -5,7 +5,7 @@ export const API_BASE_URL = process.env.API_BASE_URL = process.env.REACT_APP_API
 
 // Get axios configuration with authentication headers
 export const getAxiosConfig = () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('healthinsura360_token');
   
   const config = {
     headers: {

@@ -44,7 +44,7 @@ function ClaimManagement({ agent }) {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
-      currency: 'PKR',
+      currency: 'USD',
       minimumFractionDigits: 2
     }).format(amount || 0);
   };
@@ -121,7 +121,7 @@ function ClaimManagement({ agent }) {
     setLoading(true);
     try {
         const activeStatus = statusValue !== null ? statusValue : filterStatus;
-        let url = `http://localhost:5000/api/payments/agent/clients/${customerId}/claims`;
+        let url = `http://localhost:5000/api/agent/clients/${customerId}/claims`;
         
         if (activeStatus !== 'all') {
             url += `?status=${activeStatus}`;
@@ -190,7 +190,7 @@ function ClaimManagement({ agent }) {
     if (!months) return;
     
     try {
-        const response = await axios.post(`http://localhost:5000/api/payments/agent/policies/${policyId}/renew`,
+        const response = await axios.post(`http://localhost:5000/api/agent/policies/${policyId}/renew`,
             { renewal_period_months: parseInt(months) },
             { headers: getAuthHeaders() }
         );
@@ -213,7 +213,7 @@ function ClaimManagement({ agent }) {
     
     setActionLoading(true);
     try {
-        const response = await axios.post(`http://localhost:5000/api/payments/agent/claims/${claim.claim_id}/retry-payment`,
+        const response = await axios.post(`http://localhost:5000/api/agent/claims/${claim.claim_id}/retry-payment`,
             {},
             { headers: getAuthHeaders() }
         );
@@ -306,7 +306,58 @@ function ClaimManagement({ agent }) {
       setActionLoading(false);
     }
   };
-
+const viewDocument = async (claim, document) => {
+    const token = getAuthToken();
+    let filename = '';
+    
+    // Extract filename from document object
+    if (typeof document === 'string') {
+        const urlParts = document.split('/');
+        filename = urlParts[urlParts.length - 1];
+    } else if (document.filename) {
+        filename = document.filename;
+    } else if (document.originalName) {
+        filename = document.originalName;
+    }
+    
+    // ✅ FIXED: Use the correct claims endpoint (not agent endpoint)
+    const url = `http://localhost:5000/api/claims/${claim.claim_id}/documents/${filename}`;
+    
+    console.log('📄 Opening document:', url);
+    
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        console.log('Blob size:', blob.size, 'Blob type:', blob.type);
+        
+        if (blob.size === 0) {
+            alert('Document file is empty or corrupted');
+            return;
+        }
+        
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank');
+        
+        setTimeout(() => {
+            URL.revokeObjectURL(blobUrl);
+        }, 5000);
+        
+    } catch (error) {
+        console.error('Error fetching document:', error);
+        alert(`Failed to load document: ${error.message}`);
+    }
+};
   // Filter claims by search
   const filteredClaims = claims.filter(claim => 
     searchTerm === '' || 
@@ -352,14 +403,14 @@ function ClaimManagement({ agent }) {
               className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <button onClick={fetchClients} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 ml-4">
+          <button onClick={fetchClients} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 ml-4">
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
         </div>
 
         {loading ? (
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading clients...</p>
           </div>
         ) : filteredClients.length === 0 ? (
@@ -412,7 +463,7 @@ function ClaimManagement({ agent }) {
                         <td className="px-6 py-4">
                           <button
                             onClick={() => viewClientClaims(client)}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                           >
                             <ClipboardList className="h-4 w-4" />
                             View Claims
@@ -449,7 +500,7 @@ function ClaimManagement({ agent }) {
           </div>
           <button
             onClick={() => fetchClientClaims(selectedClient.customer_id, filterStatus)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-purple-700"
           >
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
@@ -490,7 +541,7 @@ function ClaimManagement({ agent }) {
             onClick={() => handleFilterChange(status)}
             className={`px-4 py-2 font-medium capitalize transition-colors ${
               filterStatus === status 
-                ? 'text-blue-600 border-b-2 border-blue-600 -mb-[2px]' 
+                ? 'text-purple-600 border-b-2 border-purple-600 -mb-[2px]' 
                 : 'text-gray-600 hover:text-gray-800'
             }`}
           >
@@ -508,7 +559,7 @@ function ClaimManagement({ agent }) {
             placeholder="Search by claim ID or type..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
           />
         </div>
       </div>
@@ -516,7 +567,7 @@ function ClaimManagement({ agent }) {
       {/* Claims Table */}
       {loading ? (
         <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading claims...</p>
         </div>
       ) : paginatedClaims.length === 0 ? (
@@ -565,7 +616,7 @@ function ClaimManagement({ agent }) {
                       <div className="flex gap-2">
                         <button
                           onClick={() => viewClaimDetails(claim)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                           title="View Details"
                         >
                           <Eye className="h-4 w-4" />
@@ -633,6 +684,49 @@ function ClaimManagement({ agent }) {
             </div>
             
             <div className="p-6">
+              {/* Claimed By Section - Who filed the claim */}
+              <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                  <Users className="h-4 w-4" /> 
+                  {selectedClaim.hospital_id ? 'Filed By Hospital' : 'Filed By Customer'}
+                </h4>
+                {selectedClaim.hospital_id ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Hospital:</span>
+                      <span className="font-medium text-gray-900">{selectedClaim.hospital_name || 'Hospital'}</span>
+                      <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">Hospital Filed</span>
+                    </div>
+                    {selectedClaim.patient_name && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Patient:</span>
+                        <span className="font-medium text-gray-900">{selectedClaim.patient_name}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Payment To:</span>
+                      <span className="font-medium text-green-700">Hospital Account</span>
+                      <span className="text-xs text-gray-500">(via hospital payout)</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Customer:</span>
+                      <span className="font-medium text-gray-900">
+                        {selectedClaim.customer?.first_name} {selectedClaim.customer?.last_name}
+                      </span>
+                      <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Customer Filed</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Payment To:</span>
+                      <span className="font-medium text-green-700">Customer Account</span>
+                      <span className="text-xs text-gray-500">(via Stripe transfer)</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Basic Claim Info */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-gray-50 p-3 rounded-lg">
@@ -660,58 +754,58 @@ function ClaimManagement({ agent }) {
               </div>
              
               {/* Coverage Information */}
-              {selectedClaim.sum_insured && (
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
-                    <Shield className="h-4 w-4" /> Policy Coverage Status
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <span className="text-gray-600">Total Coverage:</span>
-                      <span className="font-medium ml-2 text-blue-700">
-                        {formatCurrency(selectedClaim.sum_insured)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Remaining Coverage:</span>
-                      <span className={`font-medium ml-2 ${selectedClaim.remaining_coverage > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(selectedClaim.remaining_coverage)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Used Coverage:</span>
-                      <span className="font-medium ml-2 text-orange-600">
-                        {formatCurrency(selectedClaim.used_coverage)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Usage Percentage:</span>
-                      <span className="font-medium ml-2">
-                        {selectedClaim.coverage_used_percentage || 0}%
-                      </span>
-                    </div>
-                    {selectedClaim.deductible_amount > 0 && (
-                      <div>
-                        <span className="text-gray-600">Deductible:</span>
-                        <span className="font-medium ml-2">{formatCurrency(selectedClaim.deductible_amount)}</span>
-                      </div>
-                    )}
-                    {selectedClaim.co_pay_percentage > 0 && (
-                      <div>
-                        <span className="text-gray-600">Co-pay:</span>
-                        <span className="font-medium ml-2">{selectedClaim.co_pay_percentage}%</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {Number(selectedClaim.claim_amount) > Number(selectedClaim.remaining_coverage) && Number(selectedClaim.remaining_coverage) > 0 && (
-                    <div className="mt-3 p-2 bg-yellow-100 rounded text-yellow-800 text-sm flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4" />
-                      Warning: Claim amount exceeds remaining coverage. Only partial approval possible.
-                    </div>
-                  )}
-                </div>
-              )}
+{selectedClaim.sum_insured && (
+  <div className="mb-6 p-4 bg-purple-50 rounded-lg">
+    <h4 className="font-semibold text-purple-800 mb-3 flex items-center gap-2">
+      <Shield className="h-4 w-4" /> Policy Coverage Status
+    </h4>
+    <div className="grid grid-cols-2 gap-3 text-sm">
+      <div>
+        <span className="text-gray-600">Total Coverage:</span>
+        <span className="font-medium ml-2 text-purple-700">
+          {formatCurrency(selectedClaim.sum_insured)}
+        </span>
+      </div>
+      <div>
+        <span className="text-gray-600">Remaining Coverage:</span>
+        <span className={`font-medium ml-2 ${selectedClaim.remaining_coverage > 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {formatCurrency(selectedClaim.remaining_coverage)}
+        </span>
+      </div>
+      <div>
+        <span className="text-gray-600">Used Coverage:</span>
+        <span className="font-medium ml-2 text-orange-600">
+          {formatCurrency(selectedClaim.used_coverage)}
+        </span>
+      </div>
+      <div>
+        <span className="text-gray-600">Usage Percentage:</span>
+        <span className="font-medium ml-2">
+          {selectedClaim.coverage_used_percentage ? Number(selectedClaim.coverage_used_percentage).toFixed(2) : 0}%
+        </span>
+      </div>
+      {selectedClaim.deductible_amount > 0 && (
+        <div>
+          <span className="text-gray-600">Deductible:</span>
+          <span className="font-medium ml-2">{formatCurrency(selectedClaim.deductible_amount)}</span>
+        </div>
+      )}
+      {selectedClaim.co_pay_percentage > 0 && (
+        <div>
+          <span className="text-gray-600">Co-pay:</span>
+          <span className="font-medium ml-2">{selectedClaim.co_pay_percentage}%</span>
+        </div>
+      )}
+    </div>
+    
+    {Number(selectedClaim.claim_amount) > Number(selectedClaim.remaining_coverage) && Number(selectedClaim.remaining_coverage) > 0 && (
+      <div className="mt-3 p-2 bg-yellow-100 rounded text-yellow-800 text-sm flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4" />
+        Warning: Claim amount exceeds remaining coverage. Only partial approval possible.
+      </div>
+    )}
+  </div>
+)}
               
               {/* DOCUMENTS SECTION */}
               <div className="mb-6">
@@ -737,15 +831,12 @@ function ClaimManagement({ agent }) {
                           </div>
                         </div>
                         <button
-                          onClick={() => {
-                            const url = `http://localhost:5000/api/agent/claims/${selectedClaim.claim_id}/documents/${doc.filename}`;
-                            window.open(url, '_blank');
-                          }}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                        >
-                          <Eye className="h-4 w-4" />
-                          View
-                        </button>
+    onClick={() => viewDocument(selectedClaim, doc)}
+    className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+>
+    <Eye className="h-4 w-4" />
+    View
+</button>
                       </div>
                     ))}
                   </div>
@@ -773,7 +864,7 @@ function ClaimManagement({ agent }) {
                       handleRenewPolicy(selectedClaim.policy_id);
                       setShowModal(false);
                     }}
-                    className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors"
                   >
                     Renew Policy Now
                   </button>
@@ -782,9 +873,9 @@ function ClaimManagement({ agent }) {
               
               {/* Approval Notes */}
               {selectedClaim.approval_notes && (
-                <div className="mb-6 p-3 bg-blue-50 rounded-lg">
-                  <div className="text-sm font-medium text-blue-800">Review Notes</div>
-                  <div className="text-sm text-blue-700">{selectedClaim.approval_notes}</div>
+                <div className="mb-6 p-3 bg-purple-50 rounded-lg">
+                  <div className="text-sm font-medium text-purple-800">Review Notes</div>
+                  <div className="text-sm text-purple-700">{selectedClaim.approval_notes}</div>
                 </div>
               )}
               
@@ -848,7 +939,7 @@ function ClaimManagement({ agent }) {
                     handleRenewPolicy(currentClaim.policy_id);
                     setShowApproveModal(false);
                   }}
-                  className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                  className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700"
                 >
                   Renew Policy Now
                 </button>
@@ -857,7 +948,7 @@ function ClaimManagement({ agent }) {
             
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
               <p className="text-sm"><strong>Claim ID:</strong> #{currentClaim.claim_id}</p>
-              <p className="text-sm"><strong>Requested Amount:</strong> <span className="font-bold text-blue-600">{formatCurrency(currentClaim.claim_amount)}</span></p>
+              <p className="text-sm"><strong>Requested Amount:</strong> <span className="font-bold text-purple-600">{formatCurrency(currentClaim.claim_amount)}</span></p>
               <p className="text-sm"><strong>Remaining Coverage:</strong> <span className={`font-bold ${currentClaim.remaining_coverage > 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {formatCurrency(currentClaim.remaining_coverage)}
               </span></p>
@@ -878,7 +969,7 @@ function ClaimManagement({ agent }) {
                   <label className="block text-gray-700 mb-2 font-medium">Coverage Type *</label>
                   <select
                     id="coverageType"
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
                     onChange={(e) => {
                       const type = e.target.value;
                       const claimAmount = currentClaim.claim_amount;
@@ -953,7 +1044,7 @@ function ClaimManagement({ agent }) {
                     id="approvedAmount"
                     defaultValue={Math.min(currentClaim.claim_amount, currentClaim.remaining_coverage)}
                     onChange={(e) => setApprovedAmount(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Maximum: {formatCurrency(currentClaim.remaining_coverage)}
@@ -970,7 +1061,7 @@ function ClaimManagement({ agent }) {
                 rows="3"
                 value={approvalNotes}
                 onChange={(e) => setApprovalNotes(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
                 placeholder="Add any notes about this approval..."
               />
             </div>

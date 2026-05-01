@@ -13,7 +13,7 @@ import {
   Hospital
 } from 'lucide-react';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+import { API_BASE_URL } from '../../config';
 
 const HospitalLogin = () => {
   const navigate = useNavigate();
@@ -60,18 +60,22 @@ const HospitalLogin = () => {
       });
 
       if (response.data.success) {
-        // Store token and hospital data
+        // Store token with consistent naming
+        localStorage.setItem('healthinsura360_token', response.data.token);
         localStorage.setItem('token', response.data.token);
+        // Store hospital user data
         localStorage.setItem('user', JSON.stringify({
           ...response.data.hospital,
           role: 'hospital'
         }));
+        // Store account type for role-based access
+        localStorage.setItem('accountType', 'hospital');
         
         setSuccessMessage('Login successful! Redirecting...');
         
         // Redirect to hospital dashboard
         setTimeout(() => {
-          navigate('/hospital/dashboard');
+          navigate('/hospital-dashboard');
         }, 1500);
       }
     } catch (err) {

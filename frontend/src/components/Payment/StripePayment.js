@@ -139,7 +139,7 @@ console.log('  Stripe object exists:', !!stripe);
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
-      currency: 'PKR',
+      currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(amount || 0);

@@ -57,7 +57,7 @@ function ChatbotFloating() {
             {/* Floating Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`fixed bottom-6 right-6 z-50 bg-burgundy-600 text-white p-4 rounded-full shadow-lg hover:bg-burgundy-700 transition-all duration-200 ${
+                className={`fixed bottom-6 right-6 z-50 bg-sky-600 text-white p-4 rounded-full shadow-lg hover:bg-sky-700 transition-all duration-200 ${
                     isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
                 }`}
             >
@@ -78,7 +78,7 @@ function ChatbotFloating() {
             {isOpen && (
                 <div className="fixed bottom-24 right-6 z-50 w-96 h-[550px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col">
                     {/* Header */}
-                    <div className="bg-burgundy-600 text-white p-4 flex justify-between items-center flex-shrink-0">
+                    <div className="bg-sky-600 text-white p-4 flex justify-between items-center flex-shrink-0">
                         <div className="flex items-center gap-2">
                             <MessageCircle className="h-5 w-5" />
                             <span className="font-semibold">AI Assistant</span>
@@ -99,7 +99,7 @@ function ChatbotFloating() {
                                 <div
                                     className={`max-w-[80%] p-3 rounded-lg ${
                                         msg.type === 'user'
-                                            ? 'bg-burgundy-600 text-white rounded-br-none'
+                                            ? 'bg-sky-600 text-white rounded-br-none'
                                             : 'bg-gray-100 text-gray-800 rounded-bl-none'
                                     }`}
                                 >
@@ -130,13 +130,13 @@ function ChatbotFloating() {
                             onChange={(e) => setInputText(e.target.value)}
                             onKeyPress={handleKeyPress}
                             placeholder="Ask me about health insurance..."
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy-500 text-sm"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
                             disabled={isLoading}
                         />
                         <button
                             onClick={handleSendMessage}
                             disabled={!inputText.trim() || isLoading}
-                            className="px-4 py-2 bg-burgundy-600 text-white rounded-lg hover:bg-burgundy-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Send className="h-4 w-4" />
                         </button>

@@ -64,17 +64,66 @@ function PoliciesManagement() {
     }
   };
 
-  // Fetch policy plans from backend
+//   // Fetch policy plans from backend
+// const fetchPolicyPlans = async () => {
+//   setIsLoading(true);
+//   setError(null);
+  
+//   try {
+//     const config = getAxiosConfig();
+//     const response = await axios.get(`${API_BASE_URL}/policy-plans`, config);
+    
+//     if (response.data.success) {
+//       // ✅ FIX: Use response.data.data instead of response.data.plans
+//       const plansData = response.data.data || [];
+      
+//       // Map database fields to what frontend expects
+//       const mappedPlans = plansData.map(plan => ({
+//         plan_id: plan.plan_id,
+//         plan_name: plan.plan_name,
+//         description: plan.description,
+//         plan_type: plan.policy_type || plan.plan_type,
+//         category: plan.category || 'basic',
+//         premium_amount: parseFloat(plan.premium_amount),
+//         coverage_amount: parseFloat(plan.coverage_amount),
+//         coverage_details: plan.coverage_details || '',
+//         deductible: parseFloat(plan.deductible) || 0,
+//         max_claim_limit: parseFloat(plan.max_claim_limit) || parseFloat(plan.coverage_amount),
+//         waiting_period_days: plan.waiting_period_days || 30,
+//         renewal_period_months: plan.renewal_period_months || 12,
+//         eligibility_criteria: plan.eligibility_criteria || '',
+//         exclusions: plan.exclusions || '',
+//         benefits: plan.benefits || '',
+//         status: plan.status || 'active',
+//         created_at: plan.created_at,
+//         updated_at: plan.updated_at
+//       }));
+      
+//       setPlans(mappedPlans);
+//       console.log(`✅ Found ${mappedPlans.length} policy plans`);
+//     } else {
+//       throw new Error(response.data.message);
+//     }
+//   } catch (err) {
+//     console.error('❌ Error fetching policy plans:', err);
+//     setError(`Error: ${err.response?.data?.message || err.message}`);
+//     setPlans(getMockPolicyPlans());
+//   } finally {
+//     setIsLoading(false);
+//   }
+// };
+// Fetch policy plans from backend
 const fetchPolicyPlans = async () => {
   setIsLoading(true);
   setError(null);
   
   try {
     const config = getAxiosConfig();
-    const response = await axios.get(`${API_BASE_URL}/policy-plans`, config);
+    // Add status filter to API call
+    const statusParam = selectedStatus !== 'all' ? `?status=${selectedStatus}` : '';
+    const response = await axios.get(`${API_BASE_URL}/policy-plans${statusParam}`, config);
     
     if (response.data.success) {
-      // ✅ FIX: Use response.data.data instead of response.data.plans
       const plansData = response.data.data || [];
       
       // Map database fields to what frontend expects
@@ -94,13 +143,13 @@ const fetchPolicyPlans = async () => {
         eligibility_criteria: plan.eligibility_criteria || '',
         exclusions: plan.exclusions || '',
         benefits: plan.benefits || '',
-        status: plan.status || 'active',
+        status: (plan.status || 'active').toLowerCase(),
         created_at: plan.created_at,
         updated_at: plan.updated_at
       }));
       
       setPlans(mappedPlans);
-      console.log(`✅ Found ${mappedPlans.length} policy plans`);
+      console.log(`✅ Found ${mappedPlans.length} policy plans (filter: ${selectedStatus})`);
     } else {
       throw new Error(response.data.message);
     }
@@ -112,10 +161,9 @@ const fetchPolicyPlans = async () => {
     setIsLoading(false);
   }
 };
-
   useEffect(() => {
-    fetchPolicyPlans();
-  }, []);
+  fetchPolicyPlans();
+}, [selectedStatus]); // ✅ Add selectedStatus as dependency
 
   const getMockPolicyPlans = () => [
     { 
@@ -345,7 +393,7 @@ const handleSubmit = async (e) => {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
-      currency: 'PKR',
+      currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(amount);

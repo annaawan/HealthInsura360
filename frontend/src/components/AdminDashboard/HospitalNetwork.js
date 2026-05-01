@@ -1,11 +1,9 @@
-
 import React, { useState, useEffect} from 'react';
 import { API_BASE_URL, getAxiosConfig } from '../../config';
 import axios from 'axios';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
-// Icons from lucide-react
 import { 
-  Plus,
+  Plus, 
   Check, 
   Edit, 
   Building, 
@@ -14,23 +12,20 @@ import {
   Clock,
   Eye,
   XCircle,
-  Save
-
+  Save,
+  Send
 } from 'lucide-react';
 
-
-// Register Chart.js plugins
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
-
 
 function HospitalNetwork() {
   const [hospitals, setHospitals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState('create'); // 'create', 'edit', or 'view'
+  const [modalType, setModalType] = useState('create');
   const [selectedHospital, setSelectedHospital] = useState(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
   
-  // Form state for create/edit
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -45,13 +40,10 @@ function HospitalNetwork() {
     status: 'pending'
   });
 
-  // Validation state
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  // ---------------------------
-  // Validation Rules
-  // ---------------------------
+  // Validation rules
   const validationRules = {
     name: {
       required: true,
@@ -113,37 +105,30 @@ function HospitalNetwork() {
     }
   };
 
-  // ---------------------------
-  // Validation Functions
-  // ---------------------------
   const validateField = (fieldName, value) => {
     const rules = validationRules[fieldName];
     const newErrors = { ...errors };
 
     if (!rules) return true;
 
-    // Clear error if field is not touched or has no value
     if (!value && !rules.required) {
       delete newErrors[fieldName];
       setErrors(newErrors);
       return true;
     }
 
-    // Required validation
     if (rules.required && !value?.trim()) {
       newErrors[fieldName] = `${fieldName.replace('_', ' ')} is required`;
       setErrors(newErrors);
       return false;
     }
 
-    // Pattern validation
     if (rules.pattern && value && !rules.pattern.test(value)) {
       newErrors[fieldName] = rules.message;
       setErrors(newErrors);
       return false;
     }
 
-    // Length validations
     if (rules.minLength && value && value.length < rules.minLength) {
       newErrors[fieldName] = `${fieldName.replace('_', ' ')} must be at least ${rules.minLength} characters`;
       setErrors(newErrors);
@@ -156,7 +141,6 @@ function HospitalNetwork() {
       return false;
     }
 
-    // If all validations pass, clear error
     delete newErrors[fieldName];
     setErrors(newErrors);
     return true;
@@ -189,34 +173,18 @@ function HospitalNetwork() {
     return isValid;
   };
 
-  // ---------------------------
-  // Form Field Handlers
-  // ---------------------------
   const handleInputChange = (fieldName, value) => {
-    // Update form data
-    setFormData(prev => ({
-      ...prev,
-      [fieldName]: value
-    }));
-
-    // Validate field if it's been touched
+    setFormData(prev => ({ ...prev, [fieldName]: value }));
     if (touched[fieldName]) {
       validateField(fieldName, value);
     }
   };
 
   const handleBlur = (fieldName) => {
-    // Mark field as touched
-    setTouched(prev => ({
-      ...prev,
-      [fieldName]: true
-    }));
-
-    // Validate the field
+    setTouched(prev => ({ ...prev, [fieldName]: true }));
     validateField(fieldName, formData[fieldName]);
   };
 
-  // Helper function to render form field with validation
   const renderFormField = (fieldName, label, type = 'text', options = {}) => {
     const isRequired = validationRules[fieldName]?.required;
     const hasError = errors[fieldName] && touched[fieldName];
@@ -226,56 +194,50 @@ function HospitalNetwork() {
         <label className="block text-gray-700 mb-2">
           {label} {isRequired && <span className="text-red-500">*</span>}
         </label>
-        {type === 'select' ? (
-          <select
-            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-              hasError ? 'border-red-500' : 'border-gray-300'
-            }`}
-            value={formData[fieldName]}
-            onChange={(e) => handleInputChange(fieldName, e.target.value)}
-            onBlur={() => handleBlur(fieldName)}
-          >
-            {options.selectOptions}
-          </select>
-        ) : (
-          <input
-            type={type}
-            className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-              hasError ? 'border-red-500' : 'border-gray-300'
-            }`}
-            value={formData[fieldName]}
-            onChange={(e) => handleInputChange(fieldName, e.target.value)}
-            onBlur={() => handleBlur(fieldName)}
-            placeholder={options.placeholder || ''}
-            required={isRequired}
-          />
-        )}
-        {hasError && (
-          <p className="mt-1 text-sm text-red-600">{errors[fieldName]}</p>
-        )}
+        <input
+          type={type}
+          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+            hasError ? 'border-red-500' : 'border-gray-300'
+          }`}
+          value={formData[fieldName]}
+          onChange={(e) => handleInputChange(fieldName, e.target.value)}
+          onBlur={() => handleBlur(fieldName)}
+          placeholder={options.placeholder || ''}
+          required={isRequired}
+        />
+        {hasError && <p className="mt-1 text-sm text-red-600">{errors[fieldName]}</p>}
       </div>
     );
   };
 
-  // Reset validation states
   const resetValidation = () => {
     setErrors({});
     setTouched({});
   };
 
-  // ---------------------------
   // Fetch hospitals from backend
-  // ---------------------------
   const fetchHospitals = async () => {
     setLoading(true);
     try {
       const config = getAxiosConfig();
-      const res = await axios.get(`${API_BASE_URL}/accounts/hospitals`, config);
+      let response;
+      try {
+        response = await axios.get(`${API_BASE_URL}/hospitals`, config);
+        if (response.data.success && response.data.hospitals) {
+          setHospitals(response.data.hospitals);
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.log('Trying accounts endpoint...');
+      }
       
-      if (res.data.success) {
-        setHospitals(res.data.data);
+      response = await axios.get(`${API_BASE_URL}/accounts/hospitals`, config);
+      if (response.data.success) {
+        setHospitals(response.data.data || []);
       } else {
-        console.error("Failed to fetch hospitals:", res.data.message);
+        console.error("Failed to fetch hospitals:", response.data.message);
+        setHospitals([]);
       }
     } catch (error) {
       console.error("Error fetching hospitals:", error);
@@ -289,38 +251,86 @@ function HospitalNetwork() {
     fetchHospitals();
   }, []);
 
-  // --------------------------------------------------------
-  // Update hospital verification status in backend + frontend
-  // --------------------------------------------------------
-  const updateHospitalStatus = async (hospitalId, newStatus) => {
+  // Approve Hospital with Email Sending
+  const approveHospital = async (hospitalId, hospitalEmail, hospitalName) => {
+    if (!window.confirm(`Verify and approve ${hospitalName}? This will send an email with registration number.`)) {
+      return;
+    }
+
+    setSendingEmail(true);
     try {
       const config = getAxiosConfig();
       
       const response = await axios.put(
-        `${API_BASE_URL}/accounts/hospitals/${hospitalId}`,
-        { status: newStatus },
+        `${API_BASE_URL}/hospitals/approve/${hospitalId}`,
+        {},
         config
       );
       
       if (response.data.success) {
         setHospitals((prev) =>
           prev.map((h) =>
-            h.id === hospitalId ? { ...h, status: newStatus } : h
+            h.hospital_id === hospitalId || h.id === hospitalId
+              ? { 
+                  ...h, 
+                  status: 'verified', 
+                  verified_status: true,
+                  registration_number: response.data.hospital?.registration_number 
+                }
+              : h
           )
         );
-        alert('Hospital status updated successfully!');
+        
+        alert(`✅ Hospital approved successfully!\n\nAn email with registration number has been sent to ${hospitalEmail}`);
+        fetchHospitals();
       } else {
-        throw new Error(response.data.message);
+        throw new Error(response.data.message || 'Approval failed');
       }
     } catch (error) {
-      console.error("Failed to update status:", error);
-      alert(error.response?.data?.message || 'Failed to update status');
+      console.error("Failed to approve hospital:", error);
+      alert(error.response?.data?.message || error.message || 'Failed to approve hospital. Please try again.');
+    } finally {
+      setSendingEmail(false);
     }
   };
 
-  // -------------------
-  // Add Hospital Modal
-  // -------------------
+  // Reject Hospital with Email
+  const rejectHospital = async (hospitalId, hospitalEmail, hospitalName) => {
+    const reason = prompt('Please provide a reason for rejection (optional):');
+    
+    if (!window.confirm(`Reject ${hospitalName}?`)) {
+      return;
+    }
+
+    try {
+      const config = getAxiosConfig();
+      
+      const response = await axios.put(
+        `${API_BASE_URL}/hospitals/reject/${hospitalId}`,
+        { reason: reason || 'Not specified' },
+        config
+      );
+      
+      if (response.data.success) {
+        setHospitals((prev) =>
+          prev.map((h) =>
+            h.hospital_id === hospitalId || h.id === hospitalId
+              ? { ...h, status: 'not-verified', verified_status: false }
+              : h
+          )
+        );
+        
+        alert(`❌ Hospital rejected.\n\nA rejection email has been sent to ${hospitalEmail}`);
+        fetchHospitals();
+      } else {
+        throw new Error(response.data.message || 'Rejection failed');
+      }
+    } catch (error) {
+      console.error("Failed to reject hospital:", error);
+      alert(error.response?.data?.message || error.message || 'Failed to reject hospital');
+    }
+  };
+
   const handleAddHospital = () => {
     setModalType('create');
     setFormData({
@@ -340,9 +350,6 @@ function HospitalNetwork() {
     setShowModal(true);
   };
 
-  // -------------------
-  // Edit Hospital
-  // -------------------
   const handleEditHospital = (hospital) => {
     setModalType('edit');
     setSelectedHospital(hospital);
@@ -363,9 +370,6 @@ function HospitalNetwork() {
     setShowModal(true);
   };
 
-  // -------------------
-  // View Hospital Details
-  // -------------------
   const handleViewHospital = (hospital) => {
     setModalType('view');
     setSelectedHospital(hospital);
@@ -373,20 +377,15 @@ function HospitalNetwork() {
     setShowModal(true);
   };
 
-  // -------------------
-  // Handle Form Submit with Validation
-  // -------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Mark all fields as touched
     const allTouched = {};
     Object.keys(formData).forEach(key => {
       allTouched[key] = true;
     });
     setTouched(allTouched);
 
-    // Validate entire form
     if (!validateForm()) {
       alert('Please fix the validation errors before submitting.');
       return;
@@ -396,13 +395,9 @@ function HospitalNetwork() {
       const config = getAxiosConfig();
       
       if (modalType === 'create') {
-        const response = await axios.post(`${API_BASE_URL}/accounts`, {
-          type: 'hospitals',
-          data: formData
-        }, config);
+        const response = await axios.post(`${API_BASE_URL}/hospitals/register`, formData, config);
         
         if (response.data.success) {
-          setHospitals(prev => [...prev, response.data.data]);
           alert('Hospital created successfully!');
           setShowModal(false);
           fetchHospitals();
@@ -412,15 +407,12 @@ function HospitalNetwork() {
         }
       } else {
         const response = await axios.put(
-          `${API_BASE_URL}/accounts/hospitals/${selectedHospital.id}`,
+          `${API_BASE_URL}/hospitals/${selectedHospital.hospital_id || selectedHospital.id}`,
           formData,
           config
         );
         
         if (response.data.success) {
-          setHospitals(prev => prev.map(h => 
-            h.id === selectedHospital.id ? { ...h, ...formData } : h
-          ));
           alert('Hospital updated successfully!');
           setShowModal(false);
           fetchHospitals();
@@ -435,9 +427,6 @@ function HospitalNetwork() {
     }
   };
 
-  // -------------------
-  // Delete Hospital
-  // -------------------
   const handleDeleteHospital = async (id) => {
     if (!window.confirm('Are you sure you want to delete this hospital?')) {
       return;
@@ -445,10 +434,10 @@ function HospitalNetwork() {
 
     try {
       const config = getAxiosConfig();
-      const response = await axios.delete(`${API_BASE_URL}/accounts/hospitals/${id}`, config);
+      const response = await axios.delete(`${API_BASE_URL}/hospitals/${id}`, config);
       
       if (response.data.success) {
-        setHospitals(prev => prev.filter(h => h.id !== id));
+        setHospitals(prev => prev.filter(h => (h.hospital_id || h.id) !== id));
         alert('Hospital deleted successfully!');
       } else {
         throw new Error(response.data.message);
@@ -459,27 +448,19 @@ function HospitalNetwork() {
     }
   };
 
-  // -------------------
-  // Status color badges
-  // -------------------
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case "verified":
         return "bg-green-100 text-green-800";
       case "pending":
         return "bg-yellow-100 text-yellow-800";
-      case "active":
-        return "bg-blue-100 text-blue-800";
-      case "inactive":
-        return "bg-gray-100 text-gray-800";
+      case "not-verified":
+        return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
 
-  // -------------------
-  // Format date
-  // -------------------
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -489,7 +470,6 @@ function HospitalNetwork() {
     });
   };
 
-  // Handle modal close
   const handleCloseModal = () => {
     setShowModal(false);
     resetValidation();
@@ -525,14 +505,14 @@ function HospitalNetwork() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid md:grid-cols-4 gap-6 mb-8">
+      {/* Stats - Removed Active stat since 'active' is not a valid enum value */}
+      <div className="grid md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <div className="text-gray-600 text-sm mb-2">Total Hospitals</div>
           <div className="text-2xl font-bold text-gray-900">{hospitals.length}</div>
         </div>
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="text-gray-600 text-sm mb-2">Verified</div>
+          <div className="text-gray-600 text-sm mb-2">Verified / Active</div>
           <div className="text-2xl font-bold text-green-600">
             {hospitals.filter((h) => h.status === "verified").length}
           </div>
@@ -541,12 +521,6 @@ function HospitalNetwork() {
           <div className="text-gray-600 text-sm mb-2">Pending</div>
           <div className="text-2xl font-bold text-yellow-600">
             {hospitals.filter((h) => h.status === "pending").length}
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <div className="text-gray-600 text-sm mb-2">Active</div>
-          <div className="text-2xl font-bold text-blue-600">
-            {hospitals.filter((h) => h.status === "active").length}
           </div>
         </div>
       </div>
@@ -582,16 +556,13 @@ function HospitalNetwork() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {hospitals.map((hospital) => (
-                <tr key={hospital.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={hospital.hospital_id || hospital.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="font-medium text-gray-900">{hospital.name}</div>
                     <div className="text-sm text-gray-500">{hospital.specialization}</div>
                   </td>
                   <td className="px-6 py-4 text-gray-700">
                     {hospital.city}, {hospital.state}
-                    {hospital.address && (
-                      <div className="text-sm text-gray-500">{hospital.address}</div>
-                    )}
                   </td>
                   <td className="px-6 py-4 text-gray-700">{hospital.contact_person || 'N/A'}</td>
                   <td className="px-6 py-4">
@@ -601,38 +572,48 @@ function HospitalNetwork() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm ${getStatusColor(
-                        hospital.status
-                      )}`}
-                    >
+                    <span className={`px-3 py-1 rounded-full text-sm ${getStatusColor(hospital.status)}`}>
                       {hospital.status?.charAt(0).toUpperCase() + hospital.status?.slice(1)}
                     </span>
                   </td>
-
-                  {/* ACTION BUTTONS */}
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      {hospital.status !== 'verified' && (
+                      {/* VERIFY BUTTON - Only for pending hospitals */}
+                      {hospital.status === 'pending' && (
                         <button
-                          onClick={() => updateHospitalStatus(hospital.id, "verified")}
-                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
-                          title="Verify"
+                          onClick={() => approveHospital(
+                            hospital.hospital_id || hospital.id, 
+                            hospital.email, 
+                            hospital.name
+                          )}
+                          disabled={sendingEmail}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg disabled:opacity-50"
+                          title="Verify & Send Registration Email"
                         >
-                          <Check className="h-4 w-4" />
+                          {sendingEmail ? (
+                            <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
                         </button>
                       )}
                       
-                      {hospital.status !== 'pending' && (
+                      {/* REJECT BUTTON - Only for pending hospitals */}
+                      {hospital.status === 'pending' && (
                         <button
-                          onClick={() => updateHospitalStatus(hospital.id, "pending")}
-                          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg"
-                          title="Mark as Pending"
+                          onClick={() => rejectHospital(
+                            hospital.hospital_id || hospital.id, 
+                            hospital.email, 
+                            hospital.name
+                          )}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                          title="Reject Hospital"
                         >
-                          <Clock className="h-4 w-4" />
+                          <XCircle className="h-4 w-4" />
                         </button>
                       )}
 
+                      {/* VIEW BUTTON - All hospitals */}
                       <button
                         onClick={() => handleViewHospital(hospital)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
@@ -641,6 +622,7 @@ function HospitalNetwork() {
                         <Eye className="h-4 w-4" />
                       </button>
 
+                      {/* EDIT BUTTON - All hospitals */}
                       <button
                         onClick={() => handleEditHospital(hospital)}
                         className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
@@ -649,23 +631,24 @@ function HospitalNetwork() {
                         <Edit className="h-4 w-4" />
                       </button>
 
+                      {/* DELETE BUTTON - All hospitals */}
                       <button
-                        onClick={() => handleDeleteHospital(hospital.id)}
+                        onClick={() => handleDeleteHospital(hospital.hospital_id || hospital.id)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
                         title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                  </td>
-                </tr>
+                   </td>
+                 </tr>
               ))}
             </tbody>
-          </table>
+           </table>
         )}
       </div>
 
-      {/* Create/Edit/View Modal */}
+      {/* Create/Edit/View Modal - Keep your existing modal code */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -793,7 +776,7 @@ function HospitalNetwork() {
                       
                       <div>
                         <label className="block text-sm text-gray-500 mb-1">Hospital ID</label>
-                        <div className="font-mono text-gray-900">#{selectedHospital?.id}</div>
+                        <div className="font-mono text-gray-900">#{selectedHospital?.hospital_id || selectedHospital?.id}</div>
                       </div>
                       
                       <div>
@@ -901,9 +884,8 @@ function HospitalNetwork() {
                         onChange={(e) => handleInputChange('status', e.target.value)}
                       >
                         <option value="pending">Pending</option>
-                        <option value="active">Active</option>
                         <option value="verified">Verified</option>
-                        <option value="inactive">Inactive</option>
+                        <option value="not-verified">Not Verified</option>
                       </select>
                     </div>
                   </div>

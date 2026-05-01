@@ -22,10 +22,10 @@ const claimStorage = multer.diskStorage({
     cb(null, claimsDir);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1e9);
+    const timestamp = Date.now();
+    const random = Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
-    cb(null, `claim_${name}_${uniqueSuffix}${ext}`);
+    cb(null, `temp_${timestamp}_${random}${ext}`);
   }
 });
 
@@ -76,30 +76,38 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Create multer instances
-const uploadClaim = multer({
+// Create multer instances - EACH ONLY ONCE
+const uploadClaimDocuments = multer({
   storage: claimStorage,
   fileFilter: fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 } // 10 MB
-});
+}).array('documents', 10);
 
-const uploadHospital = multer({
+const uploadHospitalDocuments = multer({
   storage: hospitalStorage,
   fileFilter: fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 } // 10 MB
-});
+}).array('documents', 5);
 
-// Profile picture upload instance
-const uploadProfile = multer({
+// For multi-field hospital document upload
+const uploadHospitalFields = multer({
+  storage: hospitalStorage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }
+}).fields([
+  { name: 'license', maxCount: 1 },
+  { name: 'registration', maxCount: 1 },
+  { name: 'tax', maxCount: 1 },
+  { name: 'certificate', maxCount: 5 },
+  { name: 'other', maxCount: 10 },
+  { name: 'documents', maxCount: 10 }
+]);
+
+// Profile picture upload
+const uploadProfilePicture = multer({
   storage: profileStorage,
   fileFilter: (req, file, cb) => {
-    const allowedImageMimes = [
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'image/gif'
-    ];
-    
+    const allowedImageMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (allowedImageMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -107,20 +115,9 @@ const uploadProfile = multer({
     }
   },
   limits: { fileSize: 5 * 1024 * 1024 } // 5 MB
-});
+}).single('profilePicture');
 
-// ========== NEW: Multi-field hospital document upload ==========
-// This handles multiple different fields like license, registration, tax, etc.
-const uploadHospitalFields = uploadHospital.fields([
-  { name: 'license', maxCount: 1 },
-  { name: 'registration', maxCount: 1 },
-  { name: 'tax', maxCount: 1 },
-  { name: 'certificate', maxCount: 5 },
-  { name: 'other', maxCount: 10 },
-  { name: 'documents', maxCount: 10 } // For backward compatibility
-]);
-
-// ========== FIXED: Helper functions with proper URLs ==========
+// Helper functions
 const getBaseUrl = () => {
   return process.env.BASE_URL || 'http://localhost:5000';
 };
@@ -140,7 +137,6 @@ const getDocumentPath = (filename, type = 'hospital') => {
   }
 };
 
-// Helper function to get file information with URL
 const getFileInfo = (file, type = 'hospital') => {
   return {
     filename: file.filename,
@@ -152,7 +148,6 @@ const getFileInfo = (file, type = 'hospital') => {
   };
 };
 
-// Delete document function
 const deleteDocument = (filename, type = 'claim') => {
   try {
     let filePath;
@@ -181,7 +176,6 @@ const deleteDocument = (filename, type = 'claim') => {
   }
 };
 
-// Error handler for multer
 const handleUploadError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
@@ -212,26 +206,24 @@ const handleUploadError = (err, req, res, next) => {
 // Export middleware and helpers
 module.exports = {
   // For claim documents (customer claims)
-  uploadClaimDocuments: uploadClaim.array('documents', 10),
+  uploadClaimDocuments,
   
   // For hospital documents - SINGLE FIELD (multiple files)
-  uploadHospitalDocuments: uploadHospital.array('documents', 5),
+  uploadHospitalDocuments,
   
-  // NEW: For hospital documents - MULTIPLE FIELDS
+  // For hospital documents - MULTIPLE FIELDS
   uploadHospitalDocumentFields: uploadHospitalFields,
   
   // For profile pictures
-  uploadProfilePicture: uploadProfile.single('profilePicture'),
+  uploadProfilePicture,
   
   // Helper functions
   getClaimDocumentPath: (filename) => getDocumentPath(filename, 'claim'),
   getHospitalDocumentPath: (filename) => getDocumentPath(filename, 'hospital'),
   getProfilePicturePath: (filename) => getDocumentPath(filename, 'profile'),
   
-  // NEW: Generic helper
   getDocumentPath,
   getFileInfo,
   handleUploadError,
-  
   deleteDocument
 };

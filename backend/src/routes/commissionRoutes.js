@@ -53,7 +53,71 @@ router.get('/test', (req, res) => {
     console.log('✅ Test route hit!');
     res.json({ message: 'Commission routes are working!' });
 });
+// Add to commissionRoutes.js - Debug endpoint to see actual totals
+router.get('/debug/totals', async (req, res) => {
+    try {
+        // Get total commission without any filter
+        const totalAll = await db.query('SELECT COALESCE(SUM(amount), 0) as total FROM commission');
+        
+        // Get commission by date range
+        const { start_date, end_date } = req.query;
+        let totalFiltered = 0;
+        let filteredResult = null;
+        
+        if (start_date && end_date) {
+            filteredResult = await db.query(
+                'SELECT COALESCE(SUM(amount), 0) as total FROM commission WHERE created_at BETWEEN $1::date AND $2::date',
+                [start_date, end_date]
+            );
+            totalFiltered = parseFloat(filteredResult.rows[0]?.total || 0);
+        }
+        
+        // Get all commission records with their dates
+        const allCommissions = await db.query(
+            'SELECT commission_id, amount, created_at, status FROM commission ORDER BY created_at DESC'
+        );
+        
+        // Get policy count
+        const allPolicies = await db.query('SELECT COUNT(*) as count FROM policy');
+        const filteredPolicies = start_date && end_date ? 
+            await db.query('SELECT COUNT(*) as count FROM policy WHERE created_at BETWEEN $1::date AND $2::date', [start_date, end_date]) :
+            { rows: [{ count: 0 }] };
+        
+        res.json({
+            total_commission_all_time: parseFloat(totalAll.rows[0]?.total || 0),
+            total_commission_filtered: totalFiltered,
+            date_range: { start_date, end_date },
+            all_commissions: allCommissions.rows.map(c => ({
+                id: c.commission_id,
+                amount: c.amount,
+                date: c.created_at,
+                status: c.status
+            })),
+            total_policies_all_time: parseInt(allPolicies.rows[0]?.count || 0),
+            total_policies_filtered: parseInt(filteredPolicies.rows[0]?.count || 0),
+            message: totalFiltered !== 1030 ? 'Date filter is excluding some commissions. Check the dates above.' : 'Commission total matches!'
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
+// Get all-time totals (no date filter)
+router.get('/totals/all-time', async (req, res) => {
+    try {
+        const commissionTotal = await db.query('SELECT COALESCE(SUM(amount), 0) as total FROM commission');
+        const policyTotal = await db.query('SELECT COUNT(*) as count FROM policy');
+        const agentTotal = await db.query('SELECT COUNT(*) as count FROM agent WHERE status = \'active\'');
+        
+        res.json({
+            total_commission: parseFloat(commissionTotal.rows[0]?.total || 0),
+            total_policies: parseInt(policyTotal.rows[0]?.count || 0),
+            total_agents: parseInt(agentTotal.rows[0]?.count || 0)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 // Get all commissions with filters - FIXED destructuring
 router.get('/', async (req, res) => {
     try {
@@ -153,66 +217,195 @@ router.get('/report/export', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-// Get commission summary report
+// // Get commission summary report
+// router.get('/report/summary', async (req, res) => {
+//     console.log('🔍 /report/summary route was called');
+//     console.log('📅 Query params:', req.query);
+    
+//     try {
+//         const { start_date, end_date } = req.query;
+        
+//         if (!start_date || !end_date) {
+//             return res.status(400).json({ error: 'start_date and end_date are required' });
+//         }
+        
+//         const summaryResult = await db.query(
+//             `SELECT 
+//                 COALESCE(SUM(amount), 0) as total_commissions,
+//                 COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_commissions,
+//                 COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pending_commissions,
+//                 COUNT(DISTINCT agent_id) as total_agents,
+//                 COUNT(DISTINCT CASE WHEN status = 'paid' THEN agent_id END) as active_agents,
+//                 ROUND(AVG(rate), 2) as avg_commission_rate,
+//                 COUNT(policy_id) as total_policies
+//             FROM commission
+//             WHERE created_at BETWEEN $1 AND $2`,
+//             [start_date, end_date]
+//         );
+        
+//         const monthlyResult = await db.query(
+//             `SELECT 
+//                 TO_CHAR(created_at, 'Mon') as month,
+//                 COALESCE(SUM(amount), 0) as commission_amounts,
+//                 COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amounts,
+//                 COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pending_amounts
+//             FROM commission
+//             WHERE created_at BETWEEN $1 AND $2
+//             GROUP BY EXTRACT(MONTH FROM created_at), TO_CHAR(created_at, 'Mon')
+//             ORDER BY EXTRACT(MONTH FROM created_at)`,
+//             [start_date, end_date]
+//         );
+        
+//         const topAgentsResult = await db.query(
+//             `SELECT 
+//                 CONCAT(a.first_name, ' ', a.last_name) as name,
+//                 SUM(c.amount) as commission,
+//                 COUNT(c.policy_id) as policies,
+//                 ROUND(AVG(c.rate), 2) as rate
+//             FROM commission c
+//             JOIN agent a ON c.agent_id = a.agent_id
+//             WHERE c.created_at BETWEEN $1 AND $2
+//             GROUP BY c.agent_id, a.first_name, a.last_name
+//             ORDER BY commission DESC
+//             LIMIT 5`,
+//             [start_date, end_date]
+//         );
+        
+//         const summaryData = summaryResult.rows ? summaryResult.rows[0] : summaryResult[0];
+//         const monthlyData = monthlyResult.rows ? monthlyResult.rows : monthlyResult;
+//         const topAgentsData = topAgentsResult.rows ? topAgentsResult.rows : topAgentsResult;
+        
+//         res.json({
+//             summary: summaryData,
+//             chartData: {
+//                 labels: monthlyData.map(m => m.month),
+//                 commission_amounts: monthlyData.map(m => parseFloat(m.commission_amounts)),
+//                 paid_amounts: monthlyData.map(m => parseFloat(m.paid_amounts)),
+//                 pending_amounts: monthlyData.map(m => parseFloat(m.pending_amounts))
+//             },
+//             topAgents: topAgentsData.map(agent => ({
+//                 ...agent,
+//                 commission: parseFloat(agent.commission),
+//                 rate: parseFloat(agent.rate)
+//             })),
+//             period: { start_date, end_date }
+//         });
+        
+//     } catch (error) {
+//         console.error('Error generating report:', error);
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
 router.get('/report/summary', async (req, res) => {
     console.log('🔍 /report/summary route was called');
     console.log('📅 Query params:', req.query);
     
     try {
-        const { start_date, end_date } = req.query;
+        let { start_date, end_date } = req.query;
         
         if (!start_date || !end_date) {
             return res.status(400).json({ error: 'start_date and end_date are required' });
         }
         
-        const summaryResult = await db.query(
-            `SELECT 
+        // Add time to end_date to include the entire day
+        const startDateTime = `${start_date} 00:00:00`;
+        const endDateTime = `${end_date} 23:59:59`;
+        
+        console.log('📅 Date range for query:', { start_date, end_date, startDateTime, endDateTime });
+        
+        // ✅ FIX: Get average commission rate from AGENT table (not commission table)
+        const avgRateQuery = `
+            SELECT ROUND(COALESCE(AVG(commission_rate), 0), 2) as avg_commission_rate
+            FROM agent
+            WHERE status = 'active'
+        `;
+        const avgRateResult = await db.query(avgRateQuery);
+        const avgCommissionRate = parseFloat(avgRateResult.rows[0]?.avg_commission_rate) || 0;
+        
+        console.log('📊 Avg commission rate from agent table:', avgCommissionRate);
+        
+        // Get commission summary (without avg_rate)
+        const summaryQuery = `
+            SELECT 
                 COALESCE(SUM(amount), 0) as total_commissions,
                 COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_commissions,
                 COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pending_commissions,
                 COUNT(DISTINCT agent_id) as total_agents,
-                COUNT(DISTINCT CASE WHEN status = 'paid' THEN agent_id END) as active_agents,
-                ROUND(AVG(rate), 2) as avg_commission_rate,
-                COUNT(policy_id) as total_policies
+                COUNT(DISTINCT CASE WHEN status = 'paid' THEN agent_id END) as active_agents
             FROM commission
-            WHERE created_at BETWEEN $1 AND $2`,
-            [start_date, end_date]
-        );
+            WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp
+        `;
         
-        const monthlyResult = await db.query(
-            `SELECT 
-                TO_CHAR(created_at, 'Mon') as month,
+        const summaryResult = await db.query(summaryQuery, [startDateTime, endDateTime]);
+        
+        // Get TOTAL POLICIES from policy table
+        const totalPoliciesQuery = `
+            SELECT COUNT(*) as total_policies
+            FROM policy
+            WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp
+        `;
+        const totalPoliciesResult = await db.query(totalPoliciesQuery, [startDateTime, endDateTime]);
+        const totalPolicies = parseInt(totalPoliciesResult.rows[0]?.total_policies) || 0;
+        
+        console.log('📊 Total policies from policy table:', totalPolicies);
+        
+        // Monthly data
+        const monthlyQuery = `
+            SELECT 
+                TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') as month,
                 COALESCE(SUM(amount), 0) as commission_amounts,
                 COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amounts,
                 COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pending_amounts
             FROM commission
-            WHERE created_at BETWEEN $1 AND $2
-            GROUP BY EXTRACT(MONTH FROM created_at), TO_CHAR(created_at, 'Mon')
-            ORDER BY EXTRACT(MONTH FROM created_at)`,
-            [start_date, end_date]
-        );
+            WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY DATE_TRUNC('month', created_at)
+        `;
         
-        const topAgentsResult = await db.query(
-            `SELECT 
+        const monthlyResult = await db.query(monthlyQuery, [startDateTime, endDateTime]);
+        
+        // Top agents - use agent's commission_rate and count policies from policy table
+        const topAgentsQuery = `
+            SELECT 
                 CONCAT(a.first_name, ' ', a.last_name) as name,
-                SUM(c.amount) as commission,
-                COUNT(c.policy_id) as policies,
-                ROUND(AVG(c.rate), 2) as rate
+                COALESCE(SUM(c.amount), 0) as commission,
+                COALESCE((
+                    SELECT COUNT(*) 
+                    FROM policy p 
+                    WHERE p.agent_id = a.agent_id 
+                    AND p.created_at >= $1::timestamp 
+                    AND p.created_at <= $2::timestamp
+                ), 0) as policies,
+                COALESCE(a.commission_rate, 0) as rate
             FROM commission c
             JOIN agent a ON c.agent_id = a.agent_id
-            WHERE c.created_at BETWEEN $1 AND $2
-            GROUP BY c.agent_id, a.first_name, a.last_name
+            WHERE c.created_at >= $1::timestamp AND c.created_at <= $2::timestamp
+            GROUP BY a.agent_id, a.first_name, a.last_name, a.commission_rate
             ORDER BY commission DESC
-            LIMIT 5`,
-            [start_date, end_date]
-        );
+            LIMIT 5
+        `;
         
-        const summaryData = summaryResult.rows ? summaryResult.rows[0] : summaryResult[0];
-        const monthlyData = monthlyResult.rows ? monthlyResult.rows : monthlyResult;
-        const topAgentsData = topAgentsResult.rows ? topAgentsResult.rows : topAgentsResult;
+        const topAgentsResult = await db.query(topAgentsQuery, [startDateTime, endDateTime]);
+        
+        const summaryData = summaryResult.rows[0];
+        const monthlyData = monthlyResult.rows;
+        const topAgentsData = topAgentsResult.rows;
+        
+        console.log('💰 Final total_commissions:', summaryData.total_commissions);
+        console.log('📊 Top agent policies count:', topAgentsData[0]?.policies);
+        console.log('📊 Top agent rate:', topAgentsData[0]?.rate);
         
         res.json({
-            summary: summaryData,
+            summary: {
+                total_commissions: parseFloat(summaryData.total_commissions) || 0,
+                paid_commissions: parseFloat(summaryData.paid_commissions) || 0,
+                pending_commissions: parseFloat(summaryData.pending_commissions) || 0,
+                total_agents: parseInt(summaryData.total_agents) || 0,
+                active_agents: parseInt(summaryData.active_agents) || 0,
+                avg_commission_rate: avgCommissionRate,  // ✅ Now from agent table (10%)
+                total_policies: totalPolicies
+            },
             chartData: {
                 labels: monthlyData.map(m => m.month),
                 commission_amounts: monthlyData.map(m => parseFloat(m.commission_amounts)),
@@ -220,8 +413,9 @@ router.get('/report/summary', async (req, res) => {
                 pending_amounts: monthlyData.map(m => parseFloat(m.pending_amounts))
             },
             topAgents: topAgentsData.map(agent => ({
-                ...agent,
+                name: agent.name,
                 commission: parseFloat(agent.commission),
+                policies: parseInt(agent.policies),
                 rate: parseFloat(agent.rate)
             })),
             period: { start_date, end_date }
@@ -229,12 +423,9 @@ router.get('/report/summary', async (req, res) => {
         
     } catch (error) {
         console.error('Error generating report:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message, stack: error.stack });
     }
 });
-
-
-
 // ==================== PUT ROUTES ====================
 
 // Update commission rate - FIXED destructuring
@@ -290,7 +481,98 @@ router.put('/:commissionId/rate', async (req, res) => {
     }
 });
 
-// Pay commission (manual payment)
+// // Pay commission (manual payment)
+// router.put('/:commissionId/pay', async (req, res) => {
+//     try {
+//         const { commissionId } = req.params;
+//         const { payment_reference, payment_method, payment_date, notes } = req.body;
+        
+//         if (!payment_reference) {
+//             return res.status(400).json({ error: 'Payment reference is required' });
+//         }
+        
+//         // Get commission with agent details
+//         const oldResult = await db.query(
+//             `SELECT c.*, a.email, a.first_name, a.last_name 
+//              FROM commission c
+//              JOIN agent a ON c.agent_id = a.agent_id
+//              WHERE c.commission_id = $1`,
+//             [commissionId]
+//         );
+        
+//         const oldData = oldResult.rows ? oldResult.rows : oldResult;
+        
+//         if (!oldData.length) {
+//             return res.status(404).json({ error: 'Commission not found' });
+//         }
+        
+//         if (oldData[0].status === 'paid') {
+//             return res.status(400).json({ error: 'Commission already paid' });
+//         }
+        
+//         const commission = oldData[0];
+//         const amount = parseFloat(commission.amount) || 0;
+        
+//         // Update commission
+//         await db.query(
+//             `UPDATE commission 
+//              SET status = 'paid', 
+//                  paid_at = COALESCE($1, CURRENT_DATE),
+//                  payment_reference = $2,
+//                  updated_at = NOW()
+//              WHERE commission_id = $3`,
+//             [payment_date || new Date().toISOString().split('T')[0], payment_reference, commissionId]
+//         );
+        
+//         // Get updated commission
+//         const newResult = await db.query(
+//             'SELECT * FROM commission WHERE commission_id = $1',
+//             [commissionId]
+//         );
+        
+//         const newData = newResult.rows ? newResult.rows : newResult;
+        
+//         // Record in transaction table - using actual columns from your table
+//         await db.query(
+//             `INSERT INTO transaction (
+//                 related_commission_id, amount, type, status, created_at, notes, payment_method
+//             ) VALUES ($1, $2, 'commission_payment', 'completed', NOW(), $3, $4)`,
+//             [commissionId, commission.amount, notes || `Manual payment - Reference: ${payment_reference}`, payment_method || 'manual']
+//         );
+        
+//         // Send payment confirmation email to agent
+//         if (commission.email) {
+//             const commissionDetails = {
+//                 commission_id: commissionId,
+//                 policy_id: commission.policy_id,
+//                 amount: amount,
+//                 rate: commission.rate,
+//                 payment_date: payment_date || new Date().toISOString().split('T')[0],
+//                 payment_reference: payment_reference,
+//                 payment_method: payment_method || 'Manual',
+//                 notes: notes
+//             };
+            
+//             await emailService.sendManualPaymentConfirmationEmail(
+//                 commissionId,
+//                 commission.email,
+//                 `${commission.first_name} ${commission.last_name}`,
+//                 commissionDetails
+//             );
+//         }
+        
+//         res.json({ 
+//             success: true, 
+//             message: 'Commission paid successfully',
+//             commission: newData[0]
+//         });
+        
+//     } catch (error) {
+//         console.error('Payment error:', error);
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+// Pay commission (manual payment) - Corrected column names
 router.put('/:commissionId/pay', async (req, res) => {
     try {
         const { commissionId } = req.params;
@@ -300,8 +582,10 @@ router.put('/:commissionId/pay', async (req, res) => {
             return res.status(400).json({ error: 'Payment reference is required' });
         }
         
+        await db.query('BEGIN');
+        
         // Get commission with agent details
-        const oldResult = await db.query(
+        const commissionResult = await db.query(
             `SELECT c.*, a.email, a.first_name, a.last_name 
              FROM commission c
              JOIN agent a ON c.agent_id = a.agent_id
@@ -309,20 +593,22 @@ router.put('/:commissionId/pay', async (req, res) => {
             [commissionId]
         );
         
-        const oldData = oldResult.rows ? oldResult.rows : oldResult;
+        const commission = commissionResult.rows[0];
         
-        if (!oldData.length) {
+        if (!commission) {
+            await db.query('ROLLBACK');
             return res.status(404).json({ error: 'Commission not found' });
         }
         
-        if (oldData[0].status === 'paid') {
+        if (commission.status === 'paid') {
+            await db.query('ROLLBACK');
             return res.status(400).json({ error: 'Commission already paid' });
         }
         
-        const commission = oldData[0];
+        const agentId = commission.agent_id;
         const amount = parseFloat(commission.amount) || 0;
         
-        // Update commission
+        // 1. Update commission status
         await db.query(
             `UPDATE commission 
              SET status = 'paid', 
@@ -333,23 +619,77 @@ router.put('/:commissionId/pay', async (req, res) => {
             [payment_date || new Date().toISOString().split('T')[0], payment_reference, commissionId]
         );
         
-        // Get updated commission
-        const newResult = await db.query(
-            'SELECT * FROM commission WHERE commission_id = $1',
-            [commissionId]
+        // 2. Debit company account
+        const debitResult = await db.query(
+            `UPDATE company_account 
+             SET balance = balance - $1,
+                 updated_at = NOW()
+             WHERE account_type = 'operating'
+             RETURNING balance`,
+            [amount]
         );
         
-        const newData = newResult.rows ? newResult.rows : newResult;
+        console.log(`✅ Company account debited: $${amount}. New balance: $${debitResult.rows[0].balance}`);
         
-        // Record in transaction table - using actual columns from your table
+        // 3. Credit agent payment account
+        let agentAccountResult = await db.query(
+            `SELECT * FROM agent_payment_account WHERE agent_id = $1`,
+            [agentId]
+        );
+        
+        if (agentAccountResult.rows.length === 0) {
+            await db.query(
+                `INSERT INTO agent_payment_account (agent_id, balance, total_earned, status, created_at)
+                 VALUES ($1, 0, 0, 'active', NOW())`,
+                [agentId]
+            );
+        }
+        
+        const creditResult = await db.query(
+            `UPDATE agent_payment_account 
+             SET balance = balance + $1,
+                 total_earned = total_earned + $1,
+                 last_payment_date = CURRENT_DATE,
+                 updated_at = NOW()
+             WHERE agent_id = $2
+             RETURNING balance, total_earned`,
+            [amount, agentId]
+        );
+        
+        console.log(`✅ Agent ${agentId} account credited: $${amount}. New balance: $${creditResult.rows[0].balance}`);
+        
+        // 4. Record in transaction table
+        const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        
         await db.query(
             `INSERT INTO transaction (
-                related_commission_id, amount, type, status, created_at, notes, payment_method
-            ) VALUES ($1, $2, 'commission_payment', 'completed', NOW(), $3, $4)`,
-            [commissionId, commission.amount, notes || `Manual payment - Reference: ${payment_reference}`, payment_method || 'manual']
+                transaction_id, related_commission_id, amount, type, status, 
+                created_at, notes, payment_method
+            ) VALUES ($1, $2, $3, 'commission_payment', 'completed', NOW(), $4, $5)`,
+            [transactionId, commissionId, amount, notes || `Manual payment - Reference: ${payment_reference}`, payment_method || 'manual']
         );
         
-        // Send payment confirmation email to agent
+        // 5. Record in ledger transactions (Corrected column names)
+        await db.query(
+            `INSERT INTO ledger_transactions (
+                transaction_type, amount, 
+                from_account_type, from_account_id,
+                to_account_type, to_account_id, 
+                reference_id, description, status, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'completed', NOW())`,
+            [
+                'commission_payout',
+                amount,
+                'company',
+                1,
+                'agent',
+                agentId,
+                commissionId.toString(),
+                `Manual commission payout for commission #${commissionId} - Agent: ${commission.first_name} ${commission.last_name}`
+            ]
+        );
+        
+        // 6. Send email notification
         if (commission.email) {
             const commissionDetails = {
                 commission_id: commissionId,
@@ -370,13 +710,18 @@ router.put('/:commissionId/pay', async (req, res) => {
             );
         }
         
+        await db.query('COMMIT');
+        
         res.json({ 
             success: true, 
             message: 'Commission paid successfully',
-            commission: newData[0]
+            commission: { ...commission, status: 'paid' },
+            company_balance: debitResult.rows[0].balance,
+            agent_balance: creditResult.rows[0].balance
         });
         
     } catch (error) {
+        await db.query('ROLLBACK');
         console.error('Payment error:', error);
         res.status(500).json({ error: error.message });
     }
@@ -541,20 +886,121 @@ router.get('/admin/summary', async (req, res) => {
     }
 });
 
-// Get agent performance report
+// // Get agent performance report
+// router.get('/report/agent-performance', async (req, res) => {
+//     console.log('🔍 /report/agent-performance route was called');
+//     console.log('Query params:', req.query);
+    
+//     try {
+//         const { start_date, end_date } = req.query;
+        
+//         console.log('Dates received:', { start_date, end_date });
+        
+//         if (!start_date || !end_date) {
+//             return res.status(400).json({ error: 'start_date and end_date are required' });
+//         }
+        
+//         const query = `
+//             SELECT 
+//                 a.agent_id,
+//                 a.first_name,
+//                 a.last_name,
+//                 a.email,
+//                 a.commission_rate,
+//                 a.total_sales,
+//                 a.status as agent_status,
+//                 COALESCE(SUM(c.amount), 0) as total_commission,
+//                 COUNT(DISTINCT c.commission_id) as total_transactions,
+//                 COUNT(DISTINCT c.policy_id) as policies_sold,
+//                 COALESCE(SUM(CASE WHEN c.status = 'paid' THEN c.amount ELSE 0 END), 0) as paid_commission,
+//                 COALESCE(SUM(CASE WHEN c.status = 'pending' THEN c.amount ELSE 0 END), 0) as pending_commission
+//             FROM agent a
+//             LEFT JOIN commission c ON a.agent_id = c.agent_id 
+//                 AND c.created_at >= $1::date 
+//                 AND c.created_at <= $2::date
+//             WHERE a.status IN ('active', 'pending')
+//             GROUP BY a.agent_id, a.first_name, a.last_name, a.email, a.commission_rate, a.total_sales, a.status
+//             ORDER BY total_commission DESC
+//         `;
+        
+//         console.log('Executing query with params:', [start_date, end_date]);
+        
+//         const agentsResult = await db.query(query, [start_date, end_date]);
+        
+//         const agents = agentsResult.rows ? agentsResult.rows : agentsResult;
+        
+//         console.log(`✅ Found ${agents.length} agents`);
+        
+//         // Log each agent's data
+//         agents.forEach((agent, index) => {
+//             console.log(`Agent ${index + 1}:`, {
+//                 id: agent.agent_id,
+//                 name: `${agent.first_name} ${agent.last_name}`,
+//                 commission: agent.total_commission,
+//                 policies: agent.policies_sold,
+//                 status: agent.agent_status
+//             });
+//         });
+        
+//         if (agents.length === 0) {
+//             console.log('⚠️ No agents found. Checking if agent table has data...');
+//             const agentCount = await db.query('SELECT COUNT(*) FROM agent');
+//             console.log('Total agents in database:', agentCount.rows ? agentCount.rows[0] : agentCount[0]);
+//         }
+        
+//         const summary = {
+//             total_agents: agents.length,
+//             active_agents: agents.filter(a => a.agent_status === 'active').length,
+//             total_commissions: agents.reduce((sum, a) => sum + parseFloat(a.total_commission || 0), 0),
+//             total_policies: agents.reduce((sum, a) => sum + parseInt(a.policies_sold || 0), 0),
+//             avg_commission_per_agent: agents.length ? agents.reduce((sum, a) => sum + parseFloat(a.total_commission || 0), 0) / agents.length : 0,
+//             top_performer: agents[0] ? `${agents[0].first_name} ${agents[0].last_name}` : 'N/A',
+//             top_performer_commission: agents[0] ? parseFloat(agents[0].total_commission || 0) : 0
+//         };
+        
+//         console.log('📊 Summary calculated:', summary);
+        
+//         const responseData = {
+//             summary: summary,
+//             agents: agents.map(agent => ({
+//                 name: `${agent.first_name} ${agent.last_name}`,
+//                 agent_id: agent.agent_id,
+//                 commission: parseFloat(agent.total_commission || 0),
+//                 policies: parseInt(agent.policies_sold || 0),
+//                 rate: parseFloat(agent.commission_rate || 0),
+//                 status: agent.agent_status || 'pending',
+//                 total_sales: agent.total_sales || 0,
+//                 email: agent.email
+//             })),
+//             period: { start_date, end_date }
+//         };
+        
+//         console.log('📤 Sending response with agents:', responseData.agents.length);
+//         console.log('First agent in response:', responseData.agents[0]);
+        
+//         res.json(responseData);
+        
+//     } catch (error) {
+//         console.error('❌ Error generating agent performance report:', error);
+//         console.error('Error stack:', error.stack);
+//         res.status(500).json({ error: error.message });
+//     }
+// });
 router.get('/report/agent-performance', async (req, res) => {
     console.log('🔍 /report/agent-performance route was called');
     console.log('Query params:', req.query);
     
     try {
-        const { start_date, end_date } = req.query;
-        
-        console.log('Dates received:', { start_date, end_date });
+        let { start_date, end_date } = req.query;
         
         if (!start_date || !end_date) {
             return res.status(400).json({ error: 'start_date and end_date are required' });
         }
         
+        const startDateTime = `${start_date} 00:00:00`;
+        const endDateTime = `${end_date} 23:59:59`;
+        
+        // ✅ FIXED: Get total policies from policy table for each agent
         const query = `
             SELECT 
                 a.agent_id,
@@ -564,56 +1010,49 @@ router.get('/report/agent-performance', async (req, res) => {
                 a.commission_rate,
                 a.total_sales,
                 a.status as agent_status,
+                COALESCE((
+                    SELECT COUNT(*) 
+                    FROM policy p 
+                    WHERE p.agent_id = a.agent_id 
+                    AND p.created_at >= $1::timestamp 
+                    AND p.created_at <= $2::timestamp
+                ), 0) as policies_sold,
                 COALESCE(SUM(c.amount), 0) as total_commission,
                 COUNT(DISTINCT c.commission_id) as total_transactions,
-                COUNT(DISTINCT c.policy_id) as policies_sold,
                 COALESCE(SUM(CASE WHEN c.status = 'paid' THEN c.amount ELSE 0 END), 0) as paid_commission,
                 COALESCE(SUM(CASE WHEN c.status = 'pending' THEN c.amount ELSE 0 END), 0) as pending_commission
             FROM agent a
             LEFT JOIN commission c ON a.agent_id = c.agent_id 
-                AND c.created_at >= $1::date 
-                AND c.created_at <= $2::date
+                AND c.created_at >= $1::timestamp 
+                AND c.created_at <= $2::timestamp
             WHERE a.status IN ('active', 'pending')
             GROUP BY a.agent_id, a.first_name, a.last_name, a.email, a.commission_rate, a.total_sales, a.status
             ORDER BY total_commission DESC
         `;
         
-        console.log('Executing query with params:', [start_date, end_date]);
+        const agentsResult = await db.query(query, [startDateTime, endDateTime]);
+        const agents = agentsResult.rows;
         
-        const agentsResult = await db.query(query, [start_date, end_date]);
-        
-        const agents = agentsResult.rows ? agentsResult.rows : agentsResult;
+        // Get total policies for the period (all agents combined)
+        const totalPoliciesQuery = `
+            SELECT COUNT(*) as total
+            FROM policy
+            WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp
+        `;
+        const totalPoliciesResult = await db.query(totalPoliciesQuery, [startDateTime, endDateTime]);
+        const totalPolicies = parseInt(totalPoliciesResult.rows[0]?.total) || 0;
         
         console.log(`✅ Found ${agents.length} agents`);
-        
-        // Log each agent's data
-        agents.forEach((agent, index) => {
-            console.log(`Agent ${index + 1}:`, {
-                id: agent.agent_id,
-                name: `${agent.first_name} ${agent.last_name}`,
-                commission: agent.total_commission,
-                policies: agent.policies_sold,
-                status: agent.agent_status
-            });
-        });
-        
-        if (agents.length === 0) {
-            console.log('⚠️ No agents found. Checking if agent table has data...');
-            const agentCount = await db.query('SELECT COUNT(*) FROM agent');
-            console.log('Total agents in database:', agentCount.rows ? agentCount.rows[0] : agentCount[0]);
-        }
         
         const summary = {
             total_agents: agents.length,
             active_agents: agents.filter(a => a.agent_status === 'active').length,
             total_commissions: agents.reduce((sum, a) => sum + parseFloat(a.total_commission || 0), 0),
-            total_policies: agents.reduce((sum, a) => sum + parseInt(a.policies_sold || 0), 0),
+            total_policies: totalPolicies,
             avg_commission_per_agent: agents.length ? agents.reduce((sum, a) => sum + parseFloat(a.total_commission || 0), 0) / agents.length : 0,
             top_performer: agents[0] ? `${agents[0].first_name} ${agents[0].last_name}` : 'N/A',
             top_performer_commission: agents[0] ? parseFloat(agents[0].total_commission || 0) : 0
         };
-        
-        console.log('📊 Summary calculated:', summary);
         
         const responseData = {
             summary: summary,
@@ -621,7 +1060,7 @@ router.get('/report/agent-performance', async (req, res) => {
                 name: `${agent.first_name} ${agent.last_name}`,
                 agent_id: agent.agent_id,
                 commission: parseFloat(agent.total_commission || 0),
-                policies: parseInt(agent.policies_sold || 0),
+                policies: parseInt(agent.policies_sold || 0),  // ✅ Now counts ALL policies
                 rate: parseFloat(agent.commission_rate || 0),
                 status: agent.agent_status || 'pending',
                 total_sales: agent.total_sales || 0,
@@ -630,14 +1069,12 @@ router.get('/report/agent-performance', async (req, res) => {
             period: { start_date, end_date }
         };
         
-        console.log('📤 Sending response with agents:', responseData.agents.length);
-        console.log('First agent in response:', responseData.agents[0]);
+        console.log('📊 Agent policies count:', responseData.agents[0]?.policies);
         
         res.json(responseData);
         
     } catch (error) {
         console.error('❌ Error generating agent performance report:', error);
-        console.error('Error stack:', error.stack);
         res.status(500).json({ error: error.message });
     }
 });

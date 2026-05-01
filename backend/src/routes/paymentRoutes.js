@@ -107,6 +107,115 @@ router.get('/test', (req, res) => {
 
 // ============ TRANSACTION ROUTES (from paymentRoutes2) ============
 
+// // Get all transactions - handles three scenarios (mock data fallback)
+// router.get('/transactions', async (req, res) => {
+//   console.log('📊 Transactions route hit - fetching from database');
+  
+//   try {
+//     const checkQuery = `
+//       SELECT EXISTS (
+//         SELECT FROM information_schema.tables 
+//         WHERE table_name = 'transaction'
+//       ) as table_exists
+//     `;
+    
+//     const tableCheck = await pool.query(checkQuery);
+//     const tableExists = tableCheck.rows[0].table_exists;
+    
+//     if (!tableExists) {
+//       console.log('❌ Transaction table does not exist in database');
+//       return res.status(200).json({
+//         success: true,
+//         scenario: 'no_table',
+//         message: 'Transaction table does not exist in database',
+//         count: 0,
+//         data: []
+//       });
+//     }
+    
+//     const countQuery = `SELECT COUNT(*) as total FROM transaction`;
+//     const countResult = await pool.query(countQuery);
+//     const recordCount = parseInt(countResult.rows[0].total, 10);
+    
+//     console.log(`📊 Database has ${recordCount} transaction records`);
+    
+//     if (recordCount === 0) {
+//       console.log('📭 No transactions found in database');
+//       return res.status(200).json({
+//         success: true,
+//         scenario: 'no_data',
+//         message: 'No transactions found in the database',
+//         count: 0,
+//         data: []
+//       });
+//     }
+    
+//     console.log('✅ Data exists, fetching from database');
+    
+//     const query = `
+//       SELECT 
+//         t.transaction_id,
+//         t.related_payment_id,
+//         t.related_claim_id,
+//         t.related_commission_id,
+//         t.amount,
+//         t.type,
+//         t.status,
+//         t.created_at,
+//         c.first_name || ' ' || c.last_name as customer_name,
+//         p.method as payment_method,
+//         p.status as payment_status
+//       FROM transaction t
+//       LEFT JOIN payment p ON t.related_payment_id = p.payment_id
+//       LEFT JOIN customer c ON p.customer_id = c.customer_id
+//       ORDER BY t.created_at DESC
+//       LIMIT 100
+//     `;
+    
+//     const result = await pool.query(query);
+    
+//     const transactions = result.rows.map(row => ({
+//       transaction_id: row.transaction_id,
+//       related_payment_id: row.related_payment_id,
+//       related_claim_id: row.related_claim_id,
+//       related_commission_id: row.related_commission_id,
+//       amount: parseFloat(row.amount),
+//       type: row.type,
+//       status: row.status,
+//       created_at: row.created_at,
+//       customer: {
+//         name: row.customer_name || 'Unknown Customer'
+//       },
+//       payment: {
+//         method: row.payment_method || 'Unknown',
+//         status: row.payment_status
+//       }
+//     }));
+    
+//     console.log(`✅ Successfully retrieved ${transactions.length} transactions from database`);
+    
+//     return res.status(200).json({
+//       success: true,
+//       scenario: 'has_data',
+//       message: 'Transactions retrieved successfully',
+//       count: transactions.length,
+//       data: transactions
+//     });
+    
+//   } catch (error) {
+//     console.error('❌ Database retrieval failed:', error.message);
+//     console.error('Full error:', error);
+    
+//     return res.status(200).json({
+//       success: true,
+//       scenario: 'mock_data',
+//       message: 'Failed to retrieve data from database. Showing mock data.',
+//       error: error.message,
+//       count: mockTransactions.length,
+//       data: mockTransactions
+//     });
+//   }
+// });
 // Get all transactions - handles three scenarios (mock data fallback)
 router.get('/transactions', async (req, res) => {
   console.log('📊 Transactions route hit - fetching from database');
@@ -152,47 +261,91 @@ router.get('/transactions', async (req, res) => {
     
     console.log('✅ Data exists, fetching from database');
     
-    const query = `
-      SELECT 
-        t.transaction_id,
-        t.related_payment_id,
-        t.related_claim_id,
-        t.related_commission_id,
-        t.amount,
-        t.type,
-        t.status,
-        t.created_at,
-        c.first_name || ' ' || c.last_name as customer_name,
-        p.method as payment_method,
-        p.status as payment_status
-      FROM transaction t
-      LEFT JOIN payment p ON t.related_payment_id = p.payment_id
-      LEFT JOIN customer c ON p.customer_id = c.customer_id
-      ORDER BY t.created_at DESC
-      LIMIT 100
-    `;
+    // In your backend route handler, replace the query with this:
+const query = `
+  SELECT 
+    t.transaction_id,
+    t.related_payment_id,
+    t.related_claim_id,
+    t.related_commission_id,
+    t.amount,
+    t.type,
+    t.status,
+    t.created_at,
+    t.payment_method as transaction_payment_method,
+    t.notes,
+    -- Customer name (for premium payments)
+    c.first_name || ' ' || c.last_name as customer_name,
+    -- Agent name (for commission payments) - FIXED
+    a.first_name || ' ' || a.last_name as agent_name,
+    -- Hospital name (for claim payments) - FIXED
+    h.name as hospital_name,
+    -- Payment method from payment table
+    p.method as payment_method_detail,
+    p.status as payment_status,
+    -- Claim details for hospital payments
+    cl.claim_type,
+    cl.claim_amount,
+    -- Commission details
+    comm.amount as commission_amount,
+    comm.rate as commission_rate
+  FROM transaction t
+  LEFT JOIN payment p ON t.related_payment_id = p.payment_id
+  LEFT JOIN customer c ON p.customer_id = c.customer_id
+  LEFT JOIN commission comm ON t.related_commission_id = comm.commission_id
+  LEFT JOIN agent a ON comm.agent_id = a.agent_id  -- Make sure this join exists
+  LEFT JOIN claim cl ON t.related_claim_id = cl.claim_id
+  LEFT JOIN hospital h ON cl.hospital_id = h.hospital_id  -- Make sure this join exists
+  ORDER BY t.created_at DESC
+  LIMIT 100
+`;
     
     const result = await pool.query(query);
     
-    const transactions = result.rows.map(row => ({
-      transaction_id: row.transaction_id,
-      related_payment_id: row.related_payment_id,
-      related_claim_id: row.related_claim_id,
-      related_commission_id: row.related_commission_id,
-      amount: parseFloat(row.amount),
-      type: row.type,
-      status: row.status,
-      created_at: row.created_at,
-      customer: {
-        name: row.customer_name || 'Unknown Customer'
-      },
-      payment: {
-        method: row.payment_method || 'Unknown',
-        status: row.payment_status
-      }
-    }));
+    console.log(`✅ Successfully retrieved ${result.rows.length} transactions from database`);
     
-    console.log(`✅ Successfully retrieved ${transactions.length} transactions from database`);
+    const transactions = result.rows.map(row => {
+      // Determine user name based on transaction type
+      let userName = 'Unknown';
+      const transactionType = (row.type || '').toLowerCase();
+      
+      if (row.customer_name) {
+        userName = row.customer_name;
+      } else if (row.agent_name) {
+        userName = row.agent_name;
+      } else if (row.hospital_name) {
+        userName = row.hospital_name;
+      }
+      
+      // Get payment method
+      let paymentMethod = row.payment_method_detail || row.transaction_payment_method || 'Unknown';
+      
+      // Format transaction type for display
+      let displayType = row.type || 'Unknown';
+      if (displayType === 'premium_payment') displayType = 'Premium Payment';
+      if (displayType === 'commission_payment') displayType = 'Commission Payment';
+      if (displayType === 'claim_payment') displayType = 'Claim Payment';
+      
+      return {
+        transaction_id: row.transaction_id,
+        related_payment_id: row.related_payment_id,
+        related_claim_id: row.related_claim_id,
+        related_commission_id: row.related_commission_id,
+        amount: parseFloat(row.amount),
+        type: displayType,
+        status: row.status,
+        created_at: row.created_at,
+        customer: {
+          name: row.customer_name
+        },
+        agent_name: row.agent_name,
+        hospital_name: row.hospital_name,
+        payment: {
+          method: paymentMethod,
+          status: row.payment_status
+        }
+      };
+    });
     
     return res.status(200).json({
       success: true,
@@ -216,7 +369,64 @@ router.get('/transactions', async (req, res) => {
     });
   }
 });
-
+// // Get transaction statistics
+// router.get('/transactions/stats/summary', async (req, res) => {
+//   console.log('📊 Stats route hit');
+  
+//   try {
+//     const countQuery = `SELECT COUNT(*) as total FROM transaction`;
+//     const countResult = await pool.query(countQuery);
+//     const recordCount = parseInt(countResult.rows[0].total, 10);
+    
+//     if (recordCount === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         scenario: 'no_data',
+//         message: 'No transactions found',
+//         data: {
+//           total_transactions: 0,
+//           successful_count: 0,
+//           pending_count: 0,
+//           failed_count: 0,
+//           total_revenue: 0
+//         }
+//       });
+//     }
+    
+//     const query = `
+//       SELECT 
+//         COUNT(*) as total_transactions,
+//         COUNT(CASE WHEN status = 'Completed' THEN 1 END) as successful_count,
+//         COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending_count,
+//         COUNT(CASE WHEN status = 'Failed' THEN 1 END) as failed_count,
+//         COALESCE(SUM(CASE WHEN status = 'Completed' THEN amount ELSE 0 END), 0) as total_revenue
+//       FROM transaction
+//     `;
+    
+//     const result = await pool.query(query);
+    
+//     res.status(200).json({
+//       success: true,
+//       scenario: 'has_data',
+//       data: result.rows[0]
+//     });
+    
+//   } catch (error) {
+//     console.error('Stats error:', error);
+//     res.status(200).json({
+//       success: true,
+//       scenario: 'error',
+//       message: 'Failed to fetch statistics',
+//       data: {
+//         total_transactions: 0,
+//         successful_count: 0,
+//         pending_count: 0,
+//         failed_count: 0,
+//         total_revenue: 0
+//       }
+//     });
+//   }
+// });
 // Get transaction statistics
 router.get('/transactions/stats/summary', async (req, res) => {
   console.log('📊 Stats route hit');
@@ -241,13 +451,14 @@ router.get('/transactions/stats/summary', async (req, res) => {
       });
     }
     
+    // ✅ FIXED: Use case-insensitive status check
     const query = `
       SELECT 
         COUNT(*) as total_transactions,
-        COUNT(CASE WHEN status = 'Completed' THEN 1 END) as successful_count,
-        COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending_count,
-        COUNT(CASE WHEN status = 'Failed' THEN 1 END) as failed_count,
-        COALESCE(SUM(CASE WHEN status = 'Completed' THEN amount ELSE 0 END), 0) as total_revenue
+        COUNT(CASE WHEN LOWER(status) = 'completed' THEN 1 END) as successful_count,
+        COUNT(CASE WHEN LOWER(status) = 'pending' THEN 1 END) as pending_count,
+        COUNT(CASE WHEN LOWER(status) = 'failed' THEN 1 END) as failed_count,
+        COALESCE(SUM(CASE WHEN LOWER(status) = 'completed' THEN amount ELSE 0 END), 0) as total_revenue
       FROM transaction
     `;
     
@@ -316,27 +527,60 @@ router.put('/transactions/:id/status', async (req, res) => {
 
 // ============ STRIPE PAYMENT ROUTES FOR COMMISSIONS ============
 
+// router.post('/commissions/:commissionId/pay', authenticate, adminMiddleware, async (req, res) => {
+//     try {
+//         const { commissionId } = req.params;
+//         const { amount, agentId } = req.body;
+        
+//         console.log('💰 Payment request received:', { commissionId, amount, agentId });
+        
+//         if (!amount || !agentId) {
+//             return res.status(400).json({ error: 'Missing required fields: amount and agentId' });
+//         }
+        
+//         const paymentIntent = await stripePaymentService.processCommissionPayment(
+//             commissionId,
+//             agentId,
+//             parseFloat(amount)
+//         );
+        
+//         res.json({
+//             success: true,
+//             clientSecret: paymentIntent.clientSecret,
+//             paymentIntentId: paymentIntent.paymentIntentId
+//         });
+        
+//     } catch (error) {
+//         console.error('Payment creation error:', error);
+//         res.status(500).json({ error: error.message });
+//     }
+// });
 router.post('/commissions/:commissionId/pay', authenticate, adminMiddleware, async (req, res) => {
     try {
         const { commissionId } = req.params;
-        const { amount, agentId } = req.body;
+        const { amount, agentId, paymentMethod } = req.body;  // ← ADD paymentMethod
         
-        console.log('💰 Payment request received:', { commissionId, amount, agentId });
+        console.log('💰 Payment request received:', { commissionId, amount, agentId, paymentMethod });
         
         if (!amount || !agentId) {
             return res.status(400).json({ error: 'Missing required fields: amount and agentId' });
         }
         
+        // Store the payment method for later use
+        const selectedPaymentMethod = paymentMethod || 'stripe';  // Default to stripe if not specified
+        
         const paymentIntent = await stripePaymentService.processCommissionPayment(
             commissionId,
             agentId,
-            parseFloat(amount)
+            parseFloat(amount),
+            selectedPaymentMethod  // ← Pass payment method
         );
         
         res.json({
             success: true,
             clientSecret: paymentIntent.clientSecret,
-            paymentIntentId: paymentIntent.paymentIntentId
+            paymentIntentId: paymentIntent.paymentIntentId,
+            paymentMethod: selectedPaymentMethod  // ← Return payment method
         });
         
     } catch (error) {
@@ -344,25 +588,62 @@ router.post('/commissions/:commissionId/pay', authenticate, adminMiddleware, asy
         res.status(500).json({ error: error.message });
     }
 });
+// router.post('/confirm-payment', authenticate, adminMiddleware, async (req, res) => {
+//     try {
+//         const { paymentIntentId } = req.body;
+        
+//         if (!paymentIntentId) {
+//             return res.status(400).json({ error: 'Missing paymentIntentId' });
+//         }
+        
+//         const result = await stripePaymentService.confirmCommissionPayment(paymentIntentId);
+        
+//         res.json(result);
+        
+//     } catch (error) {
+//         console.error('Payment confirmation error:', error);
+//         res.status(500).json({ error: error.message });
+//     }
+// });
 
 router.post('/confirm-payment', authenticate, adminMiddleware, async (req, res) => {
+    const client = await pool.connect();
+    
     try {
-        const { paymentIntentId } = req.body;
+        const { paymentIntentId, paymentMethod, commissionId } = req.body;  // ← ADD paymentMethod and commissionId
         
         if (!paymentIntentId) {
             return res.status(400).json({ error: 'Missing paymentIntentId' });
         }
         
+        await client.query('BEGIN');
+        
         const result = await stripePaymentService.confirmCommissionPayment(paymentIntentId);
+        
+        // ✅ UPDATE transaction with payment method
+        if (result.success && result.transactionId) {
+            const updateQuery = `
+                UPDATE transaction 
+                SET payment_method = $1,
+                    notes = COALESCE(notes, '') || ' | Payment via ' || $1
+                WHERE transaction_id = $2
+            `;
+            await client.query(updateQuery, [paymentMethod || 'stripe', result.transactionId]);
+            console.log(`✅ Updated transaction ${result.transactionId} with payment method: ${paymentMethod || 'stripe'}`);
+        }
+        
+        await client.query('COMMIT');
         
         res.json(result);
         
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('Payment confirmation error:', error);
         res.status(500).json({ error: error.message });
+    } finally {
+        client.release();
     }
 });
-
 router.get('/status/:paymentIntentId', authenticate, async (req, res) => {
     try {
         const { paymentIntentId } = req.params;
@@ -1283,7 +1564,7 @@ router.get('/agent/claims/:claimId', authenticate, async (req, res) => {
     }
 });
 
-// Approve claim
+// Approve claim with hospital payout account check
 router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
     const client = await pool.connect();
     const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -1299,10 +1580,12 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
         const claimResult = await client.query(`
             SELECT c.*, p.policy_id, p.sum_insured, p.remaining_coverage, p.used_coverage,
                    p.deductible_amount as policy_deductible, p.co_pay_percentage as policy_copay,
-                   p.policy_type, cust.email as customer_email, cust.first_name, cust.last_name, cust.phone
+                   p.policy_type, cust.email as customer_email, cust.first_name, cust.last_name, cust.phone,
+                   h.name as hospital_name, h.hospital_id, h.email as hospital_email
             FROM claim c
             JOIN policy p ON c.policy_id = p.policy_id
-            JOIN customer cust ON c.customer_id = cust.customer_id
+            LEFT JOIN customer cust ON c.customer_id = cust.customer_id
+            LEFT JOIN hospital h ON c.hospital_id = h.hospital_id
             WHERE c.claim_id = $1
         `, [claimId]);
         
@@ -1312,12 +1595,45 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
         }
         
         const claim = claimResult.rows[0];
+        const isHospitalClaim = claim.hospital_id !== null;
         const requestedAmount = parseFloat(claim.claim_amount) || 0;
         let finalApprovedAmount = approved_amount ? parseFloat(approved_amount) : requestedAmount;
         
         if (isNaN(finalApprovedAmount) || finalApprovedAmount <= 0) {
             await client.query('ROLLBACK');
             return res.status(400).json({ success: false, message: 'Invalid approved amount' });
+        }
+        
+        // ============================================
+        // CHECK FOR HOSPITAL PAYOUT ACCOUNT
+        // ============================================
+        let hasPayoutAccount = true;
+        let pendingPayment = false;
+        
+        if (isHospitalClaim) {
+            const hospitalPayoutResult = await client.query(`
+                SELECT * FROM hospital_payout_account 
+                WHERE hospital_id = $1 AND status = 'active'
+                ORDER BY is_default DESC, created_at DESC
+                LIMIT 1
+            `, [claim.hospital_id]);
+            
+            hasPayoutAccount = hospitalPayoutResult.rows.length > 0;
+            
+            if (!hasPayoutAccount) {
+                console.log(`🏥 Hospital ${claim.hospital_id} has no payout account. Payment will be pending.`);
+                pendingPayment = true;
+                
+                // Send email notification to hospital about missing payout account
+                const emailService = require('../services/emailServices');
+                await emailService.sendHospitalMissingPayoutAccountEmail(
+                    claim.hospital_email,
+                    claim.hospital_name,
+                    claimId,
+                    finalApprovedAmount
+                );
+                console.log(`✅ Email sent to hospital ${claim.hospital_email} about missing payout account`);
+            }
         }
         
         const remainingCoverage = parseFloat(claim.remaining_coverage) || 0;
@@ -1343,92 +1659,207 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
         const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
         const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
         
-        await client.query(`
-            INSERT INTO payment (payment_id, policy_id, customer_id, amount, method, status, transaction_ref, paid_at)
-            VALUES ($1, $2, $3, $4, 'stripe', 'pending', $5, NOW())
-        `, [paymentId, claim.policy_id, claim.customer_id, insurancePaid, transactionId]);
-        
         let transferStatus = 'pending';
         let stripeTransferId = null;
         let paymentIntentId = null;
+        let paymentStatusForClaim = pendingPayment ? 'pending_account' : 'completed';
+        let claimStatus = pendingPayment ? 'approved' : 'paid';
         
-        if (insurancePaid > 0) {
-            try {
-                const paymentIntent = await stripe.paymentIntents.create({
-                    amount: Math.round(insurancePaid * 100),
-                    currency: 'usd',
-                    payment_method_types: ['card'],
-                    description: `Claim payment for claim #${claimId} - ${claim.policy_type}`,
-                    metadata: { claim_id: claimId, customer_id: claim.customer_id, policy_id: claim.policy_id, payment_id: paymentId },
-                    receipt_email: claim.customer_email
-                });
-                
-                paymentIntentId = paymentIntent.id;
-                stripeTransferId = paymentIntentId;
-                transferStatus = 'completed';
-                
-                const debitResult = await companyAccountService.debitCompanyAccount(
-                    insurancePaid, claim.customer_id, claimId,
-                    `Claim payout for claim #${claimId} - ${claim.policy_type}`
-                );
-                
-                console.log(`✅ Company account debited: $${insurancePaid}`);
-                
-            } catch (stripeError) {
-                console.error('Stripe payment error:', stripeError);
-                transferStatus = 'failed';
-            }
+        // ============================================
+        // DETERMINE THE RECIPIENT (ONLY ONE!)
+        // ============================================
+        let toAccountType = 'customer';
+        let toAccountId = claim.customer_id;
+        let transactionDescription = `Claim payout for claim #${claimId} - Customer: ${claim.first_name} ${claim.last_name}`;
+        let transactionType = 'claim_payout';
+        
+        if (isHospitalClaim && !pendingPayment) {
+            toAccountType = 'hospital';
+            toAccountId = claim.hospital_id;
+            transactionDescription = `Claim payout for claim #${claimId} - Hospital: ${claim.hospital_name}`;
+            transactionType = 'hospital_payout';
         }
         
+        // Only process payment if hospital has payout account (or it's a customer claim)
+        if (!pendingPayment && insurancePaid > 0) {
+            try {
+                if (isHospitalClaim) {
+                    // Hospital claim - record only (no actual Stripe transfer for now)
+                    console.log(`🏥 Processing hospital payout for claim ${claimId}`);
+                    stripeTransferId = `HOSPITAL_PAYOUT_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+                    transferStatus = 'completed';
+                    
+                    console.log(`✅ Hospital payout recorded: $${insurancePaid} to hospital ${claim.hospital_id}`);
+                    
+                } else {
+                    // Customer claim - transfer to customer's Stripe account
+                    console.log(`👤 Processing customer payout for claim ${claimId}`);
+                    
+                    const paymentIntent = await stripe.paymentIntents.create({
+                        amount: Math.round(insurancePaid * 100),
+                        currency: 'usd',
+                        payment_method_types: ['card'],
+                        description: `Claim payment for claim #${claimId} - ${claim.policy_type}`,
+                        metadata: { claim_id: claimId, customer_id: claim.customer_id, policy_id: claim.policy_id, payment_id: paymentId },
+                        receipt_email: claim.customer_email
+                    });
+                    
+                    paymentIntentId = paymentIntent.id;
+                    stripeTransferId = paymentIntentId;
+                    transferStatus = 'completed';
+                }
+                
+                // Debit company account (ONE TIME)
+                const debitResult = await companyAccountService.debitCompanyAccount(
+                    insurancePaid, 
+                    isHospitalClaim ? claim.hospital_id : claim.customer_id, 
+                    claimId,
+                    transactionDescription
+                );
+                
+                console.log(`✅ Company account debited: $${insurancePaid} (Recipient: ${toAccountType})`);
+                
+            } catch (stripeError) {
+                console.error('Payment transfer error:', stripeError);
+                transferStatus = 'failed';
+                claimStatus = 'approved';
+                paymentStatusForClaim = 'failed';
+            }
+        } else if (pendingPayment) {
+            console.log(`⏳ Payment pending for hospital ${claim.hospital_id} - waiting for payout account setup`);
+        }
+        
+        // ============================================
+        // INSERT ONLY ONE LEDGER TRANSACTION
+        // ============================================
         await client.query(`
-            UPDATE claim 
-            SET status = 'paid',
-                approved_amount = $1::DECIMAL,
-                reviewed_by = $2::INTEGER,
-                reviewed_at = NOW(),
-                approval_notes = $3::TEXT,
-                deductible_applied = $4::DECIMAL,
-                co_pay_amount = $5::DECIMAL,
-                insurance_paid = $6::DECIMAL,
-                client_responsibility = $7::DECIMAL,
-                coverage_type = $8::VARCHAR,
-                agent_notes = $9::TEXT,
-                payment_status = $10::VARCHAR,
-                payment_transfer_date = CASE WHEN $10::VARCHAR = 'completed' THEN NOW() ELSE NULL END,
-                payment_intent_id = $11::VARCHAR,
-                stripe_transfer_id = $12::VARCHAR,
-                transfer_status = $13::VARCHAR,
-                updated_at = NOW()
-            WHERE claim_id = $14::INTEGER
+            INSERT INTO ledger_transactions 
+            (transaction_type, amount, from_account_type, from_account_id, to_account_type, to_account_id, 
+             reference_id, description, stripe_transfer_id, status, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
         `, [
-            finalApprovedAmount, agentId, notes || null, deductibleApplied, coPayAmount,
-            insurancePaid, clientResponsibility, coverage_type || 'full_coverage', notes || null,
-            transferStatus, paymentIntentId, stripeTransferId, transferStatus, claimId
+            transactionType,
+            insurancePaid,
+            'company',
+            1,
+            toAccountType,
+            toAccountId,
+            paymentId,
+            transactionDescription,
+            stripeTransferId || paymentId,
+            transferStatus === 'completed' ? 'completed' : 'pending'
         ]);
+        
+        console.log(`✅ Ledger entry created: $${insurancePaid} from company to ${toAccountType} ${toAccountId}`);
+        
+        // Insert payment record
+        await client.query(`
+            INSERT INTO payment (payment_id, policy_id, customer_id, amount, method, status, transaction_ref, paid_at)
+            VALUES ($1, $2, $3, $4, 'stripe', $5, $6, ${pendingPayment ? 'NULL' : 'NOW()'})
+        `, [paymentId, claim.policy_id, claim.customer_id, insurancePaid, transferStatus, transactionId]);
+        
+        // Insert transaction record (ONLY ONE)
+        await client.query(`
+            INSERT INTO transaction (transaction_id, related_payment_id, related_claim_id, amount, type, status, created_at, notes, payment_method)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'stripe')
+        `, [
+            transactionId, 
+            paymentId, 
+            claimId, 
+            insurancePaid, 
+            isHospitalClaim ? 'hospital_payout' : 'claim_payout', 
+            transferStatus === 'completed' ? 'completed' : 'pending',
+            pendingPayment ? `Payment pending - Hospital needs to add payout account` : `Payout for claim #${claimId}`
+        ]);
+        
+       // Update claim - FIXED for hospital claims
+await client.query(`
+    UPDATE claim 
+    SET status = $1,
+        approved_amount = $2::DECIMAL,
+        reviewed_by = $3::INTEGER,
+        reviewed_at = NOW(),
+        approval_notes = $4::TEXT,
+        deductible_applied = $5::DECIMAL,
+        co_pay_amount = $6::DECIMAL,
+        insurance_paid = $7::DECIMAL,
+        client_responsibility = $8::DECIMAL,
+        coverage_type = $9::VARCHAR,
+        agent_notes = $10::TEXT,
+        payment_status = $11::VARCHAR,
+        payment_transfer_date = CASE WHEN $12 = 'completed' OR $15 = 'completed' THEN NOW() ELSE NULL END,
+        payment_intent_id = COALESCE($13, $14, NULL),
+        stripe_transfer_id = COALESCE($14, $13, NULL),
+        transfer_status = $15::VARCHAR,
+        updated_at = NOW()
+    WHERE claim_id = $16::INTEGER
+`, [
+    claimStatus,                    // $1
+    finalApprovedAmount,            // $2
+    agentId,                        // $3
+    notes || null,                  // $4
+    deductibleApplied,              // $5
+    coPayAmount,                    // $6
+    insurancePaid,                  // $7
+    clientResponsibility,           // $8
+    coverage_type || 'full_coverage', // $9
+    notes || null,                  // $10
+    paymentStatusForClaim,          // $11
+    transferStatus,                 // $12 - for payment_transfer_date condition
+    paymentIntentId,                // $13 - Stripe payment intent ID (for customer claims)
+    stripeTransferId,               // $14 - Custom transfer ID (for hospital claims)
+    transferStatus,                 // $15 - for transfer_status column and condition
+    claimId                         // $16
+]);
         
         await client.query(`UPDATE transaction SET status = $1 WHERE related_payment_id = $2`, 
             [transferStatus === 'completed' ? 'completed' : 'pending', paymentId]);
         
+        // Update policy remaining coverage
         const newRemainingCoverage = remainingCoverage - insurancePaid;
         const newUsedCoverage = (parseFloat(claim.sum_insured) || 0) - newRemainingCoverage;
         
         await client.query(`UPDATE policy SET remaining_coverage = $1::DECIMAL, used_coverage = $2::DECIMAL, updated_at = NOW() WHERE policy_id = $3::INTEGER`,
             [newRemainingCoverage, newUsedCoverage, claim.policy_id]);
         
+        // Add audit log entry
         await client.query(`INSERT INTO claim_audit_log (claim_id, action, old_status, new_status, performed_by, performed_by_type, reason, notes, created_at)
-            VALUES ($1::INTEGER, 'APPROVE_AND_PAY', 'pending', 'paid', $2::INTEGER, 'agent', $3::TEXT, $4::TEXT, NOW())`,
-            [claimId, agentId, `Amount: $${insurancePaid} transferred`, notes || null]);
+            VALUES ($1::INTEGER, 'APPROVE_AND_PAY', 'pending', $2, $3::INTEGER, 'agent', $4::TEXT, $5::TEXT, NOW())`,
+            [claimId, claimStatus, agentId, 
+             pendingPayment ? `Amount: $${insurancePaid} pending - Hospital needs payout account` : `Amount: $${insurancePaid} transferred`, 
+             notes || null]);
         
         await client.query('COMMIT');
         
-        const claimService = require('../services/claimService');
-        await claimService.sendClaimPaymentConfirmationEmail({
-            claim_id: claimId, claim_amount: requestedAmount, approved_amount: finalApprovedAmount,
-            insurance_paid: insurancePaid, payment_id: paymentId, transaction_id: transactionId,
-            payment_status: transferStatus, stripe_transfer_id: stripeTransferId
-        }, claim.customer_email, `${claim.first_name} ${claim.last_name}`);
+        // Send email confirmation if payment was processed
+        if (!pendingPayment && !isHospitalClaim) {
+            const claimService = require('../services/claimService');
+            await claimService.sendClaimPaymentConfirmationEmail({
+                claim_id: claimId, claim_amount: requestedAmount, approved_amount: finalApprovedAmount,
+                insurance_paid: insurancePaid, payment_id: paymentId, transaction_id: transactionId,
+                payment_status: transferStatus, stripe_transfer_id: stripeTransferId
+            }, claim.customer_email, `${claim.first_name} ${claim.last_name}`);
+        }
         
-        res.json({ success: true, message: `Claim approved and $${insurancePaid.toFixed(2)} transferred`, data: { claim_id: claimId, status: 'paid' } });
+        // Prepare response message
+        let responseMessage;
+        if (pendingPayment) {
+            responseMessage = `Claim approved for $${insurancePaid.toFixed(2)}. Payment is pending - Hospital needs to add payout account. An email notification has been sent to the hospital.`;
+        } else {
+            responseMessage = `Claim approved and $${insurancePaid.toFixed(2)} transferred to ${isHospitalClaim ? 'hospital payout account' : 'customer account'}`;
+        }
+        
+        res.json({ 
+            success: true, 
+            message: responseMessage,
+            data: { 
+                claim_id: claimId, 
+                status: claimStatus,
+                recipient: isHospitalClaim ? 'hospital' : 'customer',
+                pendingAccount: pendingPayment,
+                amountPending: pendingPayment ? insurancePaid : null
+            }
+        });
         
     } catch (error) {
         await client.query('ROLLBACK');
@@ -1438,7 +1869,6 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
         client.release();
     }
 });
-
 // Disapprove claim
 router.put('/agent/claims/:claimId/disapprove', authenticate, async (req, res) => {
     const client = await pool.connect();
@@ -2130,6 +2560,145 @@ router.get('/customer/reminders', authenticate, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+// // Process premium payment
+// router.post('/customer/process-payment', authenticate, async (req, res) => {
+//     const client = await pool.connect();
+    
+//     try {
+//         const customerId = req.user?.userId;
+//         const { policyId, amount, paymentMethod, reminderId } = req.body;
+        
+//         if (!customerId || !policyId || !amount) {
+//             return res.status(400).json({ success: false, error: 'Missing required fields' });
+//         }
+        
+//         await client.query('BEGIN');
+        
+//         // 1. Verify policy belongs to customer
+//         const policyResult = await client.query(
+//             `SELECT p.*, pp.plan_name 
+//              FROM policy p
+//              JOIN policy_plans pp ON pp.policy_type = p.policy_type
+//              WHERE p.policy_id = $1 AND p.customer_id = $2 AND p.status = 'active'`,
+//             [policyId, customerId]
+//         );
+        
+//         if (policyResult.rows.length === 0) {
+//             await client.query('ROLLBACK');
+//             return res.status(404).json({ success: false, error: 'Policy not found' });
+//         }
+        
+//         const policy = policyResult.rows[0];
+//         const paymentAmount = parseFloat(amount);
+        
+//         // 2. Create payment record
+//         const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+//         const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        
+//         await client.query(
+//             `INSERT INTO payment (
+//                 payment_id, policy_id, customer_id, amount, method, status, 
+//                 transaction_ref, paid_at
+//             ) VALUES ($1, $2, $3, $4, $5, 'Completed', $6, NOW())`,
+//             [paymentId, policyId, customerId, paymentAmount, paymentMethod || 'card', transactionId]
+//         );
+        
+//         // 3. Create transaction record
+//         await client.query(
+//             `INSERT INTO transaction (
+//                 transaction_id, related_payment_id, amount, type, status, 
+//                 created_at, payment_method, notes
+//             ) VALUES ($1, $2, $3, 'premium_payment', 'completed', NOW(), $4, $5)`,
+//             [transactionId, paymentId, paymentAmount, paymentMethod || 'card', `Premium payment for policy #${policyId}`]
+//         );
+        
+//         // 4. Credit company account
+//         const creditResult = await companyAccountService.creditCompanyAccount(
+//             paymentAmount,
+//             customerId,
+//             policyId,
+//             `Premium payment from customer ${customerId} for policy #${policyId} - ${policy.plan_name}`
+//         );
+        
+//         if (!creditResult.success) {
+//             throw new Error('Failed to credit company account');
+//         }
+        
+//         // 5. Update policy remaining coverage
+//         await client.query(
+//             `UPDATE policy 
+//              SET remaining_coverage = remaining_coverage + $1,
+//                  updated_at = NOW()
+//              WHERE policy_id = $2`,
+//             [paymentAmount, policyId]
+//         );
+        
+//         // ✅ 6. If this payment was from a reminder, mark reminder as 'completed'
+//         if (reminderId) {
+//             // First, get the reminder details to log properly
+//             const reminderResult = await client.query(
+//                 `SELECT reminder_date, reminder_type FROM payment_reminders WHERE reminder_id = $1`,
+//                 [reminderId]
+//             );
+            
+//             // Update reminder status to 'completed'
+//             await client.query(
+//                 `UPDATE payment_reminders 
+//                  SET status = 'completed', 
+//                      updated_at = NOW(),
+//                      notes = COALESCE(notes, 'Payment completed via customer dashboard')
+//                  WHERE reminder_id = $1`,
+//                 [reminderId]
+//             );
+            
+//             // Log reminder completion in reminder_logs
+//             await client.query(
+//                 `INSERT INTO reminder_logs (
+//                     reminder_id, customer_id, customer_email, notification_type, 
+//                     subject, message, status, sent_at
+//                 ) VALUES ($1, $2, (SELECT email FROM customer WHERE customer_id = $2), 
+//                     'payment_completed', 'Payment Completed', $3, 'success', NOW())`,
+//                 [reminderId, customerId, `Payment of Rs. ${paymentAmount.toLocaleString()} completed for policy #${policyId}`]
+//             );
+            
+//             console.log(`✅ Reminder ${reminderId} marked as completed after payment`);
+//         }
+        
+//         await client.query('COMMIT');
+        
+//         // 7. Create notification for customer
+//         const { createNotification } = require('../routes/notificationRoutes');
+//         await createNotification(
+//             customerId,
+//             'customer',
+//             'payment_received',
+//             'Payment Successful ✅',
+//             `Your payment of Rs. ${paymentAmount.toLocaleString()} for policy "${policy.plan_name}" has been received successfully.`,
+//             policyId
+//         ).catch(err => console.log('Notification error:', err.message));
+        
+//         console.log(`✅ Premium payment processed: ${paymentId} for customer ${customerId}`);
+        
+//         res.json({
+//             success: true,
+//             message: 'Payment processed successfully',
+//             data: {
+//                 payment_id: paymentId,
+//                 transaction_id: transactionId,
+//                 amount: paymentAmount,
+//                 company_balance: creditResult.new_balance,
+//                 reminder_completed: !!reminderId
+//             }
+//         });
+        
+//     } catch (error) {
+//         await client.query('ROLLBACK');
+//         console.error('Error processing premium payment:', error);
+//         res.status(500).json({ success: false, error: error.message });
+//     } finally {
+//         client.release();
+//     }
+// });
 // Process premium payment
 router.post('/customer/process-payment', authenticate, async (req, res) => {
     const client = await pool.connect();
@@ -2144,9 +2713,9 @@ router.post('/customer/process-payment', authenticate, async (req, res) => {
         
         await client.query('BEGIN');
         
-        // 1. Verify policy belongs to customer
+        // 1. Verify policy belongs to customer and get agent_id
         const policyResult = await client.query(
-            `SELECT p.*, pp.plan_name 
+            `SELECT p.*, pp.plan_name, p.agent_id
              FROM policy p
              JOIN policy_plans pp ON pp.policy_type = p.policy_type
              WHERE p.policy_id = $1 AND p.customer_id = $2 AND p.status = 'active'`,
@@ -2160,6 +2729,7 @@ router.post('/customer/process-payment', authenticate, async (req, res) => {
         
         const policy = policyResult.rows[0];
         const paymentAmount = parseFloat(amount);
+        const agentId = policy.agent_id;
         
         // 2. Create payment record
         const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -2203,15 +2773,20 @@ router.post('/customer/process-payment', authenticate, async (req, res) => {
             [paymentAmount, policyId]
         );
         
-        // ✅ 6. If this payment was from a reminder, mark reminder as 'completed'
-        if (reminderId) {
-            // First, get the reminder details to log properly
-            const reminderResult = await client.query(
-                `SELECT reminder_date, reminder_type FROM payment_reminders WHERE reminder_id = $1`,
-                [reminderId]
+        // ✅ 6. UPDATE AGENT'S TOTAL SALES (ADD THIS BLOCK)
+        if (agentId) {
+            await client.query(
+                `UPDATE agent 
+                 SET total_sales = COALESCE(total_sales, 0) + $1,
+                     updated_at = NOW()
+                 WHERE agent_id = $2`,
+                [paymentAmount, agentId]
             );
-            
-            // Update reminder status to 'completed'
+            console.log(`✅ Agent ${agentId} total_sales increased by $${paymentAmount} for premium payment on policy ${policyId}`);
+        }
+        
+        // 7. If this payment was from a reminder, mark reminder as 'completed'
+        if (reminderId) {
             await client.query(
                 `UPDATE payment_reminders 
                  SET status = 'completed', 
@@ -2221,7 +2796,6 @@ router.post('/customer/process-payment', authenticate, async (req, res) => {
                 [reminderId]
             );
             
-            // Log reminder completion in reminder_logs
             await client.query(
                 `INSERT INTO reminder_logs (
                     reminder_id, customer_id, customer_email, notification_type, 
@@ -2230,13 +2804,11 @@ router.post('/customer/process-payment', authenticate, async (req, res) => {
                     'payment_completed', 'Payment Completed', $3, 'success', NOW())`,
                 [reminderId, customerId, `Payment of Rs. ${paymentAmount.toLocaleString()} completed for policy #${policyId}`]
             );
-            
-            console.log(`✅ Reminder ${reminderId} marked as completed after payment`);
         }
         
         await client.query('COMMIT');
         
-        // 7. Create notification for customer
+        // 8. Create notification for customer
         const { createNotification } = require('../routes/notificationRoutes');
         await createNotification(
             customerId,
@@ -2269,7 +2841,6 @@ router.post('/customer/process-payment', authenticate, async (req, res) => {
         client.release();
     }
 });
-
 // Get upcoming payments summary
 router.get('/customer/upcoming-summary', authenticate, async (req, res) => {
     try {

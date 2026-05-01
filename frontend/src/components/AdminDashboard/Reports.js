@@ -89,26 +89,69 @@ function Reports() {
     try {
       const config = getAxiosConfig();
       
-      // For commission summary, use the commission API
-      if (selectedReport === 'commission-summary') {
+      // // For commission summary, use the commission API
+      // if (selectedReport === 'commission-summary') {
+      //   const dateValues = getDateRangeValues();
+      //   const response = await axios.get(
+      //     `${API_BASE_URL}/commissions/report/summary`,
+      //     {
+      //       ...config,
+      //       params: { 
+      //         start_date: dateValues.start_date,
+      //         end_date: dateValues.end_date
+      //       }
+      //     }
+      //   );
+        
+      //   if (response.data) {
+      //     setReportData(response.data);
+      //   } else {
+      //     throw new Error('Failed to fetch commission summary');
+      //   }
+      // } 
+      // In fetchReport function, for commission-summary
+if (selectedReport === 'commission-summary') {
+    try {
         const dateValues = getDateRangeValues();
         const response = await axios.get(
-          `${API_BASE_URL}/commissions/report/summary`,
-          {
-            ...config,
-            params: { 
-              start_date: dateValues.start_date,
-              end_date: dateValues.end_date
+            `${API_BASE_URL}/commissions/report/summary`,
+            {
+                ...config,
+                params: { 
+                    start_date: dateValues.start_date,
+                    end_date: dateValues.end_date
+                }
             }
-          }
         );
         
         if (response.data) {
-          setReportData(response.data);
-        } else {
-          throw new Error('Failed to fetch commission summary');
+            setReportData(response.data);
         }
-      } 
+    } catch (err) {
+        console.error("Error fetching commission summary:", err);
+        // Fallback: Try without date filter to get all data
+        try {
+            const fallbackResponse = await axios.get(
+                `${API_BASE_URL}/commissions/report/summary`,
+                {
+                    ...config,
+                    params: { 
+                        start_date: '2020-01-01',
+                        end_date: new Date().toISOString().split('T')[0]
+                    }
+                }
+            );
+            if (fallbackResponse.data) {
+                setReportData(fallbackResponse.data);
+                setError('Showing all-time data (date filter not available)');
+            } else {
+                loadMockCommissionData();
+            }
+        } catch (fallbackErr) {
+            loadMockCommissionData();
+        }
+    }
+}
       // After the commission-summary condition, add:
 else if (selectedReport === 'monthly') {
   const dateValues = getDateRangeValues();
@@ -203,41 +246,32 @@ else if (selectedReport === 'monthly') {
     console.log(`${selectedReport} API Response:`, res.data);
     
     if (res.data.success && res.data.data) {
-      // Check if the data has the expected structure
-      if (selectedReport === 'user') {
-        // Ensure user data has required fields
-        const userData = res.data.data;
-        if (userData.labels && userData.labels.length > 0) {
-          setReportData(userData);
-        } else {
-          console.log('User data has no labels, using mock data');
-          loadMockUserGrowthData();
-        }
-      } else if (selectedReport === 'hospital') {
-        // Ensure hospital data has required fields
-        const hospitalData = res.data.data;
-        if (hospitalData.labels && hospitalData.labels.length > 0) {
-          setReportData(hospitalData);
-        } else {
-          console.log('Hospital data has no labels, using mock data');
-          loadMockHospitalNetworkData();
-        }
-      } else {
-        setReportData(res.data.data);
-      }
+      // Directly set the report data without checking for mock data
+      // The backend already returns hasData: false when no data exists
+      setReportData(res.data.data);
+      console.log(`${selectedReport} data set:`, res.data.data);
     } else {
-      throw new Error(res.data.message || 'Failed to fetch report data');
+      // If no data property, create a "no data" structure
+      setReportData({
+        hasData: false,
+        message: res.data.message || 'No data available for the selected date range',
+        labels: [],
+        data: [],
+        summary: {},
+        rawData: []
+      });
     }
   } catch (err) {
     console.error(`Error fetching ${selectedReport} report:`, err);
-    // Load mock data based on report type
-    if (selectedReport === 'user') {
-      loadMockUserGrowthData();
-    } else if (selectedReport === 'hospital') {
-      loadMockHospitalNetworkData();
-    } else {
-      throw err;
-    }
+    // Don't load mock data - just set empty data structure
+    setReportData({
+      hasData: false,
+      message: err.response?.data?.message || err.message || 'Failed to load report data',
+      labels: [],
+      data: [],
+      summary: {},
+      rawData: []
+    });
   }
 }
     } catch (err) {
@@ -629,7 +663,7 @@ const printReport = () => {
                 </div>
                 <div class="breakdown-item">
                   <span class="breakdown-label">Avg Commission/Agent:</span>
-                  <span class="breakdown-value">$${(reportData.breakdown.agent_performance.avg_commission_per_agent || 0).toLocaleString()}</span>
+                  <span className="breakdown-value">{(reportData.breakdown.agent_performance.avg_commission_per_agent || 0).toLocaleString()}%</span>
                 </div>
             `;
             
@@ -1039,206 +1073,484 @@ case 'monthly':
     alert('CSV exported successfully');
   };
 
-  // Generate chart data
-  const getChartData = useCallback(() => {
-    if (!reportData) return null;
+//   // Generate chart data
+//   const getChartData = useCallback(() => {
+//     if (!reportData) return null;
     
-    switch (selectedReport) {
-      case 'commission-summary':
-        if (!reportData.chartData) return null;
+//     switch (selectedReport) {
+//       case 'commission-summary':
+//         if (!reportData.chartData) return null;
+//         return {
+//           labels: reportData.chartData.labels || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+//           datasets: [
+//             {
+//               label: 'Commission Earned',
+//               data: reportData.chartData.commission_amounts || [],
+//               backgroundColor: 'rgba(59, 130, 246, 0.6)',
+//               borderColor: 'rgb(59, 130, 246)',
+//               borderWidth: 2,
+//               borderRadius: 6,
+//             },
+//             {
+//               label: 'Paid Amount',
+//               data: reportData.chartData.paid_amounts || [],
+//               backgroundColor: 'rgba(34, 197, 94, 0.6)',
+//               borderColor: 'rgb(34, 197, 94)',
+//               borderWidth: 2,
+//               borderRadius: 6,
+//             },
+//             {
+//               label: 'Pending Amount',
+//               data: reportData.chartData.pending_amounts || [],
+//               backgroundColor: 'rgba(234, 179, 8, 0.6)',
+//               borderColor: 'rgb(234, 179, 8)',
+//               borderWidth: 2,
+//               borderRadius: 6,
+//             }
+//           ]
+//         };
+//         case 'monthly':
+//   if (!reportData.chartData) return null;
+//   return {
+//     labels: reportData.chartData.labels,
+//     datasets: [
+//       {
+//         label: 'Revenue ($)',
+//         data: reportData.chartData.revenue,
+//         borderColor: 'rgb(34, 197, 94)',
+//         backgroundColor: 'rgba(34, 197, 94, 0.1)',
+//         tension: 0.4,
+//         fill: true,
+//         yAxisID: 'y',
+//       },
+//       {
+//         label: 'Commissions ($)',
+//         data: reportData.chartData.commissions,
+//         borderColor: 'rgb(59, 130, 246)',
+//         backgroundColor: 'rgba(59, 130, 246, 0.1)',
+//         tension: 0.4,
+//         fill: true,
+//         yAxisID: 'y',
+//       },
+//       {
+//         label: 'New Users',
+//         data: reportData.chartData.new_users,
+//         borderColor: 'rgb(234, 179, 8)',
+//         backgroundColor: 'rgba(234, 179, 8, 0.1)',
+//         tension: 0.4,
+//         fill: false,
+//         yAxisID: 'y1',
+//       }
+//     ]
+//   };
+//       case 'agent':
+//   // First try to use chartData if it exists and has data
+//   if (reportData.chartData && reportData.chartData.labels && reportData.chartData.labels.length > 0) {
+//     return {
+//       labels: reportData.chartData.labels,
+//       datasets: [
+//         {
+//           label: 'Commission Amount ($)',
+//           data: reportData.chartData.commission_amounts || [],
+//           backgroundColor: 'rgba(59, 130, 246, 0.6)',
+//           borderColor: 'rgb(59, 130, 246)',
+//           borderWidth: 2,
+//         }
+//       ]
+//     };
+//   }
+//   // If no chartData, create from agents array
+//   else if (reportData.agents && reportData.agents.length > 0) {
+//     // Safely map agent data with fallbacks
+//     const labels = reportData.agents.map(agent => {
+//       return agent.name || agent.agent_name || agent.full_name || 'Unknown';
+//     });
+//     const data = reportData.agents.map(agent => {
+//       return agent.commission || agent.total_commissions || agent.amount || 0;
+//     });
+    
+//     return {
+//       labels: labels,
+//       datasets: [
+//         {
+//           label: 'Commission Amount ($)',
+//           data: data,
+//           backgroundColor: 'rgba(59, 130, 246, 0.6)',
+//           borderColor: 'rgb(59, 130, 246)',
+//           borderWidth: 2,
+//         }
+//       ]
+//     };
+//   }
+//   return null;
+        
+//       case 'user':
+//   const userLabels = reportData.labels || [];
+//   const userData = reportData.data || [];
+//   const cumulativeData = reportData.cumulativeData || [];
+  
+//   if (userLabels.length === 0 || userData.length === 0) {
+//     // Return a chart with a "No Data" message
+//     return {
+//       labels: ['No Data'],
+//       datasets: [
+//         {
+//           label: 'No Data Available',
+//           data: [0],
+//           borderColor: 'rgb(200, 200, 200)',
+//           backgroundColor: 'rgba(200, 200, 200, 0.1)',
+//         }
+//       ]
+//     };
+//   }
+  
+//   return {
+//     labels: userLabels,
+//     datasets: [
+//       {
+//         label: 'New Users',
+//         data: userData,
+//         borderColor: 'rgb(59, 130, 246)',
+//         backgroundColor: 'rgba(59, 130, 246, 0.1)',
+//         tension: 0.4,
+//         fill: true,
+//       },
+//       {
+//         label: 'Total Users',
+//         data: cumulativeData.length > 0 ? cumulativeData : userData,
+//         borderColor: 'rgb(34, 197, 94)',
+//         backgroundColor: 'rgba(34, 197, 94, 0.1)',
+//         tension: 0.4,
+//         borderDash: [5, 5],
+//         fill: false,
+//       }
+//     ]
+//   };
+  
+// case 'hospital':
+//   const hospitalLabels = reportData.labels || [];
+//   const hospitalData = reportData.data || [];
+  
+//   if (hospitalLabels.length === 0 || hospitalData.length === 0) {
+//     return {
+//       labels: ['No Data'],
+//       datasets: [
+//         {
+//           label: 'No Data Available',
+//           data: [1],
+//           backgroundColor: ['rgba(200, 200, 200, 0.8)'],
+//           borderColor: ['rgb(200, 200, 200)'],
+//           borderWidth: 2,
+//         }
+//       ]
+//     };
+//   }
+  
+//   const backgroundColors = [
+//     'rgba(34, 197, 94, 0.8)',
+//     'rgba(59, 130, 246, 0.8)',
+//     'rgba(234, 179, 8, 0.8)',
+//     'rgba(239, 68, 68, 0.8)',
+//     'rgba(168, 85, 247, 0.8)',
+//   ];
+  
+//   return {
+//     labels: hospitalLabels,
+//     datasets: [
+//       {
+//         label: 'Hospital Count',
+//         data: hospitalData,
+//         backgroundColor: backgroundColors.slice(0, hospitalLabels.length),
+//         borderColor: backgroundColors.slice(0, hospitalLabels.length).map(color => color.replace('0.8', '1')),
+//         borderWidth: 2,
+//         hoverOffset: 15,
+//       }
+//     ]
+//   };
+        
+//       default:
+//         return null;
+//     }
+//   }, [reportData, selectedReport]);
+// Generate chart data
+const getChartData = useCallback(() => {
+  if (!reportData) return null;
+  
+  switch (selectedReport) {
+    case 'commission-summary':
+      // Check if there's actual data
+      if (!reportData.chartData || !reportData.chartData.labels || reportData.chartData.labels.length === 0) {
         return {
-          labels: reportData.chartData.labels || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+          labels: ['No Data'],
           datasets: [
             {
-              label: 'Commission Earned',
-              data: reportData.chartData.commission_amounts || [],
-              backgroundColor: 'rgba(59, 130, 246, 0.6)',
-              borderColor: 'rgb(59, 130, 246)',
-              borderWidth: 2,
-              borderRadius: 6,
-            },
-            {
-              label: 'Paid Amount',
-              data: reportData.chartData.paid_amounts || [],
-              backgroundColor: 'rgba(34, 197, 94, 0.6)',
-              borderColor: 'rgb(34, 197, 94)',
-              borderWidth: 2,
-              borderRadius: 6,
-            },
-            {
-              label: 'Pending Amount',
-              data: reportData.chartData.pending_amounts || [],
-              backgroundColor: 'rgba(234, 179, 8, 0.6)',
-              borderColor: 'rgb(234, 179, 8)',
+              label: 'No Commission Data',
+              data: [0],
+              backgroundColor: 'rgba(200, 200, 200, 0.6)',
+              borderColor: 'rgb(200, 200, 200)',
               borderWidth: 2,
               borderRadius: 6,
             }
           ]
         };
-        case 'monthly':
-  if (!reportData.chartData) return null;
-  return {
-    labels: reportData.chartData.labels,
-    datasets: [
-      {
-        label: 'Revenue ($)',
-        data: reportData.chartData.revenue,
-        borderColor: 'rgb(34, 197, 94)',
-        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-        tension: 0.4,
-        fill: true,
-        yAxisID: 'y',
-      },
-      {
-        label: 'Commissions ($)',
-        data: reportData.chartData.commissions,
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        tension: 0.4,
-        fill: true,
-        yAxisID: 'y',
-      },
-      {
-        label: 'New Users',
-        data: reportData.chartData.new_users,
-        borderColor: 'rgb(234, 179, 8)',
-        backgroundColor: 'rgba(234, 179, 8, 0.1)',
-        tension: 0.4,
-        fill: false,
-        yAxisID: 'y1',
       }
-    ]
-  };
-      case 'agent':
-  // First try to use chartData if it exists and has data
-  if (reportData.chartData && reportData.chartData.labels && reportData.chartData.labels.length > 0) {
-    return {
-      labels: reportData.chartData.labels,
-      datasets: [
-        {
-          label: 'Commission Amount ($)',
-          data: reportData.chartData.commission_amounts || [],
-          backgroundColor: 'rgba(59, 130, 246, 0.6)',
-          borderColor: 'rgb(59, 130, 246)',
-          borderWidth: 2,
-        }
-      ]
-    };
-  }
-  // If no chartData, create from agents array
-  else if (reportData.agents && reportData.agents.length > 0) {
-    // Safely map agent data with fallbacks
-    const labels = reportData.agents.map(agent => {
-      return agent.name || agent.agent_name || agent.full_name || 'Unknown';
-    });
-    const data = reportData.agents.map(agent => {
-      return agent.commission || agent.total_commissions || agent.amount || 0;
-    });
-    
-    return {
-      labels: labels,
-      datasets: [
-        {
-          label: 'Commission Amount ($)',
-          data: data,
-          backgroundColor: 'rgba(59, 130, 246, 0.6)',
-          borderColor: 'rgb(59, 130, 246)',
-          borderWidth: 2,
-        }
-      ]
-    };
-  }
-  return null;
+      return {
+        labels: reportData.chartData.labels,
+        datasets: [
+          {
+            label: 'Commission Earned',
+            data: reportData.chartData.commission_amounts || [],
+            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+            borderColor: 'rgb(59, 130, 246)',
+            borderWidth: 2,
+            borderRadius: 6,
+          },
+          {
+            label: 'Paid Amount',
+            data: reportData.chartData.paid_amounts || [],
+            backgroundColor: 'rgba(34, 197, 94, 0.6)',
+            borderColor: 'rgb(34, 197, 94)',
+            borderWidth: 2,
+            borderRadius: 6,
+          },
+          {
+            label: 'Pending Amount',
+            data: reportData.chartData.pending_amounts || [],
+            backgroundColor: 'rgba(234, 179, 8, 0.6)',
+            borderColor: 'rgb(234, 179, 8)',
+            borderWidth: 2,
+            borderRadius: 6,
+          }
+        ]
+      };
+      
+    case 'monthly':
+      // Check if there's actual data
+      if (!reportData.chartData || !reportData.chartData.labels || reportData.chartData.labels.length === 0) {
+        return {
+          labels: ['No Data'],
+          datasets: [
+            {
+              label: 'No Monthly Data',
+              data: [0],
+              borderColor: 'rgb(200, 200, 200)',
+              backgroundColor: 'rgba(200, 200, 200, 0.1)',
+              tension: 0.4,
+              fill: true,
+              yAxisID: 'y',
+            }
+          ]
+        };
+      }
+      return {
+        labels: reportData.chartData.labels,
+        datasets: [
+          {
+            label: 'Revenue ($)',
+            data: reportData.chartData.revenue,
+            borderColor: 'rgb(34, 197, 94)',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            tension: 0.4,
+            fill: true,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Commissions ($)',
+            data: reportData.chartData.commissions,
+            borderColor: 'rgb(59, 130, 246)',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            tension: 0.4,
+            fill: true,
+            yAxisID: 'y',
+          },
+          {
+            label: 'New Users',
+            data: reportData.chartData.new_users,
+            borderColor: 'rgb(234, 179, 8)',
+            backgroundColor: 'rgba(234, 179, 8, 0.1)',
+            tension: 0.4,
+            fill: false,
+            yAxisID: 'y1',
+          }
+        ]
+      };
+      
+    case 'agent':
+      // Check if there's actual data using hasData flag or data presence
+      if ((reportData.hasData === false) || 
+          (!reportData.chartData || !reportData.chartData.labels || reportData.chartData.labels.length === 0) &&
+          (!reportData.agents || reportData.agents.length === 0)) {
+        return {
+          labels: ['No Data'],
+          datasets: [
+            {
+              label: 'No Agent Data',
+              data: [0],
+              backgroundColor: 'rgba(200, 200, 200, 0.6)',
+              borderColor: 'rgb(200, 200, 200)',
+              borderWidth: 2,
+            }
+          ]
+        };
+      }
+      
+      // First try to use chartData if it exists and has data
+      if (reportData.chartData && reportData.chartData.labels && reportData.chartData.labels.length > 0) {
+        return {
+          labels: reportData.chartData.labels,
+          datasets: [
+            {
+              label: 'Commission Amount ($)',
+              data: reportData.chartData.commission_amounts || [],
+              backgroundColor: 'rgba(59, 130, 246, 0.6)',
+              borderColor: 'rgb(59, 130, 246)',
+              borderWidth: 2,
+            }
+          ]
+        };
+      }
+      // If no chartData, create from agents array
+      else if (reportData.agents && reportData.agents.length > 0) {
+        const labels = reportData.agents.map(agent => {
+          return agent.name || agent.agent_name || agent.full_name || 'Unknown';
+        });
+        const data = reportData.agents.map(agent => {
+          return agent.commission || agent.total_commissions || agent.amount || 0;
+        });
         
-      case 'user':
-  const userLabels = reportData.labels || [];
-  const userData = reportData.data || [];
-  const cumulativeData = reportData.cumulativeData || [];
-  
-  if (userLabels.length === 0 || userData.length === 0) {
-    // Return a chart with a "No Data" message
-    return {
-      labels: ['No Data'],
-      datasets: [
-        {
-          label: 'No Data Available',
-          data: [0],
-          borderColor: 'rgb(200, 200, 200)',
-          backgroundColor: 'rgba(200, 200, 200, 0.1)',
-        }
-      ]
-    };
-  }
-  
-  return {
-    labels: userLabels,
-    datasets: [
-      {
-        label: 'New Users',
-        data: userData,
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        tension: 0.4,
-        fill: true,
-      },
-      {
-        label: 'Total Users',
-        data: cumulativeData.length > 0 ? cumulativeData : userData,
-        borderColor: 'rgb(34, 197, 94)',
-        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-        tension: 0.4,
-        borderDash: [5, 5],
-        fill: false,
+        return {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Commission Amount ($)',
+              data: data,
+              backgroundColor: 'rgba(59, 130, 246, 0.6)',
+              borderColor: 'rgb(59, 130, 246)',
+              borderWidth: 2,
+            }
+          ]
+        };
       }
-    ]
-  };
-  
-case 'hospital':
-  const hospitalLabels = reportData.labels || [];
-  const hospitalData = reportData.data || [];
-  
-  if (hospitalLabels.length === 0 || hospitalData.length === 0) {
-    return {
-      labels: ['No Data'],
-      datasets: [
-        {
-          label: 'No Data Available',
-          data: [1],
-          backgroundColor: ['rgba(200, 200, 200, 0.8)'],
-          borderColor: ['rgb(200, 200, 200)'],
-          borderWidth: 2,
-        }
-      ]
-    };
-  }
-  
-  const backgroundColors = [
-    'rgba(34, 197, 94, 0.8)',
-    'rgba(59, 130, 246, 0.8)',
-    'rgba(234, 179, 8, 0.8)',
-    'rgba(239, 68, 68, 0.8)',
-    'rgba(168, 85, 247, 0.8)',
-  ];
-  
-  return {
-    labels: hospitalLabels,
-    datasets: [
-      {
-        label: 'Hospital Count',
-        data: hospitalData,
-        backgroundColor: backgroundColors.slice(0, hospitalLabels.length),
-        borderColor: backgroundColors.slice(0, hospitalLabels.length).map(color => color.replace('0.8', '1')),
-        borderWidth: 2,
-        hoverOffset: 15,
+      return null;
+        
+    case 'user':
+      // Check for no data using hasData flag
+      if (reportData.hasData === false) {
+        return {
+          labels: ['No Data'],
+          datasets: [
+            {
+              label: 'No User Data Available',
+              data: [0],
+              borderColor: 'rgb(200, 200, 200)',
+              backgroundColor: 'rgba(200, 200, 200, 0.1)',
+            }
+          ]
+        };
       }
-    ]
-  };
+      
+      const userLabels = reportData.labels || [];
+      const userData = reportData.data || [];
+      const cumulativeData = reportData.cumulativeData || [];
+      
+      if (userLabels.length === 0 || userData.length === 0) {
+        return {
+          labels: ['No Data'],
+          datasets: [
+            {
+              label: 'No User Data Available',
+              data: [0],
+              borderColor: 'rgb(200, 200, 200)',
+              backgroundColor: 'rgba(200, 200, 200, 0.1)',
+            }
+          ]
+        };
+      }
+      
+      return {
+        labels: userLabels,
+        datasets: [
+          {
+            label: 'New Users',
+            data: userData,
+            borderColor: 'rgb(59, 130, 246)',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            tension: 0.4,
+            fill: true,
+          },
+          {
+            label: 'Total Users',
+            data: cumulativeData.length > 0 ? cumulativeData : userData,
+            borderColor: 'rgb(34, 197, 94)',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            tension: 0.4,
+            borderDash: [5, 5],
+            fill: false,
+          }
+        ]
+      };
+      
+    case 'hospital':
+      // Check for no data using hasData flag
+      if (reportData.hasData === false) {
+        return {
+          labels: ['No Data'],
+          datasets: [
+            {
+              label: 'No Hospital Data Available',
+              data: [1],
+              backgroundColor: ['rgba(200, 200, 200, 0.8)'],
+              borderColor: ['rgb(200, 200, 200)'],
+              borderWidth: 2,
+            }
+          ]
+        };
+      }
+      
+      const hospitalLabels = reportData.labels || [];
+      const hospitalData = reportData.data || [];
+      
+      if (hospitalLabels.length === 0 || hospitalData.length === 0) {
+        return {
+          labels: ['No Data'],
+          datasets: [
+            {
+              label: 'No Hospital Data Available',
+              data: [1],
+              backgroundColor: ['rgba(200, 200, 200, 0.8)'],
+              borderColor: ['rgb(200, 200, 200)'],
+              borderWidth: 2,
+            }
+          ]
+        };
+      }
+      
+      const backgroundColors = [
+        'rgba(34, 197, 94, 0.8)',
+        'rgba(59, 130, 246, 0.8)',
+        'rgba(234, 179, 8, 0.8)',
+        'rgba(239, 68, 68, 0.8)',
+        'rgba(168, 85, 247, 0.8)',
+      ];
+      
+      return {
+        labels: hospitalLabels,
+        datasets: [
+          {
+            label: 'Hospital Count',
+            data: hospitalData,
+            backgroundColor: backgroundColors.slice(0, hospitalLabels.length),
+            borderColor: backgroundColors.slice(0, hospitalLabels.length).map(color => color.replace('0.8', '1')),
+            borderWidth: 2,
+            hoverOffset: 15,
+          }
+        ]
+      };
         
       default:
         return null;
     }
   }, [reportData, selectedReport]);
-
   // Get chart options
   const getChartOptions = useCallback(() => {
     const currentReport = reports.find(r => r.id === selectedReport);
@@ -1386,67 +1698,170 @@ if (selectedReport === 'monthly') {
     fetchReport();
   }, [fetchReport]);
 
-  // Render appropriate chart component
-  const renderChart = () => {
-    if (!reportData) {
-      return null;
-    }
+  // // Render appropriate chart component
+  // const renderChart = () => {
+  //   if (!reportData) {
+  //     return null;
+  //   }
     
-    const chartData = getChartData();
-    const options = getChartOptions();
+  //   const chartData = getChartData();
+  //   const options = getChartOptions();
 
-    if (!chartData) {
-      return (
-        <div className="h-full flex flex-col items-center justify-center p-4">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <BarChart3 className="h-8 w-8 text-gray-400" />
-          </div>
-          <p className="text-gray-600 mb-2">No chart data available</p>
-          <p className="text-sm text-gray-500 text-center">
-            Check the summary section below for details.
-          </p>
+  //   if (!chartData) {
+  //     return (
+  //       <div className="h-full flex flex-col items-center justify-center p-4">
+  //         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+  //           <BarChart3 className="h-8 w-8 text-gray-400" />
+  //         </div>
+  //         <p className="text-gray-600 mb-2">No chart data available</p>
+  //         <p className="text-sm text-gray-500 text-center">
+  //           Check the summary section below for details.
+  //         </p>
+  //       </div>
+  //     );
+  //   }
+
+  //   try {
+  //     switch (selectedReport) {
+  //       case 'commission-summary':
+  //       case 'agent':
+  //         return <BarChart data={chartData} options={options} />;
+  //       case 'user':
+  //         return <LineChart data={chartData} options={options} />;
+  //       case 'hospital':
+  //         return <DonutChart data={chartData} options={options} />;
+  //         case 'monthly':
+  // return <LineChart data={chartData} options={options} />;
+  //       default:
+  //         return (
+  //           <div className="h-full flex flex-col items-center justify-center p-4">
+  //             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+  //               <AlertCircle className="h-8 w-8 text-gray-400" />
+  //             </div>
+  //             <p className="text-gray-600 mb-2">Chart Preview Unavailable</p>
+  //             <p className="text-sm text-gray-500 text-center">
+  //               This report type is currently inactive.
+  //             </p>
+  //           </div>
+  //         );
+  //     }
+  //   } catch (error) {
+  //     console.error('Chart rendering error:', error);
+  //     return (
+  //       <div className="h-full flex flex-col items-center justify-center p-4">
+  //         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+  //           <AlertCircle className="h-8 w-8 text-red-400" />
+  //         </div>
+  //         <p className="text-red-600 mb-2">Error rendering chart</p>
+  //         <p className="text-sm text-red-500 text-center">{error.message}</p>
+  //       </div>
+  //     );
+  //   }
+  // };
+// Render appropriate chart component
+const renderChart = () => {
+  if (!reportData) {
+    return null;
+  }
+  
+  // Check for "No Data" state in user report
+  if (selectedReport === 'user' && reportData.hasData === false) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <TrendingUp className="h-8 w-8 text-gray-400" />
         </div>
-      );
-    }
+        <p className="text-gray-600 mb-2">No User Data Available</p>
+        <p className="text-sm text-gray-500 text-center">
+          {reportData.message || 'No user data found for the selected date range.'}
+        </p>
+        <p className="text-xs text-gray-400 mt-2">
+          Try selecting a different date range or check back later.
+        </p>
+      </div>
+    );
+  }
+  
+  // Check for "No Data" state in hospital report
+  if (selectedReport === 'hospital' && reportData.hasData === false) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <Building className="h-8 w-8 text-gray-400" />
+        </div>
+        <p className="text-gray-600 mb-2">No Hospital Data Available</p>
+        <p className="text-sm text-gray-500 text-center">
+          {reportData.message || 'No hospital data found for the selected date range.'}
+        </p>
+        <p className="text-xs text-gray-400 mt-2">
+          Try selecting a different date range or check back later.
+        </p>
+      </div>
+    );
+  }
+  
+  // Check if chart data exists and has valid labels
+  const chartData = getChartData();
+  const options = getChartOptions();
 
-    try {
-      switch (selectedReport) {
-        case 'commission-summary':
-        case 'agent':
-          return <BarChart data={chartData} options={options} />;
-        case 'user':
-          return <LineChart data={chartData} options={options} />;
-        case 'hospital':
-          return <DonutChart data={chartData} options={options} />;
-          case 'monthly':
-  return <LineChart data={chartData} options={options} />;
-        default:
-          return (
-            <div className="h-full flex flex-col items-center justify-center p-4">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <AlertCircle className="h-8 w-8 text-gray-400" />
-              </div>
-              <p className="text-gray-600 mb-2">Chart Preview Unavailable</p>
-              <p className="text-sm text-gray-500 text-center">
-                This report type is currently inactive.
-              </p>
+  if (!chartData || !chartData.labels || chartData.labels.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <BarChart3 className="h-8 w-8 text-gray-400" />
+        </div>
+        <p className="text-gray-600 mb-2">No chart data available</p>
+        <p className="text-sm text-gray-500 text-center">
+          {selectedReport === 'commission-summary' || selectedReport === 'agent'
+            ? 'No commission or agent data found for the selected period.'
+            : selectedReport === 'monthly'
+            ? 'No monthly performance data available.'
+            : 'Check the summary section below for details.'}
+        </p>
+        <p className="text-xs text-gray-400 mt-2">
+          Try selecting a different date range.
+        </p>
+      </div>
+    );
+  }
+
+  try {
+    switch (selectedReport) {
+      case 'commission-summary':
+      case 'agent':
+        return <BarChart data={chartData} options={options} />;
+      case 'user':
+        return <LineChart data={chartData} options={options} />;
+      case 'hospital':
+        return <DonutChart data={chartData} options={options} />;
+      case 'monthly':
+        return <LineChart data={chartData} options={options} />;
+      default:
+        return (
+          <div className="h-full flex flex-col items-center justify-center p-4">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="h-8 w-8 text-gray-400" />
             </div>
-          );
-      }
-    } catch (error) {
-      console.error('Chart rendering error:', error);
-      return (
-        <div className="h-full flex flex-col items-center justify-center p-4">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-            <AlertCircle className="h-8 w-8 text-red-400" />
+            <p className="text-gray-600 mb-2">Chart Preview Unavailable</p>
+            <p className="text-sm text-gray-500 text-center">
+              This report type is currently inactive.
+            </p>
           </div>
-          <p className="text-red-600 mb-2">Error rendering chart</p>
-          <p className="text-sm text-red-500 text-center">{error.message}</p>
-        </div>
-      );
+        );
     }
-  };
-
+  } catch (error) {
+    console.error('Chart rendering error:', error);
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+          <AlertCircle className="h-8 w-8 text-red-400" />
+        </div>
+        <p className="text-red-600 mb-2">Error rendering chart</p>
+        <p className="text-sm text-red-500 text-center">{error.message}</p>
+      </div>
+    );
+  }
+};
   return (
     <div className="p-8">
       {/* Header */}
@@ -1579,7 +1994,7 @@ if (selectedReport === 'monthly') {
           </div>
         )}
 
-        {/* Report Summary - Enhanced for commission summary */}
+        {/* Report Summary - Enhanced for commission summary
         {reportData && reportData.summary && (
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <h4 className="font-medium text-gray-900 mb-3">Report Summary</h4>
@@ -1602,7 +2017,57 @@ if (selectedReport === 'monthly') {
               ))}
             </div>
           </div>
-        )}
+        )} */}
+        {/* Report Summary - Commission Summary */}
+{selectedReport === 'commission-summary' && reportData && reportData.summary && (
+  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+    <h4 className="font-medium text-gray-900 mb-3">Report Summary</h4>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="text-center">
+        <div className="text-2xl font-bold text-blue-600">
+          ${reportData.summary.total_commissions?.toLocaleString() || 0}
+        </div>
+        <div className="text-sm text-gray-600">total commissions</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-green-600">
+          ${reportData.summary.paid_commissions?.toLocaleString() || 0}
+        </div>
+        <div className="text-sm text-gray-600">paid commissions</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-yellow-600">
+          ${reportData.summary.pending_commissions?.toLocaleString() || 0}
+        </div>
+        <div className="text-sm text-gray-600">pending commissions</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-gray-900">
+          {reportData.summary.total_agents || 0}
+        </div>
+        <div className="text-sm text-gray-600">total agents</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-gray-900">
+          {reportData.summary.active_agents || 0}
+        </div>
+        <div className="text-sm text-gray-600">active agents</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-purple-600">
+          {reportData.summary.avg_commission_rate || 0}%
+        </div>
+        <div className="text-sm text-gray-600">avg commission rate</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-gray-900">
+          {reportData.summary.total_policies || 0}
+        </div>
+        <div className="text-sm text-gray-600">total policies</div>
+      </div>
+    </div>
+  </div>
+)}
 
         {/* Top Agents Section for Commission Summary */}
         {selectedReport === 'commission-summary' && reportData && reportData.topAgents && (

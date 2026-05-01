@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "setup-db": "node setup-database.js"
+    "setup-db": "node setup-database.js",
+    "link-documents": "node backend/scripts/linkClaimDocuments.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

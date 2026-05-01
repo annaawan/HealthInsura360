@@ -112,8 +112,12 @@ const SetupPassword = () => {
       if (response.data.success) {
         setSuccess(true);
         setTimeout(() => {
-          navigate('/hospital/login', { 
-            state: { message: 'Password set successfully! Please login with your email and new password.' }
+          // CHANGED: Redirect to unified login page (not hospital-specific login)
+          navigate('/login', { 
+            state: { 
+              message: 'Password set successfully! Please login with your email, registration number, and new password.',
+              accountType: 'hospital'
+            }
           });
         }, 3000);
       }
@@ -147,10 +151,10 @@ const SetupPassword = () => {
             Please contact hospital support for assistance.
           </p>
           <button
-            onClick={() => navigate('/hospital/login')}
+            onClick={() => navigate('/login')}
             className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Go to Hospital Login
+            Go to Login
           </button>
         </div>
       </div>

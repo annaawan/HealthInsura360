@@ -2,7 +2,7 @@ const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 class StripeService {
-  async createPaymentIntent(amount, currency = 'pkr', metadata = {}) {
+  async createPaymentIntent(amount, currency = 'usd', metadata = {}) {
     try {
       const amountInPaisa = Math.round(amount * 100);
       

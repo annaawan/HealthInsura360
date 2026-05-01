@@ -170,7 +170,7 @@ router.get('/clients', authMiddleware, async (req, res) => {
       phone: client.phone || 'N/A',
       plan_name: client.policy_type || 'Pending Policy',
       premium_amount: client.premium_amount || 0,
-      status: client.policy_status || client.customer_status || 'Active',
+      status: (client.policy_status || client.customer_status || 'Active').toLowerCase(),
       created_at: client.created_at,
       policy_id: client.policy_id,
       start_date: client.start_date,
@@ -200,14 +200,14 @@ router.get('/clients/stats', authMiddleware, async (req, res) => {
     const result = await db.query(
       `SELECT 
          COUNT(DISTINCT c.customer_id) as total_clients,
-         COUNT(DISTINCT CASE WHEN p.status = 'Active' THEN c.customer_id END) as active_policies,
-         COUNT(DISTINCT CASE WHEN p.status = 'Pending' THEN c.customer_id END) as pending_policies,
+         COUNT(CASE WHEN LOWER(p.status) = 'active' THEN 1 END) as active_policies,
+         COUNT(CASE WHEN LOWER(p.status) = 'pending' THEN 1 END) as pending_policies,
          COALESCE(SUM(p.premium_amount), 0) as total_monthly_premium
        FROM customer c
        LEFT JOIN policy p ON c.customer_id = p.customer_id
        WHERE c.agent_id = $1 OR p.agent_id = $1`,
       [req.user.userId]
-    );
+);
 
     const stats = result.rows[0];
     res.json({
@@ -238,7 +238,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
     const result = await db.query(
       `SELECT 
          COUNT(*) as total_customers,
-         COUNT(CASE WHEN status = 'Active' THEN 1 END) as active_customers
+         COUNT(CASE WHEN LOWER(status) = 'active' THEN 1 END) as active_customers
        FROM customer
        WHERE agent_id = $1`,
       [req.user.userId]

@@ -318,7 +318,7 @@ function AgentPayments({ agent }) {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
-      currency: 'PKR',
+      currency: 'USD',
       minimumFractionDigits: 2
     }).format(amount || 0);
   };

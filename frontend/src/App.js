@@ -14,9 +14,10 @@ import AdminDashboard from './components/AdminDashboard/AdminDashboard';
 import CustomerDashboard from './components/CustomerDashboard';
 import SubmitClaim from './components/Claims/SubmitClaim';
 import MyClaims from './components/Claims/MyClaims';
-import SetupPassword from './pages/hospital/SetupPassword';
-import HospitalLogin from './pages/hospital/HospitalLogin';
-import HospitalDashboard from './pages/hospital/HospitalDashboard';
+// NEW paths (after moving to components folder)
+import HospitalLogin from './components/hospital/HospitalLogin';
+import HospitalDashboard from './components/hospital/HospitalDashboard';
+import SetupPassword from './components/hospital/SetupPassword';
 import { CommissionProvider } from './context/CommissionContext';
 import { AgentDashboard } from './components/AgentDashboard/AgentDashboard';  
 

@@ -47,150 +47,151 @@ function AccountsManagement() {
   });
 
   const validateForm = () => {
-  const errors = {};
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;  // Fixed: removed unnecessary escape
-  const zipRegex = /^\d{5}(-\d{4})?$/;
-  
-  // Common validations
-  if (!formData.name.trim()) errors.name = 'Name is required';
-  if (!formData.email.trim()) errors.email = 'Email is required';
-  else if (!emailRegex.test(formData.email)) errors.email = 'Invalid email format';
-  
-  if (formData.phone && !phoneRegex.test(formData.phone.replace(/\D/g, ''))) {
-    errors.phone = 'Invalid phone number';
-  }
-  
-  // Customer-specific validations
-  if (activeTab === 'customers') {
-    if (modalType === 'create' && !formData.password_hash) {
-      errors.password_hash = 'Password is required';
+    const errors = {};
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
+    const zipRegex = /^\d{5}(-\d{4})?$/;
+    
+    // Common validations
+    if (!formData.name.trim()) errors.name = 'Name is required';
+    if (!formData.email.trim()) errors.email = 'Email is required';
+    else if (!emailRegex.test(formData.email)) errors.email = 'Invalid email format';
+    
+    if (formData.phone && !phoneRegex.test(formData.phone.replace(/\D/g, ''))) {
+      errors.phone = 'Invalid phone number';
     }
-    if (formData.password_hash && formData.password_hash.length < 6) {
-      errors.password_hash = 'Password must be at least 6 characters';
-    }
-    if (formData.dob && new Date(formData.dob) > new Date()) {
-      errors.dob = 'Date of birth cannot be in the future';
-    }
-    if (formData.zip_code && !zipRegex.test(formData.zip_code)) {
-      errors.zip_code = 'Invalid ZIP code format';
-    }
-  }
-  
-  // Agent-specific validations
-  if (activeTab === 'agents') {
-    if (modalType === 'create' && !formData.password_hash) {
-      errors.password_hash = 'Password is required';
-    }
-    if (formData.password_hash && formData.password_hash.length < 6) {
-      errors.password_hash = 'Password must be at least 6 characters';
-    }
-    if (formData.commission_rate) {
-      const commission = parseFloat(formData.commission_rate);
-      if (isNaN(commission) || commission < 0 || commission > 100) {
-        errors.commission_rate = 'Commission must be between 0 and 100';
+    
+    // Customer-specific validations
+    if (activeTab === 'customers') {
+      if (modalType === 'create' && !formData.password_hash) {
+        errors.password_hash = 'Password is required';
+      }
+      if (formData.password_hash && formData.password_hash.length < 6) {
+        errors.password_hash = 'Password must be at least 6 characters';
+      }
+      if (formData.dob && new Date(formData.dob) > new Date()) {
+        errors.dob = 'Date of birth cannot be in the future';
+      }
+      if (formData.zip_code && !zipRegex.test(formData.zip_code)) {
+        errors.zip_code = 'Invalid ZIP code format';
       }
     }
-    if (formData.total_sales && parseFloat(formData.total_sales) < 0) {
-      errors.total_sales = 'Total sales cannot be negative';
+    
+    // Agent-specific validations
+    if (activeTab === 'agents') {
+      if (modalType === 'create' && !formData.password_hash) {
+        errors.password_hash = 'Password is required';
+      }
+      if (formData.password_hash && formData.password_hash.length < 6) {
+        errors.password_hash = 'Password must be at least 6 characters';
+      }
+      if (formData.commission_rate) {
+        const commission = parseFloat(formData.commission_rate);
+        if (isNaN(commission) || commission < 0 || commission > 100) {
+          errors.commission_rate = 'Commission must be between 0 and 100';
+        }
+      }
+      if (formData.total_sales && parseFloat(formData.total_sales) < 0) {
+        errors.total_sales = 'Total sales cannot be negative';
+      }
+      if (formData.gender && modalType === 'create') {
+        errors.gender = 'Gender is required';
+      }
     }
-    if (formData.gender && modalType === 'create') {
-      errors.gender = 'Gender is required';
+    
+    // Hospital-specific validations
+    if (activeTab === 'hospitals') {
+      if (formData.zip_code && !zipRegex.test(formData.zip_code)) {
+        errors.zip_code = 'Invalid ZIP code format';
+      }
     }
-  }
-  
-  // Hospital-specific validations
-  if (activeTab === 'hospitals') {
-    if (formData.zip_code && !zipRegex.test(formData.zip_code)) {
-      errors.zip_code = 'Invalid ZIP code format';
-    }
-  }
-  
-  setFormErrors(errors);
-  return Object.keys(errors).length === 0;
-};
-const fetchData = async () => {
-  setIsLoading(true);
-  setError(null);
-  
-  try {
-    const config = getAxiosConfig();
-    console.log('🔧 Fetching data with config:', config);
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
-    // Test connection first
+  const fetchData = async () => {
+    setIsLoading(true);
+    setError(null);
+    
     try {
-      const testRes = await axios.get(`${API_BASE_URL}/test`, config);
-      console.log('✅ Backend test response:', testRes.data);
-    } catch (testErr) {
-      console.error('❌ Backend test failed:', testErr.message);
-    }
+      const config = getAxiosConfig();
+      console.log('🔧 Fetching data with config:', config);
 
-    // Fetch all data in parallel
-    const [customersRes, agentsRes, hospitalsRes] = await Promise.all([
-      axios.get(`${API_BASE_URL}/accounts/customers`, config).catch(err => {
-        console.error('Customers fetch error:', err.response?.data || err.message);
-        throw err;
-      }),
-      axios.get(`${API_BASE_URL}/accounts/agents`, config).catch(err => {
-        console.error('Agents fetch error:', err.response?.data || err.message);
-        throw err;
-      }),
-      axios.get(`${API_BASE_URL}/accounts/hospitals`, config).catch(err => {
-        console.error('Hospitals fetch error:', err.response?.data || err.message);
-        throw err;
-      })
-    ]);
+      // Test connection first
+      try {
+        const testRes = await axios.get(`${API_BASE_URL}/test`, config);
+        console.log('✅ Backend test response:', testRes.data);
+      } catch (testErr) {
+        console.error('❌ Backend test failed:', testErr.message);
+      }
 
-    console.log('📊 API Responses:', {
-      customers: customersRes.data,
-      agents: agentsRes.data,
-      hospitals: hospitalsRes.data
-    });
+      // Fetch all data in parallel
+      const [customersRes, agentsRes, hospitalsRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/accounts/customers`, config).catch(err => {
+          console.error('Customers fetch error:', err.response?.data || err.message);
+          throw err;
+        }),
+        axios.get(`${API_BASE_URL}/accounts/agents`, config).catch(err => {
+          console.error('Agents fetch error:', err.response?.data || err.message);
+          throw err;
+        }),
+        axios.get(`${API_BASE_URL}/accounts/hospitals`, config).catch(err => {
+          console.error('Hospitals fetch error:', err.response?.data || err.message);
+          throw err;
+        })
+      ]);
 
-    // Extract data from response
-    if (customersRes.data.success) {
-      setCustomers(customersRes.data.data);
-    } else {
-      throw new Error(customersRes.data.message);
+      console.log('📊 API Responses:', {
+        customers: customersRes.data,
+        agents: agentsRes.data,
+        hospitals: hospitalsRes.data
+      });
+
+      // Extract data from response
+      if (customersRes.data.success) {
+        setCustomers(customersRes.data.data);
+      } else {
+        throw new Error(customersRes.data.message);
+      }
+      
+      if (agentsRes.data.success) {
+        setAgents(agentsRes.data.data);
+      } else {
+        throw new Error(agentsRes.data.message);
+      }
+      
+      if (hospitalsRes.data.success) {
+        setHospitals(hospitalsRes.data.data);
+      } else {
+        throw new Error(hospitalsRes.data.message);
+      }
+      
+    } catch (err) {
+      console.error('❌ Error fetching data:', err);
+      console.error('Full error object:', err);
+      console.error('Response data:', err.response?.data);
+      console.error('Response status:', err.response?.status);
+      
+      const errorMessage = err.response?.data?.message || 
+                          err.message || 
+                          'Failed to load data from server';
+      setError(`Error: ${errorMessage}. Please check browser console for details.`);
+      
+      // Use mock data as fallback
+      console.log('🔄 Using mock data as fallback');
+      setCustomers(getMockCustomers());
+      setAgents(getMockAgents());
+      setHospitals(getMockHospitals());
+    } finally {
+      setIsLoading(false);
     }
-    
-    if (agentsRes.data.success) {
-      setAgents(agentsRes.data.data);
-    } else {
-      throw new Error(agentsRes.data.message);
-    }
-    
-    if (hospitalsRes.data.success) {
-      setHospitals(hospitalsRes.data.data);
-    } else {
-      throw new Error(hospitalsRes.data.message);
-    }
-    
-  } catch (err) {
-    console.error('❌ Error fetching data:', err);
-    console.error('Full error object:', err);
-    console.error('Response data:', err.response?.data);
-    console.error('Response status:', err.response?.status);
-    
-    const errorMessage = err.response?.data?.message || 
-                        err.message || 
-                        'Failed to load data from server';
-    setError(`Error: ${errorMessage}. Please check browser console for details.`);
-    
-    // Use mock data as fallback
-    console.log('🔄 Using mock data as fallback');
-    setCustomers(getMockCustomers());
-    setAgents(getMockAgents());
-    setHospitals(getMockHospitals());
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   useEffect(() => {
-  fetchData();
+    fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []); 
+  }, []); 
 
   // Mock data for development (fallback)
   const getMockCustomers = () => [
@@ -345,331 +346,334 @@ const fetchData = async () => {
     return matchesSearch && matchesStatus;
   });
 
-const handleCreateAccount = () => {
-  setModalType('create');
-  
-  // Base form data WITHOUT password_hash
-  const baseFormData = {
-    name: '',
-    email: '',
-    phone: '',
-    status: 'active',
-    address: '',
-    city: '',
-    state: '',
-    zip_code: ''
-  };
-  
-  // Add type-specific fields
-  switch (activeTab) {
-    case 'customers':
-      setFormData({
-        ...baseFormData,
-        password_hash: '', // ADD password for customers
-        gender: '',
-        dob: '',
-      });
-      break;
-      
-    case 'agents':
-      setFormData({
-        ...baseFormData,
-        password_hash: '', // ADD password for agents
-        commission_rate: '',
-        license_number: '',
-        total_sales: ''
-      });
-      break;
-      
-    case 'hospitals':
-      setFormData({
-        ...baseFormData,
-        // NO password_hash for hospitals
-        registration_number: '',
-        contact_person: '',
-        specialization: ''
-      });
-      break;
-      
-    default:
-      setFormData(baseFormData);
-  }
-  
-  setShowModal(true);
-};
-
-const handleEditAccount = (account) => {
-  setModalType('edit');
-  setEditingAccount(account);
-  
-  // Base form data WITHOUT password_hash
-  const baseFormData = {
-    name: account.name || '',
-    email: account.email || '',
-    phone: account.phone || '',
-    status: account.status || 'active',
-    address: account.address || '',
-    city: account.city || '',
-    state: account.state || '',
-    zip_code: account.zip_code || ''
-  };
-  
-  // Add type-specific fields
-  switch (activeTab) {
-    case 'customers':
-      setFormData({
-        ...baseFormData,
-        password_hash: '', // Optional password for edit
-        gender: account.gender || '',
-        dob: account.dob || ''
-      });
-      break;
-      
-    case 'agents':
-      // Clean up commission rate (remove % if present)
-      let commissionRate = account.commission_rate || '';
-      if (commissionRate && typeof commissionRate === 'string') {
-        commissionRate = commissionRate.replace('%', '');
-      }
-      
-      setFormData({
-        ...baseFormData,
-        password_hash: '', // Optional password for edit
-        commission_rate: commissionRate,
-        license_number: account.license_number || '',
-        total_sales: account.total_sales || ''
-      });
-      break;
-      
-    case 'hospitals':
-      setFormData({
-        ...baseFormData,
-        // NO password_hash for hospitals
-        registration_number: account.registration_number || '',
-        contact_person: account.contact_person || '',
-        specialization: account.specialization || ''
-      });
-      break;
-      
-    default:
-      setFormData(baseFormData);
-  }
-  
-  setShowModal(true);
-};
-
-const deleteAccount = async (id) => {
-  if (!window.confirm('Are you sure you want to delete this account? This action cannot be undone.')) {
-    return;
-  }
-
-  try {
-    const config = getAxiosConfig();
-    const response = await axios.delete(`${API_BASE_URL}/accounts/${activeTab}/${id}`, config);
+  const handleCreateAccount = () => {
+    setModalType('create');
     
-    if (!response.data.success) {
-      throw new Error(response.data.message);
-    }
-    
-    // Update local state
-    const setter = getCurrentDataSetter();
-    
-    // Get account details before deletion for audit log
-    const deletedAccount = getCurrentData().find(item => item.id === id);
-    
-    setter(prev => prev.filter(item => item.id !== id));
-    
-    await auditLogger.deleteAccount(
-        activeTab,
-        id,
-        {
-          account_name: deletedAccount?.name || 'Unknown',
-          account_email: deletedAccount?.email || 'Unknown',
-          account_type: activeTab,
-          deleted_at: new Date().toISOString()
-        }
-      );
-    
-    alert(response.data.message || 'Account deleted successfully!');
-    fetchData(); // Reload page to reflect changes
-  } catch (err) {
-    console.error('Error deleting account:', err);
-    alert(err.response?.data?.message || err.message || 'Failed to delete account');
-  }
-};
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  // Validate form before submission
-  if (!validateForm()) {
-    alert('Please fix form errors before submitting.');
-    return;
-  }
-  try {
-    const config = getAxiosConfig();
-    console.log('🔄 Submitting form for:', activeTab);
-    console.log('📋 Form data:', formData);
-    
-    // Prepare clean data for API
-    const prepareApiData = () => {
-      // Start with all form data
-      const apiData = { ...formData };
-      
-      // Remove password_hash if it's empty (for edit mode)
-      if (apiData.password_hash === '') {
-        delete apiData.password_hash;
-      }
-      
-      // For hospitals, NEVER send password_hash
-      if (activeTab === 'hospitals' && apiData.password_hash !== undefined) {
-        console.log('⚠️ Removing password_hash for hospital');
-        delete apiData.password_hash;
-      }
-      
-      console.log('📤 Cleaned API data:', apiData);
-      return apiData;
+    // Base form data WITHOUT password_hash
+    const baseFormData = {
+      name: '',
+      email: '',
+      phone: '',
+      status: 'active',
+      address: '',
+      city: '',
+      state: '',
+      zip_code: ''
     };
     
-    const apiData = prepareApiData();
+    // Add type-specific fields
+    switch (activeTab) {
+      case 'customers':
+        setFormData({
+          ...baseFormData,
+          password_hash: '',
+          gender: '',
+          dob: '',
+        });
+        break;
+        
+      case 'agents':
+        setFormData({
+          ...baseFormData,
+          password_hash: '',
+          commission_rate: '',
+          license_number: '',
+          total_sales: ''
+        });
+        break;
+        
+      case 'hospitals':
+        setFormData({
+          ...baseFormData,
+          registration_number: '',
+          contact_person: '',
+          specialization: '',
+          status: 'pending' // Default status for hospitals
+        });
+        break;
+        
+      default:
+        setFormData(baseFormData);
+    }
     
-    // Use activeTab directly (plural)
-    const backendType = activeTab; // 'customers', 'agents', 'hospitals'
-    console.log('🎯 Backend type:', backendType);
+    setShowModal(true);
+  };
+
+  const handleEditAccount = (account) => {
+    setModalType('edit');
+    setEditingAccount(account);
     
-    if (modalType === 'create') {
-      // CREATE new account
-      const postPayload = {
-        type: backendType,
-        data: apiData
+    // Base form data WITHOUT password_hash
+    const baseFormData = {
+      name: account.name || '',
+      email: account.email || '',
+      phone: account.phone || '',
+      status: account.status || 'active',
+      address: account.address || '',
+      city: account.city || '',
+      state: account.state || '',
+      zip_code: account.zip_code || ''
+    };
+    
+    // Add type-specific fields
+    switch (activeTab) {
+      case 'customers':
+        setFormData({
+          ...baseFormData,
+          password_hash: '',
+          gender: account.gender || '',
+          dob: account.dob || ''
+        });
+        break;
+        
+      case 'agents':
+        let commissionRate = account.commission_rate || '';
+        if (commissionRate && typeof commissionRate === 'string') {
+          commissionRate = commissionRate.replace('%', '');
+        }
+        
+        setFormData({
+          ...baseFormData,
+          password_hash: '',
+          commission_rate: commissionRate,
+          license_number: account.license_number || '',
+          total_sales: account.total_sales || ''
+        });
+        break;
+        
+      case 'hospitals':
+        setFormData({
+          ...baseFormData,
+          registration_number: account.registration_number || '',
+          contact_person: account.contact_person || '',
+          specialization: account.specialization || ''
+        });
+        break;
+        
+      default:
+        setFormData(baseFormData);
+    }
+    
+    setShowModal(true);
+  };
+
+  const deleteAccount = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this account? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const config = getAxiosConfig();
+      const response = await axios.delete(`${API_BASE_URL}/accounts/${activeTab}/${id}`, config);
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message);
+      }
+      
+      // Update local state
+      const setter = getCurrentDataSetter();
+      
+      // Get account details before deletion for audit log
+      const deletedAccount = getCurrentData().find(item => item.id === id);
+      
+      setter(prev => prev.filter(item => item.id !== id));
+      
+      await auditLogger.deleteAccount(
+          activeTab,
+          id,
+          {
+            account_name: deletedAccount?.name || 'Unknown',
+            account_email: deletedAccount?.email || 'Unknown',
+            account_type: activeTab,
+            deleted_at: new Date().toISOString()
+          }
+        );
+      
+      alert(response.data.message || 'Account deleted successfully!');
+      fetchData();
+    } catch (err) {
+      console.error('Error deleting account:', err);
+      alert(err.response?.data?.message || err.message || 'Failed to delete account');
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) {
+      alert('Please fix form errors before submitting.');
+      return;
+    }
+    try {
+      const config = getAxiosConfig();
+      console.log('🔄 Submitting form for:', activeTab);
+      console.log('📋 Form data:', formData);
+      
+      const prepareApiData = () => {
+        const apiData = { ...formData };
+        
+        if (apiData.password_hash === '') {
+          delete apiData.password_hash;
+        }
+        
+        if (activeTab === 'hospitals' && apiData.password_hash !== undefined) {
+          console.log('⚠️ Removing password_hash for hospital');
+          delete apiData.password_hash;
+        }
+        
+        console.log('📤 Cleaned API data:', apiData);
+        return apiData;
       };
       
-      console.log('🚀 Sending POST to:', `${API_BASE_URL}/accounts`);
-      console.log('📦 POST payload:', postPayload);
+      const apiData = prepareApiData();
+      const backendType = activeTab;
+      console.log('🎯 Backend type:', backendType);
       
-      const response = await axios.post(
-        `${API_BASE_URL}/accounts`,
-        postPayload,
-        config
-      );
-      
-      console.log('✅ Response:', response.data);
-      
-      if (response.data.success) {
-        // Update local state
-        const setter = getCurrentDataSetter();
-        setter(prev => [...prev, response.data.data]);
-        // Log the creation
-    await auditLogger.createAccount(
-          activeTab,
-          response.data.data.id,
-          {
-            account_name: formData.name,
-            account_email: formData.email,
-            account_type: activeTab,
-            status: formData.status
-          }
+      if (modalType === 'create') {
+        const postPayload = {
+          type: backendType,
+          data: apiData
+        };
+        
+        console.log('🚀 Sending POST to:', `${API_BASE_URL}/accounts`);
+        console.log('📦 POST payload:', postPayload);
+        
+        const response = await axios.post(
+          `${API_BASE_URL}/accounts`,
+          postPayload,
+          config
         );
-        alert('Account created successfully!');
-        setShowModal(false);
-        fetchData(); // Refresh data
+        
+        console.log('✅ Response:', response.data);
+        
+        if (response.data.success) {
+          const setter = getCurrentDataSetter();
+          setter(prev => [...prev, response.data.data]);
+          await auditLogger.createAccount(
+            activeTab,
+            response.data.data.id,
+            {
+              account_name: formData.name,
+              account_email: formData.email,
+              account_type: activeTab,
+              status: formData.status
+            }
+          );
+          alert('Account created successfully!');
+          setShowModal(false);
+          fetchData();
+        } else {
+          throw new Error(response.data.message || 'Creation failed');
+        }
+        
       } else {
-        throw new Error(response.data.message || 'Creation failed');
+        console.log(`🚀 Sending PUT to: ${API_BASE_URL}/accounts/${backendType}/${editingAccount.id}`);
+        console.log('📦 PUT data:', apiData);
+        
+        const response = await axios.put(
+          `${API_BASE_URL}/accounts/${backendType}/${editingAccount.id}`,
+          apiData,
+          config
+        );
+        
+        console.log('✅ Response:', response.data);
+        
+        if (response.data.success) {
+          const setter = getCurrentDataSetter();
+          setter(prev => prev.map(item => 
+            item.id === editingAccount.id ? { ...item, ...apiData } : item
+          ));
+          await auditLogger.updateAccount(
+            activeTab,
+            editingAccount.id,
+            {
+              account_name: formData.name,
+              account_email: formData.email,
+              account_type: activeTab,
+              status: formData.status,
+              changed_fields: Object.keys(formData).filter(key => formData[key] !== editingAccount[key])
+            }
+          );
+          alert('Account updated successfully!');
+          setShowModal(false);
+          fetchData();
+        } else {
+          throw new Error(response.data.message || 'Update failed');
+        }
       }
       
-    } else {
-      // UPDATE existing account
-      console.log(`🚀 Sending PUT to: ${API_BASE_URL}/accounts/${backendType}/${editingAccount.id}`);
-      console.log('📦 PUT data:', apiData);
-      
-      const response = await axios.put(
-        `${API_BASE_URL}/accounts/${backendType}/${editingAccount.id}`,
-        apiData,
-        config
-      );
-      
-      console.log('✅ Response:', response.data);
-      
-      if (response.data.success) {
-        // Update local state
-        const setter = getCurrentDataSetter();
-        setter(prev => prev.map(item => 
-          item.id === editingAccount.id ? { ...item, ...apiData } : item
-        ));
-        await auditLogger.updateAccount(
-          activeTab,
-          editingAccount.id,
-          {
-            account_name: formData.name,
-            account_email: formData.email,
-            account_type: activeTab,
-            status: formData.status,
-            changed_fields: Object.keys(formData).filter(key => formData[key] !== editingAccount[key])
-          }
-        );
-        alert('Account updated successfully!');
-        setShowModal(false);
-        fetchData(); // Refresh data
-      } else {
-        throw new Error(response.data.message || 'Update failed');
-      }
-    }
-    
-  } catch (err) {
-    console.error('❌ FULL ERROR DETAILS:');
-    console.error('❌ Error object:', err);
-    console.error('❌ Error message:', err.message);
-    console.error('❌ Error response:', err.response?.data);
-    console.error('❌ Error status:', err.response?.status);
-    console.error('❌ Error headers:', err.response?.headers);
-    console.error('❌ Request config:', err.config);
+    } catch (err) {
+      console.error('❌ FULL ERROR DETAILS:');
+      console.error('❌ Error object:', err);
+      console.error('❌ Error message:', err.message);
+      console.error('❌ Error response:', err.response?.data);
+      console.error('❌ Error status:', err.response?.status);
+      console.error('❌ Error headers:', err.response?.headers);
+      console.error('❌ Request config:', err.config);
 
-    await auditLogger.logAuditAction(
-      `FAILED_${modalType.toUpperCase()}_${activeTab.toUpperCase()}`,
-      activeTab.slice(0, -1),
-      modalType === 'edit' ? editingAccount.id : null,
-      {
-        error: err.response?.data?.message || err.message,
-        account_name: formData.name,
-        account_type: activeTab
-      }
-    );
-    let errorMessage = 'Failed to save account. ';
-    
-    if (err.response?.data?.message) {
-      errorMessage += `Error: ${err.response.data.message}`;
+      await auditLogger.logAuditAction(
+        `FAILED_${modalType.toUpperCase()}_${activeTab.toUpperCase()}`,
+        activeTab.slice(0, -1),
+        modalType === 'edit' ? editingAccount.id : null,
+        {
+          error: err.response?.data?.message || err.message,
+          account_name: formData.name,
+          account_type: activeTab
+        }
+      );
+      let errorMessage = 'Failed to save account. ';
       
-      // Show specific backend error if available
-      if (err.response.data.error) {
-        errorMessage += `\nDetails: ${err.response.data.error}`;
+      if (err.response?.data?.message) {
+        errorMessage += `Error: ${err.response.data.message}`;
+        if (err.response.data.error) {
+          errorMessage += `\nDetails: ${err.response.data.error}`;
+        }
+      } else if (err.response?.data?.error) {
+        errorMessage += `Error: ${err.response.data.error}`;
+      } else if (err.message) {
+        errorMessage += `Error: ${err.message}`;
       }
-    } else if (err.response?.data?.error) {
-      errorMessage += `Error: ${err.response.data.error}`;
-    } else if (err.message) {
-      errorMessage += `Error: ${err.message}`;
+      
+      if (errorMessage.includes('Network Error') || errorMessage.includes('Failed to fetch')) {
+        errorMessage += '\n\n⚠️ Network issue. Check if backend server is running.';
+      }
+      
+      if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+        errorMessage += '\n\n⚠️ Authentication issue. Please login again.';
+      }
+      
+      if (errorMessage.includes('500') || errorMessage.includes('Internal Server Error')) {
+        errorMessage += '\n\n⚠️ Server error. Check backend console logs.';
+      }
+      
+      alert(errorMessage);
+    }
+  };
+
+  const getStatusColor = (status, tab = activeTab) => {
+    // For hospitals, map status to specific colors
+    if (tab === 'hospitals') {
+      switch (status?.toLowerCase()) {
+        case 'verified':
+          return 'bg-green-100 text-green-800';
+        case 'pending':
+          return 'bg-yellow-100 text-yellow-800';
+        case 'not-verified':
+        case 'rejected':
+          return 'bg-red-100 text-red-800';
+        default:
+          return 'bg-gray-100 text-gray-800';
+      }
     }
     
-    // Add troubleshooting tips based on common issues
-    if (errorMessage.includes('Network Error') || errorMessage.includes('Failed to fetch')) {
-      errorMessage += '\n\n⚠️ Network issue. Check if backend server is running.';
-    }
-    
-    if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-      errorMessage += '\n\n⚠️ Authentication issue. Please login again.';
-    }
-    
-    if (errorMessage.includes('500') || errorMessage.includes('Internal Server Error')) {
-      errorMessage += '\n\n⚠️ Server error. Check backend console logs.';
-    }
-    
-    alert(errorMessage);
-  }
-};
-  const getStatusColor = (status) => {
+    // For customers and agents
     switch (status?.toLowerCase()) {
       case 'active':
       case 'verified':
         return 'bg-green-100 text-green-800';
       case 'inactive':
-        return 'bg-gray-100 text-gray-800';
+      case 'not-verified':
+      case 'rejected':
+        return 'bg-red-100 text-red-800';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       default:
@@ -686,395 +690,163 @@ const handleSubmit = async (e) => {
     }
   };
 
-const renderFormFields = () => {
-  // Common fields shared by all account types
-  const commonFields = (
-    <>
-      <div className="grid md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-gray-700 mb-2">Name *</label>
-          <input
-            type="text"
-            required
-            className={`w-full px-4 py-2 border ${formErrors.name ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-            value={formData.name}
-            onChange={(e) => {
-              setFormData({...formData, name: e.target.value});
-              if (formErrors.name) setFormErrors({...formErrors, name: ''});
-            }}
-          />
-          {formErrors.name && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
-          )}
-        </div>
-        <div>
-          <label className="block text-gray-700 mb-2">Email *</label>
-          <input
-            type="email"
-            required
-            className={`w-full px-4 py-2 border ${formErrors.email ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-            value={formData.email}
-            onChange={(e) => {
-              setFormData({...formData, email: e.target.value});
-              if (formErrors.email) setFormErrors({...formErrors, email: ''});
-            }}
-          />
-          {formErrors.email && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-gray-700 mb-2">Phone</label>
-        <input
-          type="tel"
-          className={`w-full px-4 py-2 border ${formErrors.phone ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-          value={formData.phone}
-          onChange={(e) => {
-            setFormData({...formData, phone: e.target.value});
-            if (formErrors.phone) setFormErrors({...formErrors, phone: ''});
-          }}
-        />
-        {formErrors.phone && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
-        )}
-      </div>
-    </>
-  );
-
-  // CUSTOMER-SPECIFIC FORM
-  if (activeTab === 'customers') {
-    return (
+  const renderFormFields = () => {
+    // Common fields shared by all account types
+    const commonFields = (
       <>
-        {commonFields}
-        
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-gray-700 mb-2">
-              Password {modalType === 'create' ? '*' : ''}
-            </label>
+            <label className="block text-gray-700 mb-2">Name *</label>
             <input
-              type="password"
-              required={modalType === 'create'}
-              className={`w-full px-4 py-2 border ${formErrors.password_hash ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-              value={formData.password_hash}
+              type="text"
+              required
+              className={`w-full px-4 py-2 border ${formErrors.name ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+              value={formData.name}
               onChange={(e) => {
-                setFormData({...formData, password_hash: e.target.value});
-                if (formErrors.password_hash) setFormErrors({...formErrors, password_hash: ''});
+                setFormData({...formData, name: e.target.value});
+                if (formErrors.name) setFormErrors({...formErrors, name: ''});
               }}
             />
-            {formErrors.password_hash && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.password_hash}</p>
+            {formErrors.name && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
             )}
           </div>
           <div>
-            <label className="block text-gray-700 mb-2">Status *</label>
-            <select
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.status}
-              onChange={(e) => setFormData({...formData, status: e.target.value})}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="pending">Pending</option>
-            </select>
-          </div>
-        </div>
-        
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">Gender</label>
-            <select
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.gender}
-              onChange={(e) => setFormData({...formData, gender: e.target.value})}
-            >
-              <option value="">Select Gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-2">Date of Birth</label>
+            <label className="block text-gray-700 mb-2">Email *</label>
             <input
-              type="date"
-              className={`w-full px-4 py-2 border ${formErrors.dob ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-              value={formData.dob}
+              type="email"
+              required
+              className={`w-full px-4 py-2 border ${formErrors.email ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+              value={formData.email}
               onChange={(e) => {
-                setFormData({...formData, dob: e.target.value});
-                if (formErrors.dob) setFormErrors({...formErrors, dob: ''});
+                setFormData({...formData, email: e.target.value});
+                if (formErrors.email) setFormErrors({...formErrors, email: ''});
               }}
             />
-            {formErrors.dob && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.dob}</p>
+            {formErrors.email && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
             )}
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">Address</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.address}
-              onChange={(e) => setFormData({...formData, address: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-2">City</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.city}
-              onChange={(e) => setFormData({...formData, city: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-2">State</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.state}
-              onChange={(e) => setFormData({...formData, state: e.target.value})}
-            />
           </div>
         </div>
 
         <div>
-          <label className="block text-gray-700 mb-2">ZIP Code</label>
+          <label className="block text-gray-700 mb-2">Phone</label>
           <input
-            type="text"
-            className={`w-full px-4 py-2 border ${formErrors.zip_code ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-            value={formData.zip_code}
+            type="tel"
+            className={`w-full px-4 py-2 border ${formErrors.phone ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+            value={formData.phone}
             onChange={(e) => {
-              setFormData({...formData, zip_code: e.target.value});
-              if (formErrors.zip_code) setFormErrors({...formErrors, zip_code: ''});
+              setFormData({...formData, phone: e.target.value});
+              if (formErrors.phone) setFormErrors({...formErrors, phone: ''});
             }}
           />
-          {formErrors.zip_code && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.zip_code}</p>
+          {formErrors.phone && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
           )}
         </div>
       </>
     );
-  }
 
-  // AGENT-SPECIFIC FORM
-  if (activeTab === 'agents') {
-    return (
-      <>
-        {commonFields}
-        
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">
-              Password {modalType === 'create' ? '*' : ''}
-            </label>
-            <input
-              type="password"
-              required={modalType === 'create'}
-              className={`w-full px-4 py-2 border ${formErrors.password_hash ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-              value={formData.password_hash}
-              onChange={(e) => {
-                setFormData({...formData, password_hash: e.target.value});
-                if (formErrors.password_hash) setFormErrors({...formErrors, password_hash: ''});
-              }}
-            />
-            {formErrors.password_hash && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.password_hash}</p>
-            )}
+    // CUSTOMER-SPECIFIC FORM
+    if (activeTab === 'customers') {
+      return (
+        <>
+          {commonFields}
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">
+                Password {modalType === 'create' ? '*' : ''}
+              </label>
+              <input
+                type="password"
+                required={modalType === 'create'}
+                className={`w-full px-4 py-2 border ${formErrors.password_hash ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+                value={formData.password_hash}
+                onChange={(e) => {
+                  setFormData({...formData, password_hash: e.target.value});
+                  if (formErrors.password_hash) setFormErrors({...formErrors, password_hash: ''});
+                }}
+              />
+              {formErrors.password_hash && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.password_hash}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Status *</label>
+              <select
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.status}
+                onChange={(e) => setFormData({...formData, status: e.target.value})}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-gray-700 mb-2">Status *</label>
-            <select
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.status}
-              onChange={(e) => setFormData({...formData, status: e.target.value})}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="pending">Pending</option>
-            </select>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">Gender</label>
+              <select
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.gender}
+                onChange={(e) => setFormData({...formData, gender: e.target.value})}
+              >
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Date of Birth</label>
+              <input
+                type="date"
+                className={`w-full px-4 py-2 border ${formErrors.dob ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+                value={formData.dob}
+                onChange={(e) => {
+                  setFormData({...formData, dob: e.target.value});
+                  if (formErrors.dob) setFormErrors({...formErrors, dob: ''});
+                }}
+              />
+              {formErrors.dob && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.dob}</p>
+              )}
+            </div>
           </div>
-        </div>
-        
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">Gender *</label>
-            <select
-              required={modalType === 'create'}
-              className={`w-full px-4 py-2 border ${formErrors.gender ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-              value={formData.gender}
-              onChange={(e) => {
-                setFormData({...formData, gender: e.target.value});
-                if (formErrors.gender) setFormErrors({...formErrors, gender: ''});
-              }}
-            >
-              <option value="">Select Gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-            </select>
-            {formErrors.gender && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.gender}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-2">Date of Birth</label>
-            <input
-              type="date"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.dob}
-              onChange={(e) => setFormData({...formData, dob: e.target.value})}
-            />
-          </div>
-        </div>
 
-        <div className="grid md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">Address</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.address}
-              onChange={(e) => setFormData({...formData, address: e.target.value})}
-            />
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">Address</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.address}
+                onChange={(e) => setFormData({...formData, address: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">City</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.city}
+                onChange={(e) => setFormData({...formData, city: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">State</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.state}
+                onChange={(e) => setFormData({...formData, state: e.target.value})}
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-gray-700 mb-2">City</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.city}
-              onChange={(e) => setFormData({...formData, city: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-2">State</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.state}
-              onChange={(e) => setFormData({...formData, state: e.target.value})}
-            />
-          </div>
-        </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">ZIP Code</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.zip_code}
-              onChange={(e) => setFormData({...formData, zip_code: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-2">Commission Rate (%)</label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              max="100"
-              className={`w-full px-4 py-2 border ${formErrors.commission_rate ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-              value={formData.commission_rate}
-              onChange={(e) => {
-                setFormData({...formData, commission_rate: e.target.value});
-                if (formErrors.commission_rate) setFormErrors({...formErrors, commission_rate: ''});
-              }}
-            />
-            {formErrors.commission_rate && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.commission_rate}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">License Number</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.license_number}
-              onChange={(e) => setFormData({...formData, license_number: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-2">Total Sales ($)</label>
-            <input
-              type="number"
-              min="0"
-              className={`w-full px-4 py-2 border ${formErrors.total_sales ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
-              value={formData.total_sales}
-              onChange={(e) => {
-                setFormData({...formData, total_sales: e.target.value});
-                if (formErrors.total_sales) setFormErrors({...formErrors, total_sales: ''});
-              }}
-            />
-            {formErrors.total_sales && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.total_sales}</p>
-            )}
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // HOSPITAL-SPECIFIC FORM (NO PASSWORD FIELD)
-  if (activeTab === 'hospitals') {
-    return (
-      <>
-        {commonFields}
-        
-        <div>
-          <label className="block text-gray-700 mb-2">Status *</label>
-          <select
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-            value={formData.status}
-            onChange={(e) => setFormData({...formData, status: e.target.value})}
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="pending">Pending</option>
-            <option value="verified">Verified</option>
-          </select>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">Address</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.address}
-              onChange={(e) => setFormData({...formData, address: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-2">City</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.city}
-              onChange={(e) => setFormData({...formData, city: e.target.value})}
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-2">State</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.state}
-              onChange={(e) => setFormData({...formData, state: e.target.value})}
-            />
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="block text-gray-700 mb-2">ZIP Code</label>
             <input
@@ -1090,43 +862,277 @@ const renderFormFields = () => {
               <p className="text-red-500 text-sm mt-1">{formErrors.zip_code}</p>
             )}
           </div>
-          <div>
-            <label className="block text-gray-700 mb-2">Registration Number</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.registration_number}
-              onChange={(e) => setFormData({...formData, registration_number: e.target.value})}
-            />
-          </div>
-        </div>
+        </>
+      );
+    }
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">Contact Person</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.contact_person}
-              onChange={(e) => setFormData({...formData, contact_person: e.target.value})}
-            />
+    // AGENT-SPECIFIC FORM
+    if (activeTab === 'agents') {
+      return (
+        <>
+          {commonFields}
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">
+                Password {modalType === 'create' ? '*' : ''}
+              </label>
+              <input
+                type="password"
+                required={modalType === 'create'}
+                className={`w-full px-4 py-2 border ${formErrors.password_hash ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+                value={formData.password_hash}
+                onChange={(e) => {
+                  setFormData({...formData, password_hash: e.target.value});
+                  if (formErrors.password_hash) setFormErrors({...formErrors, password_hash: ''});
+                }}
+              />
+              {formErrors.password_hash && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.password_hash}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Status *</label>
+              <select
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.status}
+                onChange={(e) => setFormData({...formData, status: e.target.value})}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-gray-700 mb-2">Specialization</label>
-            <input
-              type="text"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              value={formData.specialization}
-              onChange={(e) => setFormData({...formData, specialization: e.target.value})}
-            />
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">Gender *</label>
+              <select
+                required={modalType === 'create'}
+                className={`w-full px-4 py-2 border ${formErrors.gender ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+                value={formData.gender}
+                onChange={(e) => {
+                  setFormData({...formData, gender: e.target.value});
+                  if (formErrors.gender) setFormErrors({...formErrors, gender: ''});
+                }}
+              >
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+              {formErrors.gender && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.gender}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Date of Birth</label>
+              <input
+                type="date"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.dob}
+                onChange={(e) => setFormData({...formData, dob: e.target.value})}
+              />
+            </div>
           </div>
-        </div>
-      </>
-    );
-  }
 
-  return null;
-};
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">Address</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.address}
+                onChange={(e) => setFormData({...formData, address: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">City</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.city}
+                onChange={(e) => setFormData({...formData, city: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">State</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.state}
+                onChange={(e) => setFormData({...formData, state: e.target.value})}
+              />
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">ZIP Code</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.zip_code}
+                onChange={(e) => setFormData({...formData, zip_code: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Commission Rate (%)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                className={`w-full px-4 py-2 border ${formErrors.commission_rate ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+                value={formData.commission_rate}
+                onChange={(e) => {
+                  setFormData({...formData, commission_rate: e.target.value});
+                  if (formErrors.commission_rate) setFormErrors({...formErrors, commission_rate: ''});
+                }}
+              />
+              {formErrors.commission_rate && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.commission_rate}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">License Number</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.license_number}
+                onChange={(e) => setFormData({...formData, license_number: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Total Sales ($)</label>
+              <input
+                type="number"
+                min="0"
+                className={`w-full px-4 py-2 border ${formErrors.total_sales ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+                value={formData.total_sales}
+                onChange={(e) => {
+                  setFormData({...formData, total_sales: e.target.value});
+                  if (formErrors.total_sales) setFormErrors({...formErrors, total_sales: ''});
+                }}
+              />
+              {formErrors.total_sales && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.total_sales}</p>
+              )}
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // HOSPITAL-SPECIFIC FORM (UPDATED: removed "active" option, changed to "rejected" instead of "inactive")
+    if (activeTab === 'hospitals') {
+      return (
+        <>
+          {commonFields}
+          
+          <div>
+            <label className="block text-gray-700 mb-2">Status *</label>
+            <select
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+              value={formData.status}
+              onChange={(e) => setFormData({...formData, status: e.target.value})}
+            >
+              <option value="pending">Pending</option>
+              <option value="verified">Verified</option>
+              <option value="not-verified">Rejected</option>
+            </select>
+            <p className="text-gray-500 text-sm mt-1">
+              Verified = Active in network | Rejected = Not approved
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">Address</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.address}
+                onChange={(e) => setFormData({...formData, address: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">City</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.city}
+                onChange={(e) => setFormData({...formData, city: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">State</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.state}
+                onChange={(e) => setFormData({...formData, state: e.target.value})}
+              />
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">ZIP Code</label>
+              <input
+                type="text"
+                className={`w-full px-4 py-2 border ${formErrors.zip_code ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600`}
+                value={formData.zip_code}
+                onChange={(e) => {
+                  setFormData({...formData, zip_code: e.target.value});
+                  if (formErrors.zip_code) setFormErrors({...formErrors, zip_code: ''});
+                }}
+              />
+              {formErrors.zip_code && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.zip_code}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Registration Number</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.registration_number}
+                onChange={(e) => setFormData({...formData, registration_number: e.target.value})}
+              />
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">Contact Person</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.contact_person}
+                onChange={(e) => setFormData({...formData, contact_person: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Specialization</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                value={formData.specialization}
+                onChange={(e) => setFormData({...formData, specialization: e.target.value})}
+              />
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    return null;
+  };
 
   if (isLoading) {
     return (
@@ -1171,29 +1177,30 @@ const renderFormFields = () => {
       )}
 
       {/* Tabs */}
-    
       <div className="flex gap-2 mb-6">
-  {[
-    { key: 'customers', icon: User, count: customers.length },
-    { key: 'agents', icon: Briefcase, count: agents.length },
-    { key: 'hospitals', icon: Building, count: hospitals.length },
-  ].map(({ key, icon: Icon, count }) => (
-    <button
-      key={key}
-      onClick={() => setActiveTab(key)}
-      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
-        activeTab === key
-          ? 'bg-blue-600 text-white'
-          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-      }`}
-    >
-      <Icon className="h-5 w-5" />
-      {key.charAt(0).toUpperCase() + key.slice(1)}
-      <span className="ml-2 text-sm opacity-80">({count})</span>
-    </button>
-  ))}
-</div>
-
+        {[
+          { key: 'customers', icon: User, count: customers.length },
+          { key: 'agents', icon: Briefcase, count: agents.length },
+          { key: 'hospitals', icon: Building, count: hospitals.length },
+        ].map(({ key, icon: Icon, count }) => (
+          <button
+            key={key}
+            onClick={() => {
+              setActiveTab(key);
+              setSelectedStatus('all'); // Reset filter when changing tabs
+            }}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
+              activeTab === key
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <Icon className="h-5 w-5" />
+            {key.charAt(0).toUpperCase() + key.slice(1)}
+            <span className="ml-2 text-sm opacity-80">({count})</span>
+          </button>
+        ))}
+      </div>
 
       {/* Filters and Search */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
@@ -1217,10 +1224,27 @@ const renderFormFields = () => {
               onChange={(e) => setSelectedStatus(e.target.value)}
             >
               <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="pending">Pending</option>
-              {activeTab === 'hospitals' && <option value="verified">Verified</option>}
+              {activeTab === 'customers' && (
+                <>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="pending">Pending</option>
+                </>
+              )}
+              {activeTab === 'agents' && (
+                <>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="pending">Pending</option>
+                </>
+              )}
+              {activeTab === 'hospitals' && (
+                <>
+                  <option value="verified">Verified (Active)</option>
+                  <option value="pending">Pending</option>
+                  <option value="not-verified">Rejected</option>
+                </>
+              )}
             </select>
           </div>
 
@@ -1284,6 +1308,16 @@ const renderFormFields = () => {
             <tbody className="divide-y divide-gray-200">
               {filteredData.map((account) => {
                 const Icon = getIcon();
+                // Display status nicely (show "Active" for verified hospitals)
+                let displayStatus = account.status;
+                if (activeTab === 'hospitals' && account.status === 'verified') {
+                  displayStatus = 'Active';
+                } else if (activeTab === 'hospitals' && account.status === 'not-verified') {
+                  displayStatus = 'Rejected';
+                } else {
+                  displayStatus = account.status?.charAt(0).toUpperCase() + account.status?.slice(1);
+                }
+                
                 return (
                   <tr key={account.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 font-mono text-gray-600">#{account.id}</td>
@@ -1333,8 +1367,8 @@ const renderFormFields = () => {
                       </>
                     )}
                     <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-sm ${getStatusColor(account.status)}`}>
-                        {account.status?.charAt(0).toUpperCase() + account.status?.slice(1)}
+                      <span className={`px-3 py-1 rounded-full text-sm ${getStatusColor(account.status, activeTab)}`}>
+                        {displayStatus}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-gray-600">
@@ -1413,4 +1447,5 @@ const renderFormFields = () => {
     </div>
   );
 }
+
 export default AccountsManagement;

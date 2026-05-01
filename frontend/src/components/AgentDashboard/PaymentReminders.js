@@ -244,7 +244,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
         >
           <Plus className="h-4 w-4" /> Create Reminder
         </button>
@@ -254,19 +254,19 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
       <div className="flex gap-2 mb-6 border-b border-gray-200">
         <button
           onClick={() => setFilterStatus('all')}
-          className={`px-4 py-2 font-medium ${filterStatus === 'all' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}
+          className={`px-4 py-2 font-medium ${filterStatus === 'all' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-600'}`}
         >
           All Reminders
         </button>
         <button
           onClick={() => setFilterStatus('active')}
-          className={`px-4 py-2 font-medium ${filterStatus === 'active' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}
+          className={`px-4 py-2 font-medium ${filterStatus === 'active' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-600'}`}
         >
           Active
         </button>
         <button
           onClick={() => setFilterStatus('sent')}
-          className={`px-4 py-2 font-medium ${filterStatus === 'sent' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}
+          className={`px-4 py-2 font-medium ${filterStatus === 'sent' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-600'}`}
         >
           Sent
         </button>
@@ -282,7 +282,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
       {/* Reminders List */}
       {loading ? (
         <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading reminders...</p>
         </div>
       ) : reminders.length === 0 ? (
@@ -364,7 +364,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                   {(reminder.status === 'active' || reminder.status === 'sent') && (
                     <button
                       onClick={() => handleMarkAsCompleted(reminder.reminder_id, reminder.policy_id, reminder.premium_amount)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                       title="Mark as Paid (Record Payment)"
                     >
                       <CheckCircle className="h-4 w-4" />
@@ -392,7 +392,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
           <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Create Payment Reminder</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-purple-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -406,7 +406,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                     required
                     value={reminderForm.customer_id}
                     onChange={(e) => handleClientChange(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
                   >
                     <option value="">-- Select a client --</option>
                     {clients.map(client => (
@@ -424,7 +424,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                     required
                     value={reminderForm.policy_id}
                     onChange={(e) => setReminderForm({...reminderForm, policy_id: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
                     disabled={!reminderForm.customer_id}
                   >
                     <option value="">-- Select a policy --</option>
@@ -467,7 +467,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                 
                 {/* Frequency */}
                 <div>
-                  <label className="block text-gray-700 mb-2">Frequency</label>
+                  <label className="block text-purple-700 mb-2">Frequency</label>
                   <select
                     value={reminderForm.frequency}
                     onChange={(e) => setReminderForm({...reminderForm, frequency: e.target.value})}
@@ -482,7 +482,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                 {/* Recurring End Date */}
                 {reminderForm.frequency !== 'one-time' && (
                   <div>
-                    <label className="block text-gray-700 mb-2">End Date (Optional)</label>
+                    <label className="block text-purple-700 mb-2">End Date (Optional)</label>
                     <input
                       type="date"
                       value={reminderForm.recurring_end_date}
@@ -495,7 +495,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                 
                 {/* Notification Methods */}
                 <div>
-                  <label className="block text-gray-700 mb-2">Notification Methods</label>
+                  <label className="block text-purple-700 mb-2">Notification Methods</label>
                   <div className="flex gap-4">
                     <label className="flex items-center gap-2">
                       <input
@@ -530,12 +530,12 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                 
                 {/* Custom Message */}
                 <div>
-                  <label className="block text-gray-700 mb-2">Custom Message (Optional)</label>
+                  <label className="block text-purple-700 mb-2">Custom Message (Optional)</label>
                   <textarea
                     rows="3"
                     value={reminderForm.message}
                     onChange={(e) => setReminderForm({...reminderForm, message: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
                     placeholder="Add a personal message to your client..."
                   />
                 </div>
@@ -544,7 +544,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
               <div className="flex gap-3 mt-6">
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                  className="flex-1 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700"
                 >
                   Create Reminder
                 </button>

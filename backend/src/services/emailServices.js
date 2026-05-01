@@ -1174,6 +1174,510 @@ async sendPolicyRenewalEmail(customerEmail, customerName, policyDetails) {
         return { success: false, error: error.message };
     }
 }
+// Send hospital approval email with registration number and password setup link
+async sendHospitalApprovalEmail(email, hospitalName, registrationNumber) {
+    console.log('📧 Sending hospital approval email to:', email);
+    
+    try {
+        // Check if email service is configured
+        if (!process.env.SMTP_EMAIL || !process.env.SMTP_PASSWORD) {
+            console.error('❌ SMTP not configured. Please check .env file');
+            return { success: false, error: 'SMTP not configured' };
+        }
+        
+        // Generate password setup token
+        const crypto = require('crypto');
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour expiry
+        
+        // Save token to database
+        const db = require('../config/database');
+        await db.query(
+            `INSERT INTO password_reset_tokens (token, email, user_type, expires_at, used)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [token, email, 'hospital', expiresAt, false]
+        );
+        
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const setupLink = `${frontendUrl}/hospital/setup-password?token=${token}&email=${encodeURIComponent(email)}`;
+        
+        const emailContent = this.generateHospitalApprovalEmailTemplate(hospitalName, registrationNumber, setupLink, email);
+        
+        const mailOptions = {
+            from: `"HealthInsura360" <${process.env.SMTP_EMAIL}>`,
+            to: email,
+            subject: '✅ Hospital Registration Approved - Welcome to HealthInsura360',
+            html: emailContent,
+        };
+        
+        const info = await this.transporter.sendMail(mailOptions);
+        console.log(`✅ Hospital approval email sent to ${email}: ${info.messageId}`);
+        
+        return { success: true, messageId: info.messageId };
+    } catch (error) {
+        console.error('❌ Failed to send hospital approval email:', error.message);
+        return { success: false, error: error.message };
+    }
+}
+
+// Generate hospital approval email template
+generateHospitalApprovalEmailTemplate(hospitalName, registrationNumber, setupLink, email) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Hospital Registration Approved</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f4f4f4;
+                }
+                .container {
+                    max-width: 600px;
+                    margin: 20px auto;
+                    padding: 0;
+                    background-color: #ffffff;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                }
+                .header {
+                    background: linear-gradient(135deg, #0cc0df 0%, #0aa9c4 100%);
+                    color: white;
+                    padding: 30px;
+                    text-align: center;
+                }
+                .header h1 {
+                    margin: 0;
+                    font-size: 28px;
+                }
+                .content {
+                    padding: 30px;
+                }
+                .greeting {
+                    font-size: 18px;
+                    margin-bottom: 20px;
+                }
+                .credentials-box {
+                    background-color: #e8f4f8;
+                    border-left: 4px solid #0cc0df;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 8px;
+                }
+                .credentials-box h3 {
+                    color: #0a2540;
+                    margin-top: 0;
+                }
+                .registration-code {
+                    background: #f5f5f5;
+                    padding: 10px;
+                    border-radius: 5px;
+                    font-family: monospace;
+                    font-size: 18px;
+                    font-weight: bold;
+                    letter-spacing: 1px;
+                    text-align: center;
+                }
+                .button {
+                    display: inline-block;
+                    padding: 12px 30px;
+                    background-color: #0cc0df;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                    font-weight: bold;
+                }
+                .warning-box {
+                    background-color: #fff3cd;
+                    border: 1px solid #ffeaa7;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                    color: #856404;
+                }
+                .footer {
+                    background-color: #f8f9fa;
+                    padding: 20px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #666;
+                    border-top: 1px solid #e0e0e0;
+                }
+                .detail-row {
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 8px 0;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+                .detail-label {
+                    font-weight: 600;
+                    color: #555;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div style="font-size: 48px;">🏥</div>
+                    <h1>Hospital Registration Approved!</h1>
+                </div>
+                
+                <div class="content">
+                    <div class="greeting">
+                        Dear <strong>${this.escapeHtml(hospitalName)}</strong>,
+                    </div>
+                    
+                    <p>Congratulations! Your hospital registration has been <strong style="color: green;">approved</strong> by the HealthInsura360 admin team.</p>
+                    
+                    <div class="credentials-box">
+                        <h3>🔐 Your Hospital Login Credentials</h3>
+                        <div class="detail-row">
+                            <span class="detail-label">Registration Number:</span>
+                            <span class="registration-code">${registrationNumber}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Email:</span>
+                            <span>${email}</span>
+                        </div>
+                    </div>
+                    
+                    <p>Please click the button below to set up your password and access the hospital portal:</p>
+                    
+                    <div style="text-align: center;">
+                        <a href="${setupLink}" class="button">
+                            Set Up Your Password
+                        </a>
+                    </div>
+                    
+                    <div class="warning-box">
+                        <strong>⚠️ Important:</strong>
+                        <ul style="margin: 10px 0 0 20px;">
+                            <li>This link will expire in <strong>24 hours</strong></li>
+                            <li>You will need your <strong>Email</strong> and <strong>Registration Number</strong> to log in</li>
+                            <li>Save your registration number in a safe place</li>
+                        </ul>
+                    </div>
+                    
+                    <h3>📋 Next Steps:</h3>
+                    <ol>
+                        <li>Click the button above to set up your password</li>
+                        <li>Login to the hospital portal using your email and registration number</li>
+                        <li>Complete your hospital profile</li>
+                        <li>Start submitting cashless claims for patients</li>
+                    </ol>
+                    
+                    <p>If you have any questions, please contact our support team.</p>
+                </div>
+                
+                <div class="footer">
+                    <p>This is an automated message from HealthInsura360. Please do not reply to this email.</p>
+                    <p>&copy; ${new Date().getFullYear()} HealthInsura360. All rights reserved.</p>
+                    <p>Need help? Contact us at support@healthinsura360.com</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+}
+
+// Send hospital rejection email
+async sendHospitalRejectionEmail(email, hospitalName, reason) {
+    console.log('📧 Sending hospital rejection email to:', email);
+    
+    try {
+        const emailContent = this.generateHospitalRejectionEmailTemplate(hospitalName, reason);
+        
+        const mailOptions = {
+            from: `"HealthInsura360" <${process.env.SMTP_EMAIL}>`,
+            to: email,
+            subject: '❌ Hospital Registration Update',
+            html: emailContent,
+        };
+        
+        const info = await this.transporter.sendMail(mailOptions);
+        console.log(`✅ Hospital rejection email sent to ${email}: ${info.messageId}`);
+        
+        return { success: true, messageId: info.messageId };
+    } catch (error) {
+        console.error('❌ Failed to send hospital rejection email:', error.message);
+        return { success: false, error: error.message };
+    }
+}
+
+// Generate hospital rejection email template
+generateHospitalRejectionEmailTemplate(hospitalName, reason) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Hospital Registration Update</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f4f4f4;
+                }
+                .container {
+                    max-width: 600px;
+                    margin: 20px auto;
+                    background: white;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                }
+                .header {
+                    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+                    color: white;
+                    padding: 30px;
+                    text-align: center;
+                }
+                .header h1 {
+                    margin: 0;
+                    font-size: 28px;
+                }
+                .content {
+                    padding: 30px;
+                }
+                .reason-box {
+                    background-color: #fff3cd;
+                    border-left: 4px solid #ffc107;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 8px;
+                }
+                .footer {
+                    background: #f8f9fa;
+                    padding: 20px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #666;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div style="font-size: 48px;">❌</div>
+                    <h1>Hospital Registration Update</h1>
+                </div>
+                <div class="content">
+                    <p>Dear <strong>${this.escapeHtml(hospitalName)}</strong>,</p>
+                    
+                    <p>Thank you for your interest in joining HealthInsura360. After careful review, your hospital registration could not be approved at this time.</p>
+                    
+                    <div class="reason-box">
+                        <strong>Reason for rejection:</strong><br>
+                        ${this.escapeHtml(reason || 'The submitted documents or information did not meet our verification requirements.')}
+                    </div>
+                    
+                    <p>You may reapply after addressing the issues mentioned above. If you have any questions, please contact our support team.</p>
+                    
+                    <p>We appreciate your understanding.</p>
+                </div>
+                <div class="footer">
+                    <p>HealthInsura360 - Automated Message</p>
+                    <p>© ${new Date().getFullYear()} HealthInsura360</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+}
+
+// Send email to hospital about missing payout account
+async sendHospitalMissingPayoutAccountEmail(hospitalEmail, hospitalName, claimId, claimAmount) {
+    console.log('📧 Sending missing payout account email to hospital:', hospitalEmail);
+    
+    try {
+        // Check if email service is configured
+        if (!process.env.SMTP_EMAIL || !process.env.SMTP_PASSWORD) {
+            console.error('❌ SMTP not configured. Please check .env file');
+            return { success: false, error: 'SMTP not configured' };
+        }
+        
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const accountSetupLink = `${frontendUrl}/hospital/account`; // Link to account panel
+        
+        const emailContent = this.generateMissingPayoutAccountEmailTemplate(hospitalName, claimId, claimAmount, accountSetupLink);
+        
+        const mailOptions = {
+            from: `"HealthInsura360" <${process.env.SMTP_EMAIL}>`,
+            to: hospitalEmail,
+            subject: '⚠️ Action Required: Payment Account Needed for Claim Approval',
+            html: emailContent,
+        };
+        
+        const info = await this.transporter.sendMail(mailOptions);
+        console.log(`✅ Missing payout account email sent to ${hospitalEmail}: ${info.messageId}`);
+        
+        return { success: true, messageId: info.messageId };
+    } catch (error) {
+        console.error('❌ Failed to send missing payout account email:', error.message);
+        return { success: false, error: error.message };
+    }
+}
+
+// Generate missing payout account email template
+generateMissingPayoutAccountEmailTemplate(hospitalName, claimId, claimAmount, accountSetupLink) {
+    const formattedAmount = parseFloat(claimAmount).toFixed(2);
+    
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Action Required: Payment Account Needed</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f4f4f4;
+                }
+                .container {
+                    max-width: 600px;
+                    margin: 20px auto;
+                    padding: 0;
+                    background-color: #ffffff;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                }
+                .header {
+                    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+                    color: white;
+                    padding: 30px;
+                    text-align: center;
+                }
+                .header h1 {
+                    margin: 0;
+                    font-size: 28px;
+                }
+                .content {
+                    padding: 30px;
+                }
+                .greeting {
+                    font-size: 18px;
+                    margin-bottom: 20px;
+                }
+                .alert-box {
+                    background-color: #fff3cd;
+                    border-left: 4px solid #ffc107;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 8px;
+                }
+                .details-box {
+                    background-color: #f8f9fa;
+                    border-left: 4px solid #ff9800;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 5px;
+                }
+                .amount {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #ff9800;
+                    text-align: center;
+                    padding: 15px;
+                    background-color: #fff3e0;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                }
+                .button {
+                    display: inline-block;
+                    padding: 12px 30px;
+                    background-color: #ff9800;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                    font-weight: bold;
+                }
+                .footer {
+                    background-color: #f8f9fa;
+                    padding: 20px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #666;
+                    border-top: 1px solid #e0e0e0;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div style="font-size: 48px;">⚠️</div>
+                    <h1>Action Required: Payment Account Needed</h1>
+                </div>
+                
+                <div class="content">
+                    <div class="greeting">
+                        Dear <strong>${this.escapeHtml(hospitalName)}</strong>,
+                    </div>
+                    
+                    <div class="alert-box">
+                        <p><strong>Claim #${claimId} has been approved!</strong> However, we cannot process the payment of <strong>$${formattedAmount}</strong> because your hospital does not have a payment account configured.</p>
+                    </div>
+                    
+                    <p>Your claim has been approved by the insurance company, but the payment is pending until you add your bank account details.</p>
+                    
+                    <div class="details-box">
+                        <h3 style="margin-top: 0; color: #ff9800;">Claim Details</h3>
+                        <p><strong>Claim ID:</strong> #${claimId}</p>
+                        <p><strong>Approved Amount:</strong> $${formattedAmount}</p>
+                    </div>
+                    
+                    <div class="amount">
+                        Waiting to Transfer: $${formattedAmount}
+                    </div>
+                    
+                    <p>To receive this payment, please add your bank account details by clicking the button below:</p>
+                    
+                    <div style="text-align: center;">
+                        <a href="${accountSetupLink}" class="button">
+                            Add Payment Account
+                        </a>
+                    </div>
+                    
+                    <div class="alert-box">
+                        <strong>📌 Important Notes:</strong>
+                        <ul style="margin: 10px 0 0 20px;">
+                            <li>Once you add your payment account, the funds will be automatically transferred.</li>
+                            <li>Payment will be sent to the account you provide.</li>
+                            <li>This notification will be sent for the first approved claim only.</li>
+                        </ul>
+                    </div>
+                    
+                    <p>If you have any questions, please contact our support team.</p>
+                </div>
+                
+                <div class="footer">
+                    <p>This is an automated message from HealthInsura360. Please do not reply to this email.</p>
+                    <p>&copy; ${new Date().getFullYear()} HealthInsura360. All rights reserved.</p>
+                    <p>Need help? Contact us at support@healthinsura360.com</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+}
 }
 
 module.exports = new EmailService();

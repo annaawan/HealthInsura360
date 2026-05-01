@@ -2,10 +2,7 @@ const db = require('../config/database');
 const { createNotification } = require('../routes/notificationRoutes');
 const fs = require('fs');
 const path = require('path');
-// ============================================
-// Submit a comprehensive reimbursement claim (Customer)
-// FIXED: Inserts into YOUR 'claim' table, not partner's 'claims' table
-// ============================================
+
 exports.submitClaim = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -17,13 +14,11 @@ exports.submitClaim = async (req, res) => {
             });
         }
         
-        // ✅ ADD THIS DEBUG LOG
         console.log('📋 Claim submission received:');
         console.log('   userId:', userId);
         console.log('   req.body:', req.body);
         console.log('   req.files:', req.files ? req.files.length : 0);
         
-        // Extract claim data
         const {
             policy_id,
             claim_type = 'reimbursement',
@@ -36,25 +31,19 @@ exports.submitClaim = async (req, res) => {
             reason_for_claim
         } = req.body;
         
-        // Validate required fields
         if (!policy_id || !claim_amount) {
-            console.log('❌ Missing required fields: policy_id or claim_amount');
             return res.status(400).json({ 
                 success: false,
                 error: 'Missing required fields: policy_id and claim_amount are required' 
             });
         }
 
-        // Verify policy belongs to customer and is active
-        console.log(`🔍 Checking policy ${policy_id} for customer ${userId}`);
-        
+        // Verify policy
         const policyCheck = await db.query(
             `SELECT policy_id, remaining_coverage FROM policy 
              WHERE policy_id = $1 AND customer_id = $2 AND status = 'active'`,
             [policy_id, userId]
         );
-        
-        console.log('   Policy check result:', policyCheck.rows.length);
         
         if (policyCheck.rows.length === 0) {
             return res.status(404).json({
@@ -66,10 +55,6 @@ exports.submitClaim = async (req, res) => {
         const policy = policyCheck.rows[0];
         const claimAmountNum = parseFloat(claim_amount);
         
-        console.log(`   Policy remaining coverage: ${policy.remaining_coverage}`);
-        console.log(`   Claim amount: ${claimAmountNum}`);
-        
-        // Check if claim amount exceeds remaining coverage
         if (claimAmountNum > policy.remaining_coverage) {
             return res.status(400).json({
                 success: false,
@@ -77,59 +62,92 @@ exports.submitClaim = async (req, res) => {
             });
         }
 
-        // Handle document uploads
-        let documentUrls = [];
-        if (req.files && req.files.length > 0) {
-            documentUrls = req.files.map(file => ({
-                filename: file.filename,
-                originalName: file.originalname,
-                path: `/uploads/claims/${file.filename}`,
-                type: file.mimetype,
-                size: file.size,
-                uploadedAt: new Date()
-            }));
-        }
-        
-        console.log('📄 Documents to upload:', documentUrls.length);
-        
-        // Insert into YOUR 'claim' table
+        // ============================================
+        // STEP 1: INSERT CLAIM FIRST TO GET CLAIM_ID
+        // ============================================
         const claimResult = await db.query(
             `INSERT INTO claim (
-                policy_id, 
-                customer_id, 
-                claim_type, 
-                claim_amount, 
-                status,
-                filing_date,
-                patient_name,
-                hospital_name,
-                diagnosis,
-                service_date,
-                description,
-                reason_for_claim,
-                documents,
-                updated_at
-            ) VALUES ($1, $2, $3, $4, 'pending', NOW(), $5, $6, $7, $8, $9, $10, $11, NOW())
+                policy_id, customer_id, claim_type, claim_amount, status,
+                filing_date, patient_name, hospital_name, diagnosis,
+                service_date, description, reason_for_claim, updated_at
+            ) VALUES ($1, $2, $3, $4, 'pending', NOW(), $5, $6, $7, $8, $9, $10, NOW())
             RETURNING claim_id`,
             [
-                policy_id,
-                userId,
-                claim_type,
-                claimAmountNum,
-                patient_name || null,
-                hospital_name || null,
-                diagnosis || null,
-                service_date || null,
-                description || null,
-                reason_for_claim || null,
-                JSON.stringify(documentUrls)
+                policy_id, userId, claim_type, claimAmountNum,
+                patient_name || null, hospital_name || null,
+                diagnosis || null, service_date || null,
+                description || null, reason_for_claim || null
             ]
         );
         
         const claimId = claimResult.rows[0].claim_id;
         const claimNumber = 'CLM-' + claimId;
         
-        console.log(`✅ Reimbursement claim submitted successfully: ${claimNumber}`);
+        console.log(`✅ Claim ${claimNumber} created with ID: ${claimId}`);
+
+        // ============================================
+        // STEP 2: PROCESS AND RENAME UPLOADED FILES
+        // ============================================
+        let documentUrls = [];
+        
+        if (req.files && req.files.length > 0) {
+            console.log(`📄 Processing ${req.files.length} uploaded files...`);
+            
+            for (const file of req.files) {
+                const oldPath = file.path;
+                // Get file extension
+                const ext = path.extname(file.originalname);
+                // Create safe filename (remove special characters, spaces)
+                let safeName = file.originalname
+                    .replace(/[^a-zA-Z0-9.-]/g, '_')  // Replace special chars with underscore
+                    .replace(/_+/g, '_');              // Replace multiple underscores with single
+                
+                // Create new filename: claim_{claimId}_{originalname}
+                const newFilename = `claim_${claimId}_${safeName}`;
+                const newPath = path.join(path.dirname(oldPath), newFilename);
+                
+                try {
+                    // Rename the file
+                    fs.renameSync(oldPath, newPath);
+                    console.log(`   ✅ Renamed: ${file.originalname} -> ${newFilename}`);
+                    
+                    documentUrls.push({
+                        filename: newFilename,
+                        originalName: file.originalname,
+                        path: `/uploads/claims/${newFilename}`,
+                        type: file.mimetype,
+                        size: file.size,
+                        uploadedAt: new Date()
+                    });
+                } catch (renameError) {
+                    console.error(`   ❌ Rename failed: ${renameError.message}`);
+                    // Fallback: use original filename
+                    documentUrls.push({
+                        filename: file.filename,
+                        originalName: file.originalname,
+                        path: `/uploads/claims/${file.filename}`,
+                        type: file.mimetype,
+                        size: file.size,
+                        uploadedAt: new Date()
+                    });
+                }
+            }
+        }
+        
+        console.log(`📄 Saving ${documentUrls.length} document reference(s)`);
+
+        // ============================================
+        // STEP 3: UPDATE CLAIM WITH DOCUMENTS
+        // ============================================
+        if (documentUrls.length > 0) {
+            await db.query(
+                `UPDATE claim 
+                 SET documents = $1, updated_at = NOW()
+                 WHERE claim_id = $2`,
+                [JSON.stringify(documentUrls), claimId]
+            );
+            console.log(`✅ Linked ${documentUrls.length} document(s) to claim ${claimId}`);
+        }
         
         // Create notification
         const formattedAmount = claimAmountNum.toLocaleString();
@@ -149,20 +167,19 @@ exports.submitClaim = async (req, res) => {
             claim: {
                 id: claimId,
                 claim_number: claimNumber,
-                status: 'pending'
+                status: 'pending',
+                documents: documentUrls
             }
         });
         
     } catch (error) {
         console.error('❌ Claim submission error:', error);
-        console.error('❌ Error details:', error.message);
         res.status(500).json({ 
             success: false,
             error: 'Failed to submit claim: ' + error.message 
         });
     }
 };
-
 // ============================================
 // Submit Cashless Claim (Hospital)
 // ============================================
@@ -670,121 +687,192 @@ exports.updateClaimStatus = async (req, res) => {
         });
     }
 };
-// ============================================
-// Serve Claim Document (Agent/Hospital/Admin access)
+// exports.getClaimDocument = async (req, res) => {
+//     try {
+//         const { claimId, filename } = req.params;
+        
+//         // Check for token in headers OR query parameter
+//         let userId = req.user?.userId;
+//         let userRole = req.user?.role || req.user?.userType;
+        
+//         // If no user in request (direct URL access), check query parameter token
+//         if (!userId && req.query.token) {
+//             const jwt = require('jsonwebtoken');
+//             try {
+//                 const decoded = jwt.verify(req.query.token, process.env.JWT_SECRET);
+//                 userId = decoded.userId;
+//                 userRole = decoded.userType;
+//                 console.log('✅ Token verified from query param for user:', userId);
+//             } catch (err) {
+//                 console.log('❌ Invalid token in query param:', err.message);
+//             }
+//         }
+        
+//         if (!userId) {
+//             return res.status(401).json({ success: false, error: 'Unauthorized. No valid token provided.' });
+//         }
+        
+//         console.log(`📄 Document request - Claim: ${claimId}, File: ${filename}, User: ${userId}, Role: ${userRole}`);
+        
+//         // Check access based on user role
+//         let hasAccess = false;
+        
+//         if (userRole === 'agent') {
+//             const accessCheck = await db.query(
+//                 `SELECT c.claim_id 
+//                  FROM claim c
+//                  JOIN policy p ON c.policy_id = p.policy_id
+//                  WHERE c.claim_id = $1 AND p.agent_id = $2`,
+//                 [claimId, userId]
+//             );
+//             hasAccess = accessCheck.rows.length > 0;
+//         } else if (userRole === 'admin') {
+//             hasAccess = true;
+//         } else if (userRole === 'customer') {
+//             const accessCheck = await db.query(
+//                 `SELECT claim_id FROM claim WHERE claim_id = $1 AND customer_id = $2`,
+//                 [claimId, userId]
+//             );
+//             hasAccess = accessCheck.rows.length > 0;
+//         }
+        
+//         if (!hasAccess) {
+//             console.log(`❌ Access denied for user ${userId} to claim ${claimId}`);
+//             return res.status(403).json({ success: false, error: 'Access denied' });
+//         }
+        
+//         // Get claim to verify document exists
+//         const claimResult = await db.query(
+//             `SELECT documents FROM claim WHERE claim_id = $1`,
+//             [claimId]
+//         );
+        
+//         if (claimResult.rows.length === 0) {
+//             return res.status(404).json({ success: false, error: 'Claim not found' });
+//         }
+        
+//         let documents = [];
+//         const docField = claimResult.rows[0].documents;
+        
+//         if (docField) {
+//             try {
+//                 documents = typeof docField === 'string' ? JSON.parse(docField) : docField;
+//             } catch (e) {
+//                 documents = [];
+//             }
+//         }
+        
+//         // Find the document
+//         const document = documents.find(doc => 
+//             doc.filename === filename || 
+//             doc.path?.includes(filename)
+//         );
+        
+//         if (!document) {
+//             return res.status(404).json({ success: false, error: 'Document not found' });
+//         }
+        
+//         // ✅ FIX: Correct path - files are in backend/uploads/claims/
+//         const fs = require('fs');
+//         const path = require('path');
+        
+//         // __dirname is backend/src/controllers
+//         // Go up 2 levels to backend root, then to uploads/claims
+//         const backendRoot = path.join(__dirname, '../..');
+//         const fullPath = path.join(backendRoot, 'uploads', 'claims', filename);
+        
+//         console.log(`📄 Serving document from: ${fullPath}`);
+        
+//         if (!fs.existsSync(fullPath)) {
+//             console.log(`❌ File not found: ${fullPath}`);
+//             return res.status(404).json({ success: false, error: 'File not found on server' });
+//         }
+        
+//         const ext = path.extname(filename).toLowerCase();
+//         const contentTypes = {
+//             '.pdf': 'application/pdf',
+//             '.jpg': 'image/jpeg',
+//             '.jpeg': 'image/jpeg',
+//             '.png': 'image/png',
+//             '.gif': 'image/gif',
+//             '.doc': 'application/msword',
+//             '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+//         };
+        
+//         const contentType = contentTypes[ext] || 'application/octet-stream';
+//         res.setHeader('Content-Type', contentType);
+//         res.setHeader('Content-Disposition', `inline; filename="${document.originalName || filename}"`);
+        
+//         res.sendFile(fullPath);
+        
+//     } catch (error) {
+//         console.error('❌ Error serving document:', error);
+//         res.status(500).json({ success: false, error: 'Failed to retrieve document: ' + error.message });
+//     }
+// };
+
 exports.getClaimDocument = async (req, res) => {
     try {
         const { claimId, filename } = req.params;
-        const userId = req.user?.userId;
-        const userRole = req.user?.role || req.user?.userType;
         
-        const fs = require('fs');
-        const path = require('path');
+        console.log('========== DOCUMENT REQUEST ==========');
+        console.log('Claim ID:', claimId);
+        console.log('Filename:', filename);
         
-        console.log(`📄 Document request - Claim: ${claimId}, File: ${filename}, User: ${userId}, Role: ${userRole}`);
+        // ... existing access control code ...
         
-        // Check if user has access to this claim
-        let hasAccess = false;
+        // After finding the document and constructing fullPath
+        const backendRoot = path.join(__dirname, '../..');
+        const fullPath = path.join(backendRoot, 'uploads', 'claims', filename);
         
-        if (userRole === 'agent') {
-            const accessCheck = await db.query(
-                `SELECT c.claim_id 
-                 FROM claim c
-                 JOIN policy p ON c.policy_id = p.policy_id
-                 WHERE c.claim_id = $1 AND p.agent_id = $2`,
-                [claimId, userId]
-            );
-            hasAccess = accessCheck.rows.length > 0;
-        } else if (userRole === 'admin') {
-            hasAccess = true;
-        } else if (userRole === 'customer') {
-            const accessCheck = await db.query(
-                `SELECT claim_id FROM claim WHERE claim_id = $1 AND customer_id = $2`,
-                [claimId, userId]
-            );
-            hasAccess = accessCheck.rows.length > 0;
-        }
+        console.log('Full path:', fullPath);
         
-        if (!hasAccess) {
-            return res.status(403).json({ success: false, error: 'Access denied' });
-        }
-        
-        // Get claim to verify document exists
-        const claimResult = await db.query(
-            `SELECT documents FROM claim WHERE claim_id = $1`,
-            [claimId]
-        );
-        
-        if (claimResult.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Claim not found' });
-        }
-        
-        let documents = [];
-        const docField = claimResult.rows[0].documents;
-        
-        if (docField) {
-            try {
-                documents = typeof docField === 'string' ? JSON.parse(docField) : docField;
-            } catch (e) {
-                documents = [];
-            }
-        }
-        
-        // Find the document
-        const document = documents.find(doc => 
-            doc.filename === filename || 
-            doc.path?.includes(filename)
-        );
-        
-        if (!document) {
-            return res.status(404).json({ success: false, error: 'Document not found' });
-        }
-        
-        // Get file path - use the path from database
-        let filePath = document.path;
-        
-        if (!filePath) {
-            filePath = `/uploads/claims/${filename}`;
-        }
-        
-        // Remove leading slash for path resolution
-        const cleanPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
-        const fullPath = path.join(__dirname, '..', cleanPath);
-        
-        console.log(`📄 Serving document from: ${fullPath}`);
-        
-        // Check if file exists
+        // Check if file exists and get its size
         if (!fs.existsSync(fullPath)) {
-            console.log(`❌ File not found: ${fullPath}`);
-            return res.status(404).json({ success: false, error: 'File not found on server' });
+            console.log('❌ File not found:', fullPath);
+            return res.status(404).json({ success: false, error: 'File not found' });
         }
         
-        // Set content type
+        const stats = fs.statSync(fullPath);
+        console.log('File size:', stats.size, 'bytes');
+        
+        if (stats.size === 0) {
+            console.log('❌ File is empty!');
+            return res.status(500).json({ success: false, error: 'File is empty' });
+        }
+        
         const ext = path.extname(filename).toLowerCase();
         const contentTypes = {
             '.pdf': 'application/pdf',
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
             '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.doc': 'application/msword',
-            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            '.gif': 'image/gif'
         };
         
         const contentType = contentTypes[ext] || 'application/octet-stream';
         res.setHeader('Content-Type', contentType);
-        res.setHeader('Content-Disposition', `inline; filename="${document.originalName || filename}"`);
+        res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
         
-        res.sendFile(fullPath);
+        // Use createReadStream for better performance
+        const fileStream = fs.createReadStream(fullPath);
+        fileStream.pipe(res);
+        
+        fileStream.on('error', (err) => {
+            console.error('Stream error:', err);
+            res.status(500).json({ success: false, error: 'Error streaming file' });
+        });
         
     } catch (error) {
         console.error('❌ Error serving document:', error);
-        res.status(500).json({ success: false, error: 'Failed to retrieve document' });
+        res.status(500).json({ success: false, error: 'Failed to retrieve document: ' + error.message });
     }
 };
-
 // ============================================
 exports.getAgentClientClaims = async (req, res) => {
+     console.log('🟢🟢🟢 getAgentClientClaims WAS CALLED! 🟢🟢🟢');
+    console.log('   Params:', req.params);
+    console.log('   User:', req.user?.userId);
     try {
         const agentId = req.user?.userId;
         const { customerId } = req.params;
@@ -803,6 +891,8 @@ exports.getAgentClientClaims = async (req, res) => {
             SELECT 
                 c.claim_id,
                 c.policy_id,
+                c.customer_id,
+                c.hospital_id,
                 c.claim_type,
                 c.claim_amount,
                 c.status,
@@ -812,6 +902,7 @@ exports.getAgentClientClaims = async (req, res) => {
                 c.documents,
                 c.description,
                 c.hospital_name,
+                c.patient_name,
                 c.diagnosis,
                 c.service_date,
                 p.sum_insured,
@@ -819,9 +910,12 @@ exports.getAgentClientClaims = async (req, res) => {
                 p.used_coverage,
                 p.deductible_amount,
                 p.co_pay_percentage,
+                cust.first_name as customer_first_name,
+                cust.last_name as customer_last_name,
                 (p.used_coverage / NULLIF(p.sum_insured, 0) * 100) as coverage_used_percentage
             FROM claim c
             JOIN policy p ON c.policy_id = p.policy_id
+            LEFT JOIN customer cust ON c.customer_id = cust.customer_id
             WHERE p.agent_id = $1 AND c.customer_id = $2
         `;
         
@@ -884,7 +978,12 @@ exports.getAgentClientClaims = async (req, res) => {
                 remaining_coverage: parseFloat(claim.remaining_coverage),
                 used_coverage: parseFloat(claim.used_coverage),
                 deductible_amount: parseFloat(claim.deductible_amount),
-                co_pay_percentage: parseFloat(claim.co_pay_percentage)
+                co_pay_percentage: parseFloat(claim.co_pay_percentage),
+                customer: claim.customer_id ? {
+                    customer_id: claim.customer_id,
+                    first_name: claim.customer_first_name,
+                    last_name: claim.customer_last_name
+                } : null
             };
         });
         
@@ -898,18 +997,19 @@ exports.getAgentClientClaims = async (req, res) => {
         });
         
         // Get stats
-        const statsQuery = `
-            SELECT 
-                COUNT(*) as total_claims,
-                COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count,
-                COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved_count,
-                COUNT(CASE WHEN status = 'disapproved' THEN 1 END) as disapproved_count,
-                COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_count,
-                COALESCE(SUM(CASE WHEN status = 'approved' THEN approved_amount ELSE 0 END), 0) as total_approved_amount
-            FROM claim c
-            JOIN policy p ON c.policy_id = p.policy_id
-            WHERE p.agent_id = $1 AND c.customer_id = $2
-        `;
+       // Fix the stats query - add table aliases to status column
+const statsQuery = `
+    SELECT 
+        COUNT(*) as total_claims,
+        COUNT(CASE WHEN c.status = 'pending' THEN 1 END) as pending_count,
+        COUNT(CASE WHEN c.status = 'approved' THEN 1 END) as approved_count,
+        COUNT(CASE WHEN c.status = 'disapproved' THEN 1 END) as disapproved_count,
+        COUNT(CASE WHEN c.status = 'paid' THEN 1 END) as paid_count,
+        COALESCE(SUM(CASE WHEN c.status IN ('approved', 'paid') THEN c.approved_amount ELSE 0 END), 0) as total_approved_amount
+    FROM claim c
+    JOIN policy p ON c.policy_id = p.policy_id
+    WHERE p.agent_id = $1 AND c.customer_id = $2
+`;
         
         const statsResult = await db.query(statsQuery, [agentId, customerId]);
         

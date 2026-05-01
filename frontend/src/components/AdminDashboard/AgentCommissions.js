@@ -9,6 +9,8 @@ function AgentCommissions() {
     commissions, 
     summary, 
     loading, 
+    totalPending,
+    totalPaid,
     updateCommissionRate, 
     payCommission,
     cancelCommission,
@@ -144,7 +146,7 @@ function AgentCommissions() {
         </div>
       </div>
       
-      {/* Stats Cards */}
+      {/* Stats Cards
       <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="bg-white p-4 rounded-lg shadow border">
           <div className="text-gray-600">Total Commissions</div>
@@ -160,7 +162,30 @@ function AgentCommissions() {
           <div className="text-2xl font-bold text-green-600">${summary?.totalPaid?.toLocaleString() || 0}</div>
           <div className="text-sm text-gray-500">{summary?.paidCount || 0} transactions</div>
         </div>
-      </div>
+      </div> */}
+{/* Stats Cards */}
+<div className="grid grid-cols-3 gap-4 mb-8">
+  <div className="bg-white p-4 rounded-lg shadow border">
+    <div className="text-gray-600">Total Commissions</div>
+    <div className="text-2xl font-bold">
+      ${((totalPaid || 0) + (totalPending || 0)).toLocaleString()}
+    </div>
+  </div>
+  <div className="bg-white p-4 rounded-lg shadow border">
+    <div className="text-gray-600">Pending</div>
+    <div className="text-2xl font-bold text-yellow-600">
+      ${(totalPending || 0).toLocaleString()}
+    </div>
+    <div className="text-sm text-gray-500">{summary?.pendingCount || 0} transactions</div>
+  </div>
+  <div className="bg-white p-4 rounded-lg shadow border">
+    <div className="text-gray-600">Paid</div>
+    <div className="text-2xl font-bold text-green-600">
+      ${(totalPaid || 0).toLocaleString()}
+    </div>
+    <div className="text-sm text-gray-500">{summary?.paidCount || 0} transactions</div>
+  </div>
+</div>
       
       {/* Filter */}
       <div className="mb-4">

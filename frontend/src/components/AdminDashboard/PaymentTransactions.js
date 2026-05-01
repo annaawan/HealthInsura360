@@ -99,16 +99,24 @@ function PaymentTransactions() {
       console.log('Response:', response.data);
       
       if (response.data.success && response.data.data && response.data.data.length > 0) {
-        const formattedTransactions = response.data.data.map(txn => {
-          // Determine the user name based on transaction type
-          let userName = 'Unknown';
-          if (txn.customer?.name) {
-            userName = txn.customer.name;
-          } else if (txn.agent_name) {
-            userName = txn.agent_name;
-          } else if (txn.hospital_name) {
-            userName = txn.hospital_name;
-          }
+       const formattedTransactions = response.data.data.map(txn => {
+  // Determine the user name based on transaction type
+  let userName = 'Unknown';
+  const transactionType = (txn.type || '').toLowerCase();
+  
+  if (txn.customer?.name) {
+    userName = txn.customer.name;
+  } else if (txn.agent_name) {
+    userName = txn.agent_name;
+  } else if (txn.hospital_name) {
+    userName = txn.hospital_name;
+  } else if (transactionType === 'commission payment') {
+    userName = `Agent (Commission ID: ${txn.related_commission_id || 'Unknown'})`;
+  } else if (transactionType === 'claim payment') {
+    userName = `Hospital (Claim ID: ${txn.related_claim_id || 'Unknown'})`;
+  } else if (transactionType === 'premium payment') {
+    userName = `Customer (Payment ID: ${txn.related_payment_id || 'Unknown'})`;
+  }
           
           // Get payment method
           let paymentMethod = txn.payment?.method || 'Unknown';
@@ -432,9 +440,9 @@ function PaymentTransactions() {
             <div class="summary">
               <strong>Summary:</strong> Total Transactions: ${transactions.length} | 
               Total Revenue: $${totalRevenue.toLocaleString()} | 
-              Successful: ${transactions.filter(t => t.status === 'Completed').length} |
-              Pending: ${transactions.filter(t => t.status === 'Pending').length} |
-              Failed: ${transactions.filter(t => t.status === 'Failed').length}
+              Successful: ${transactions.filter(t => t.status?.toLowerCase() === 'completed').length} |
+              Pending: ${transactions.filter(t => t.status?.toLowerCase() === 'pending').length} |
+              Failed: ${transactions.filter(t => t.status?.toLowerCase() === 'failed').length}
             </div>
             <table border="1">
               <thead>
@@ -482,7 +490,7 @@ function PaymentTransactions() {
   };
 
   const totalRevenue = transactions
-    .filter(t => t.status === 'Completed')
+    .filter(t => t.status?.toLowerCase() === 'completed')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
   const handleRetry = () => {
@@ -598,19 +606,19 @@ function PaymentTransactions() {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <div className="text-gray-600 text-sm mb-2">Successful</div>
           <div className="text-2xl font-bold text-green-600">
-            {transactions.filter(t => t.status === 'Completed').length}
+            {transactions.filter(t => t.status?.toLowerCase() === 'completed').length}
           </div>
         </div>
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <div className="text-gray-600 text-sm mb-2">Pending</div>
           <div className="text-2xl font-bold text-yellow-600">
-            {transactions.filter(t => t.status === 'Pending').length}
+            {transactions.filter(t => t.status?.toLowerCase() === 'pending').length}
           </div>
         </div>
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <div className="text-gray-600 text-sm mb-2">Failed</div>
           <div className="text-2xl font-bold text-red-600">
-            {transactions.filter(t => t.status === 'Failed').length}
+            {transactions.filter(t => t.status?.toLowerCase() === 'failed').length}
           </div>
         </div>
       </div>

@@ -1,14 +1,14 @@
 import React from 'react';
 import Logo from "../assets/HealthInsura360.png";
-import { LayoutDashboard, Search, FileText, File, LogOut, Menu } from 'lucide-react';
+import { LayoutDashboard, Search, FileText, File, LogOut, Menu, DollarSign, CreditCard } from 'lucide-react';
 
 // Sidebar specifically for hospital portal with orange accent
 function HospitalSidebar({ currentView, onViewChange, isOpen, onToggle }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'verify', label: 'Verify Patient', icon: Search },
     { id: 'claims', label: 'Claims History', icon: FileText },
-    { id: 'report', label: 'Generate Report', icon: File }
+    { id: 'payment', label: 'Payment History', icon: DollarSign },      // Payment panel
+  { id: 'account', label: 'Payment Account', icon: CreditCard },
   ];
 
   const handleLogout = () => {

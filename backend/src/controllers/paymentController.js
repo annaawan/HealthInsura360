@@ -53,7 +53,7 @@ exports.createPaymentIntent = async (req, res) => {
     
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInPaisa,
-      currency: 'pkr',
+      currency: 'usd',
       metadata: { 
         customerId: customerId.toString(), 
         policyId: policyId.toString(),

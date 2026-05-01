@@ -76,4 +76,6 @@ router.get('/:claimId/documents/:filename',
     authMiddleware,
     claimController.getClaimDocument
 );
+
+
 module.exports = router;

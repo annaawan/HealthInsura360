@@ -548,18 +548,322 @@ function PoliciesSection({ setCurrentView, refreshTrigger = 0 }) {
   );
 }
 
+// // ==================== BUY POLICIES SECTION ====================
+// function BuyPoliciesSection({ onBack }) {
+//   const [allPolicies, setAllPolicies] = useState([]);  // Changed from availablePolicies
+//   const [customerPolicies, setCustomerPolicies] = useState([]);
+//   const [loading, setLoading] = useState(true);
+//   const [error, setError] = useState(null);
+//   const [selectedPlan, setSelectedPlan] = useState(null);
+//   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
+//   const [purchaseData, setPurchaseData] = useState({
+//     startDate: '',
+//     endDate: ''
+//   });
+
+//   useEffect(() => {
+//     // Check if a plan was pre-selected from AI recommendations
+//     const selectedPlanStr = sessionStorage.getItem('selectedPlanForPurchase');
+//     if (selectedPlanStr) {
+//       const selectedPlanData = JSON.parse(selectedPlanStr);
+//       sessionStorage.removeItem('selectedPlanForPurchase');
+      
+//       const today = new Date();
+//       const startDate = today.toISOString().split('T')[0];
+//       const endDate = new Date(today);
+//       endDate.setFullYear(endDate.getFullYear() + 1);
+      
+//       setSelectedPlan(selectedPlanData);
+//       setPurchaseData({
+//         startDate: startDate,
+//         endDate: endDate.toISOString().split('T')[0]
+//       });
+//       setShowPurchaseForm(true);
+//     }
+//   }, []);
+
+//   const fetchPlansAndCustomerPolicies = useCallback(async () => {
+//     setLoading(true);
+//     try {
+//       const config = getAxiosConfig();
+      
+//       // Get ALL plans
+//       const plansResponse = await axios.get(`${API_BASE_URL}/insurance-plans`, config);
+//       const allPlans = plansResponse.data.plans || [];
+
+//       // Get customer's purchased policies
+//       const customerResponse = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
+//       const customerPolicyList = customerResponse.data.policies || [];
+//       setCustomerPolicies(customerPolicyList);
+
+//       // ✅ Create a Set of purchased plan_ids
+//       const purchasedPlanIds = new Set(
+//         customerPolicyList
+//           .filter(p => p && p.plan_id)
+//           .map(p => p.plan_id)
+//       );
+      
+//       // ✅ Mark each plan as purchased or not
+//       const plansWithStatus = allPlans.map(plan => ({
+//         ...plan,
+//         isPurchased: purchasedPlanIds.has(plan.plan_id),
+//         purchasedDate: customerPolicyList.find(p => p.plan_id === plan.plan_id)?.start_date || null
+//       }));
+
+//       // Sort: Show non-purchased first, then purchased
+//       plansWithStatus.sort((a, b) => {
+//         if (a.isPurchased === b.isPurchased) return 0;
+//         return a.isPurchased ? 1 : -1;
+//       });
+
+//       setAllPolicies(plansWithStatus);
+//       setError(null);
+      
+//       console.log('📊 Purchased plan IDs:', [...purchasedPlanIds]);
+//       console.log('📊 All plans with status:', plansWithStatus.map(p => ({ 
+//         name: p.plan_name, 
+//         purchased: p.isPurchased 
+//       })));
+      
+//     } catch (err) {
+//       console.error('Error fetching policies:', err);
+//       setError('Failed to load available policies');
+//       setAllPolicies([]);
+//     } finally {
+//       setLoading(false);
+//     }
+//   }, []);
+
+//   useEffect(() => {
+//     fetchPlansAndCustomerPolicies();
+//   }, [fetchPlansAndCustomerPolicies]);
+
+//   const checkPolicyOwnership = async (plan) => {
+//     if (!plan || !plan.plan_id) {
+//       return { alreadyOwned: false, existingPolicies: [] };
+//     }
+    
+//     try {
+//       const config = getAxiosConfig();
+//       const response = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
+//       const existingPolicies = response.data.policies || [];
+      
+//       const alreadyOwned = existingPolicies.some(policy => {
+//         if (!policy || !policy.plan_id) return false;
+//         return policy.plan_id === plan.plan_id && policy.status === 'active';
+//       });
+      
+//       return { alreadyOwned, existingPolicies };
+//     } catch (err) {
+//       console.error('Error checking policy ownership:', err);
+//       return { alreadyOwned: false, existingPolicies: [] };
+//     }
+//   };
+
+//   const handlePurchaseClick = async (plan) => {
+//     // ✅ Don't allow purchase if already owned
+//     if (plan.isPurchased) {
+//       alert(`You already own the ${plan.plan_name} policy.`);
+//       return;
+//     }
+    
+//     if (!plan || !plan.plan_id) {
+//       alert('Invalid plan data. Please contact support.');
+//       return;
+//     }
+    
+//     try {
+//       const config = getAxiosConfig();
+//       const customerResponse = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
+//       const existingPolicies = customerResponse.data.policies || [];
+      
+//       const alreadyOwned = existingPolicies.some(policy => {
+//         if (!policy || !policy.plan_id) return false;
+//         return policy.plan_id === plan.plan_id && policy.status === 'active';
+//       });
+      
+//       if (alreadyOwned) {
+//         alert(`You already own the ${plan.plan_name} policy.`);
+//         return;
+//       }
+      
+//       const today = new Date();
+//       const startDate = today.toISOString().split('T')[0];
+//       const endDate = new Date(today);
+//       endDate.setFullYear(endDate.getFullYear() + 1);
+//       const endDateStr = endDate.toISOString().split('T')[0];
+      
+//       setSelectedPlan(plan);
+//       setPurchaseData({ startDate, endDate: endDateStr });
+//       setShowPurchaseForm(true);
+      
+//     } catch (err) {
+//       console.error('Error checking policy ownership:', err);
+//       alert('Unable to verify policy ownership. Please try again.');
+//     }
+//   };
+
+//   if (loading) {
+//     return (
+//       <div className="text-center py-12">
+//         <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+//         <p className="text-gray-600 mt-4">Loading available policies...</p>
+//       </div>
+//     );
+//   }
+
+//   return (
+//     <div className="space-y-6">
+//       <div className="flex items-center gap-4">
+//         <button
+//           onClick={onBack}
+//           className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+//         >
+//           ← Back to My Policies
+//         </button>
+//         <h2 className="text-2xl font-bold text-gray-900">Insurance Plans</h2>
+//       </div>
+
+//       {error && (
+//         <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+//           <p className="text-red-600 flex items-center gap-2">
+//             <AlertCircle className="h-5 w-5" />
+//             {error}
+//           </p>
+//         </div>
+//       )}
+
+//       {allPolicies.length === 0 ? (
+//         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+//           <Check className="h-12 w-12 text-green-500 mx-auto mb-4" />
+//           <p className="text-gray-600 mb-2 font-medium">No Plans Available</p>
+//           <p className="text-gray-500">Check back later for new insurance plans</p>
+//         </div>
+//       ) : (
+//         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+//           {allPolicies.map((plan) => (
+//             <div 
+//               key={plan.plan_id} 
+//               className={`bg-white rounded-lg shadow-md border p-6 transition-all ${
+//                 plan.isPurchased 
+//                   ? 'border-green-300 bg-green-50 opacity-75' 
+//                   : 'border-gray-200 hover:shadow-lg'
+//               }`}
+//             >
+//               {/* Purchased Badge */}
+//               {plan.isPurchased && (
+//                 <div className="flex justify-end mb-2">
+//                   <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full flex items-center gap-1">
+//                     <Check className="h-3 w-3" />
+//                     Already Purchased
+//                   </span>
+//                 </div>
+//               )}
+              
+//               <h3 className="text-lg font-bold text-gray-900 mb-2">{plan.plan_name}</h3>
+//               <p className="text-sm text-gray-600 mb-4">{plan.description}</p>
+              
+//               <div className="space-y-3 mb-6 p-3 bg-gray-50 rounded-lg">
+//                 <div className="flex justify-between">
+//                   <span className="text-gray-600 text-sm">Monthly Premium</span>
+//                   <span className="font-bold text-sky-600">{formatCurrency(plan.premium_amount)}</span>
+//                 </div>
+//                 <div className="flex justify-between">
+//                   <span className="text-gray-600 text-sm">Coverage</span>
+//                   <span className="font-bold text-gray-900">{formatCurrency(plan.coverage_amount)}</span>
+//                 </div>
+//                 <div className="flex justify-between">
+//                   <span className="text-gray-600 text-sm">Deductible</span>
+//                   <span className="font-bold text-gray-900">{formatCurrency(plan.deductible || 0)}</span>
+//                 </div>
+//               </div>
+
+//               <button
+//                 onClick={() => handlePurchaseClick(plan)}
+//                 disabled={plan.isPurchased}
+//                 className={`w-full px-4 py-2 rounded-lg transition-colors font-medium ${
+//                   plan.isPurchased
+//                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+//                     : 'bg-sky-600 text-white hover:bg-sky-700'
+//                 }`}
+//               >
+//                 {plan.isPurchased ? 'Already Purchased' : 'Purchase Now'}
+//               </button>
+//             </div>
+//           ))}
+//         </div>
+//       )}
+
+//       {/* Purchase Form Modal with Stripe - Keep as is */}
+//       {showPurchaseForm && selectedPlan && !selectedPlan.isPurchased && (
+//         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+//           <div className="bg-white rounded-lg p-6 max-w-md w-full">
+//             <h3 className="text-xl font-bold text-gray-900 mb-4">
+//               Purchase {selectedPlan.plan_name}
+//             </h3>
+            
+//             <Elements stripe={stripePromise}>
+//               <StripePayment
+//                 policyId={selectedPlan.plan_id}
+//                 amount={selectedPlan.premium_amount}
+//                 policyName={selectedPlan.plan_name}
+//                 onSuccess={async (paymentIntent) => {
+//                   try {
+//                     const config = getAxiosConfig();
+                    
+//                     const payload = {
+//                       planId: selectedPlan.plan_id,
+//                       startDate: purchaseData.startDate,
+//                       endDate: purchaseData.endDate,
+//                       paymentIntentId: paymentIntent.id,
+//                       amount: selectedPlan.premium_amount
+//                     };
+                    
+//                     const response = await axios.post(
+//                       `${API_BASE_URL}/policies/purchase`, 
+//                       payload, 
+//                       config
+//                     );
+                    
+//                     if (response.data.success) {
+//                       alert('✅ Payment successful! Your policy has been activated.');
+//                       setShowPurchaseForm(false);
+//                       setSelectedPlan(null);
+//                       fetchPlansAndCustomerPolicies(); // Refresh the list
+//                       onBack(); // Go back to policies list
+//                     } else {
+//                       alert(`⚠️ ${response.data.error || 'Policy activation failed'}`);
+//                     }
+                    
+//                   } catch (err) {
+//                     console.error('❌ Activation error:', err);
+//                     let errorMessage = 'Policy activation failed';
+//                     if (err.response?.data?.error) {
+//                       errorMessage = err.response.data.error;
+//                     }
+//                     alert(`⚠️ Payment succeeded but policy activation failed: ${errorMessage}\n\nPlease contact support.`);
+//                   }
+//                 }}
+//                 onCancel={() => {
+//                   setShowPurchaseForm(false);
+//                   setSelectedPlan(null);
+//                 }}
+//               />
+//             </Elements>
+//           </div>
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
+
 // ==================== BUY POLICIES SECTION ====================
 function BuyPoliciesSection({ onBack }) {
-  const [allPolicies, setAllPolicies] = useState([]);  // Changed from availablePolicies
+  const [allPolicies, setAllPolicies] = useState([]);
   const [customerPolicies, setCustomerPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedPlan, setSelectedPlan] = useState(null);
-  const [showPurchaseForm, setShowPurchaseForm] = useState(false);
-  const [purchaseData, setPurchaseData] = useState({
-    startDate: '',
-    endDate: ''
-  });
+  const [processingPlanId, setProcessingPlanId] = useState(null); // Track which plan is being processed
 
   useEffect(() => {
     // Check if a plan was pre-selected from AI recommendations
@@ -568,17 +872,8 @@ function BuyPoliciesSection({ onBack }) {
       const selectedPlanData = JSON.parse(selectedPlanStr);
       sessionStorage.removeItem('selectedPlanForPurchase');
       
-      const today = new Date();
-      const startDate = today.toISOString().split('T')[0];
-      const endDate = new Date(today);
-      endDate.setFullYear(endDate.getFullYear() + 1);
-      
-      setSelectedPlan(selectedPlanData);
-      setPurchaseData({
-        startDate: startDate,
-        endDate: endDate.toISOString().split('T')[0]
-      });
-      setShowPurchaseForm(true);
+      // Directly purchase the pre-selected plan
+      handleDirectPurchase(selectedPlanData);
     }
   }, []);
 
@@ -638,30 +933,9 @@ function BuyPoliciesSection({ onBack }) {
     fetchPlansAndCustomerPolicies();
   }, [fetchPlansAndCustomerPolicies]);
 
-  const checkPolicyOwnership = async (plan) => {
-    if (!plan || !plan.plan_id) {
-      return { alreadyOwned: false, existingPolicies: [] };
-    }
-    
-    try {
-      const config = getAxiosConfig();
-      const response = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
-      const existingPolicies = response.data.policies || [];
-      
-      const alreadyOwned = existingPolicies.some(policy => {
-        if (!policy || !policy.plan_id) return false;
-        return policy.plan_id === plan.plan_id && policy.status === 'active';
-      });
-      
-      return { alreadyOwned, existingPolicies };
-    } catch (err) {
-      console.error('Error checking policy ownership:', err);
-      return { alreadyOwned: false, existingPolicies: [] };
-    }
-  };
-
-  const handlePurchaseClick = async (plan) => {
-    // ✅ Don't allow purchase if already owned
+  // ✅ Direct purchase WITHOUT payment
+  const handleDirectPurchase = async (plan) => {
+    // Don't allow purchase if already owned
     if (plan.isPurchased) {
       alert(`You already own the ${plan.plan_name} policy.`);
       return;
@@ -672,8 +946,12 @@ function BuyPoliciesSection({ onBack }) {
       return;
     }
     
+    setProcessingPlanId(plan.plan_id);
+    
     try {
       const config = getAxiosConfig();
+      
+      // Double check if already owned
       const customerResponse = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
       const existingPolicies = customerResponse.data.policies || [];
       
@@ -684,22 +962,47 @@ function BuyPoliciesSection({ onBack }) {
       
       if (alreadyOwned) {
         alert(`You already own the ${plan.plan_name} policy.`);
+        setProcessingPlanId(null);
         return;
       }
       
+      // Calculate dates
       const today = new Date();
       const startDate = today.toISOString().split('T')[0];
       const endDate = new Date(today);
       endDate.setFullYear(endDate.getFullYear() + 1);
       const endDateStr = endDate.toISOString().split('T')[0];
       
-      setSelectedPlan(plan);
-      setPurchaseData({ startDate, endDate: endDateStr });
-      setShowPurchaseForm(true);
+      // ✅ Direct purchase WITHOUT payment (no paymentIntentId, no amount)
+      const payload = {
+        planId: plan.plan_id,
+        startDate: startDate,
+        endDate: endDateStr
+      };
+      
+      const response = await axios.post(
+        `${API_BASE_URL}/policies/purchase`, 
+        payload, 
+        config
+      );
+      
+      if (response.data.success) {
+        alert(`✅ Policy "${plan.plan_name}" has been activated successfully!`);
+        fetchPlansAndCustomerPolicies(); // Refresh the list
+        onBack(); // Go back to policies list
+      } else {
+        alert(`⚠️ ${response.data.error || 'Policy activation failed'}`);
+      }
       
     } catch (err) {
-      console.error('Error checking policy ownership:', err);
-      alert('Unable to verify policy ownership. Please try again.');
+      console.error('❌ Policy activation error:', err);
+      let errorMessage = 'Policy activation failed';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      }
+      alert(`⚠️ ${errorMessage}`);
+    } finally {
+      setProcessingPlanId(null);
     }
   };
 
@@ -779,84 +1082,34 @@ function BuyPoliciesSection({ onBack }) {
               </div>
 
               <button
-                onClick={() => handlePurchaseClick(plan)}
-                disabled={plan.isPurchased}
+                onClick={() => handleDirectPurchase(plan)}
+                disabled={plan.isPurchased || processingPlanId === plan.plan_id}
                 className={`w-full px-4 py-2 rounded-lg transition-colors font-medium ${
                   plan.isPurchased
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : processingPlanId === plan.plan_id
+                    ? 'bg-gray-400 text-white cursor-wait'
                     : 'bg-sky-600 text-white hover:bg-sky-700'
                 }`}
               >
-                {plan.isPurchased ? 'Already Purchased' : 'Purchase Now'}
+                {processingPlanId === plan.plan_id ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Processing...
+                  </span>
+                ) : plan.isPurchased ? (
+                  'Already Purchased'
+                ) : (
+                  'Get Policy'
+                )}
               </button>
             </div>
           ))}
         </div>
       )}
-
-      {/* Purchase Form Modal with Stripe - Keep as is */}
-      {showPurchaseForm && selectedPlan && !selectedPlan.isPurchased && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
-              Purchase {selectedPlan.plan_name}
-            </h3>
-            
-            <Elements stripe={stripePromise}>
-              <StripePayment
-                policyId={selectedPlan.plan_id}
-                amount={selectedPlan.premium_amount}
-                policyName={selectedPlan.plan_name}
-                onSuccess={async (paymentIntent) => {
-                  try {
-                    const config = getAxiosConfig();
-                    
-                    const payload = {
-                      planId: selectedPlan.plan_id,
-                      startDate: purchaseData.startDate,
-                      endDate: purchaseData.endDate,
-                      paymentIntentId: paymentIntent.id,
-                      amount: selectedPlan.premium_amount
-                    };
-                    
-                    const response = await axios.post(
-                      `${API_BASE_URL}/policies/purchase`, 
-                      payload, 
-                      config
-                    );
-                    
-                    if (response.data.success) {
-                      alert('✅ Payment successful! Your policy has been activated.');
-                      setShowPurchaseForm(false);
-                      setSelectedPlan(null);
-                      fetchPlansAndCustomerPolicies(); // Refresh the list
-                      onBack(); // Go back to policies list
-                    } else {
-                      alert(`⚠️ ${response.data.error || 'Policy activation failed'}`);
-                    }
-                    
-                  } catch (err) {
-                    console.error('❌ Activation error:', err);
-                    let errorMessage = 'Policy activation failed';
-                    if (err.response?.data?.error) {
-                      errorMessage = err.response.data.error;
-                    }
-                    alert(`⚠️ Payment succeeded but policy activation failed: ${errorMessage}\n\nPlease contact support.`);
-                  }
-                }}
-                onCancel={() => {
-                  setShowPurchaseForm(false);
-                  setSelectedPlan(null);
-                }}
-              />
-            </Elements>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-
 // ==================== CLAIMS SECTION ====================
 function ClaimsSection({ customerPolicies = [] }) {
   const [claims, setClaims] = useState([]);
@@ -1087,17 +1340,32 @@ function ClaimsSection({ customerPolicies = [] }) {
     }
   };
 
-  const getDocumentIcon = (filename) => {
-    const ext = filename.split('.').pop().toLowerCase();
-    if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
-      return '🖼️';
-    } else if (ext === 'pdf') {
-      return '📄';
-    } else if (['doc', 'docx'].includes(ext)) {
-      return '📝';
-    }
-    return '📎';
-  };
+ const getDocumentIcon = (filename) => {
+  // Handle undefined, null, or empty values
+  if (!filename) return '📎';
+  
+  // Ensure filename is a string
+  const filenameStr = String(filename);
+  
+  // Get extension safely
+  const parts = filenameStr.split('.');
+  if (parts.length < 2) return '📎';
+  
+  const ext = parts.pop().toLowerCase();
+  
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+    return '🖼️';
+  } else if (ext === 'pdf') {
+    return '📄';
+  } else if (['doc', 'docx'].includes(ext)) {
+    return '📝';
+  } else if (['xls', 'xlsx'].includes(ext)) {
+    return '📊';
+  } else if (ext === 'txt') {
+    return '📃';
+  }
+  return '📎';
+};
 
   return (
     <div className="space-y-6">
@@ -1393,24 +1661,50 @@ function ClaimsSection({ customerPolicies = [] }) {
                   <p className="text-sm text-gray-600 mb-2">{claim.description}</p>
                   
                   {claim.documents && claim.documents.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <p className="text-xs font-medium text-gray-500 mb-2">Attached Documents:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {claim.documents.map((doc, idx) => (
-                          <a
-                            key={idx}
-                            href={`http://localhost:5000${doc.url || doc.path}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center px-2 py-1 bg-gray-100 rounded text-xs text-gray-600 hover:bg-gray-200 transition-colors"
-                          >
-                            <span className="mr-1">{getDocumentIcon(doc.filename || doc.originalName)}</span>
-                            {doc.originalName || doc.filename}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+  <div className="mt-3 pt-3 border-t border-gray-100">
+    <p className="text-xs font-medium text-gray-500 mb-2">Attached Documents:</p>
+    <div className="flex flex-wrap gap-2">
+      {claim.documents.map((doc, idx) => {
+        // Handle both object and string formats
+        let filename = '';
+        let fileUrl = '';
+        let originalName = '';
+        
+        if (typeof doc === 'string') {
+          // Document is stored as a string URL
+          fileUrl = doc;
+          // Extract filename from URL
+          const urlParts = doc.split('/');
+          filename = urlParts[urlParts.length - 1];
+          originalName = filename;
+        } else if (typeof doc === 'object' && doc !== null) {
+          // Document is stored as an object
+          filename = doc.filename || doc.originalName || '';
+          fileUrl = doc.url || doc.path || '';
+          originalName = doc.originalName || doc.filename || filename;
+        }
+        
+        // Construct full URL if needed
+        const fullUrl = fileUrl.startsWith('http') 
+          ? fileUrl 
+          : `http://localhost:5000${fileUrl.startsWith('/') ? fileUrl : '/' + fileUrl}`;
+        
+        return (
+          <a
+            key={idx}
+            href={fullUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-2 py-1 bg-gray-100 rounded text-xs text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            <span className="mr-1">{getDocumentIcon(filename)}</span>
+            {originalName || filename || 'Document'}
+          </a>
+        );
+      })}
+    </div>
+  </div>
+)}
                 </div>
                 <div className="text-right ml-4">
                   <p className="text-lg font-bold text-sky-600">{formatCurrency(claim.claim_amount)}</p>
@@ -2097,46 +2391,51 @@ function Sidebar({ currentView, setCurrentView, isSidebarOpen, setIsSidebarOpen 
   ];
 
   return (
-    <div className={`${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:static lg:flex-shrink-0 left-0 top-0 h-screen w-64 bg-sky-900 text-white transition-transform duration-300 z-40 overflow-y-auto`}>
-      <div className="p-4 sm:p-6 border-b border-sky-800 sticky top-0 bg-sky-900">
-        <img src={Logo} alt="HealthInsura360" className="h-8 mb-2" />
-        <h1 className="text-lg sm:text-xl font-bold break-words">HealthInsura360</h1>
+    <aside className={`fixed left-0 top-0 h-screen bg-gradient-to-b from-sky-800 to-sky-900 text-white transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between p-4 border-b border-sky-700">
+          <div className={`flex items-center gap-2 ${!isSidebarOpen && 'justify-center'}`}>
+            <div className="w-8 h-8">
+              <img src={Logo} alt="HealthInsura360 Logo" className="w-full h-full object-contain rounded-lg bg-white p-1" />
+            </div>
+            {isSidebarOpen && (
+              <div>
+                <span className="font-bold text-lg">HealthInsura360</span>
+                <div className="text-xs text-sky-200">Customer Panel</div>
+              </div>
+            )}
+          </div>
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-white hover:bg-sky-700 p-2 rounded-lg transition-colors">
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
+        <nav className="flex-1 py-6 overflow-y-auto">
+          <ul className="space-y-2 px-3">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentView === item.id;
+              return (
+                <li key={item.id}>
+                  <button 
+                    onClick={() => setCurrentView(item.id)} 
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive ? 'bg-sky-700 text-white shadow-sm' : 'text-sky-100 hover:bg-sky-800'} ${!isSidebarOpen && 'justify-center'}`}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    {isSidebarOpen && <span>{item.label}</span>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+        <div className="p-3 border-t border-sky-800">
+          <button onClick={handleLogout} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sky-100 hover:bg-sky-800 transition-colors ${!isSidebarOpen && 'justify-center'}`}>
+            <LogOut className="h-5 w-5 flex-shrink-0" />
+            {isSidebarOpen && <span>Logout</span>}
+          </button>
+        </div>
       </div>
-      
-      <nav className="flex-1 p-4 sm:p-6 space-y-2">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              onClick={() => {
-                setCurrentView(item.id);
-                setIsSidebarOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                currentView === item.id
-                  ? 'bg-sky-700 text-white'
-                  : 'text-sky-100 hover:bg-sky-800'
-              }`}
-            >
-              <Icon className="h-5 w-5" />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="p-4 sm:p-6 border-t border-sky-800">
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-sky-700 hover:bg-sky-600 text-white rounded-lg transition-colors text-sm sm:text-base"
-        >
-          <LogOut className="h-5 w-5" />
-          <span className="hidden sm:inline">Logout</span>
-          <span className="sm:hidden">Log out</span>
-        </button>
-      </div>
-    </div>
+    </aside>
   );
 }
 
@@ -2179,7 +2478,7 @@ function DashboardOverviewSection({ customerName = { first_name: '', last_name: 
   const activePolicies = policies.filter(p => p.status === 'active').length;
   const paidClaims = claims.filter(c => c.status === 'paid').length;
   const pendingClaims = claims.filter(c => ['pending', 'processing', 'submitted'].includes(c.status)).length;
-  const approvedClaims = claims.filter(c => c.status === 'approved').length;
+  const approvedClaims = claims.filter(c => c.status === 'approved'|| c.status === 'paid').length;
   const rejectedClaims = claims.filter(c => ['rejected', 'disapproved'].includes(c.status)).length;
   
   // eslint-disable-next-line no-unused-vars
@@ -2598,7 +2897,7 @@ function CustomerDashboard() {
         />
       )}
 
-      <div className="flex-1 flex flex-col overflow-hidden relative z-0">
+      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
         <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-20">
           <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
