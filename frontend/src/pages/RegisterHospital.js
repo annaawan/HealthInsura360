@@ -62,7 +62,6 @@ const RegisterHospital = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // FIXED: Use hospitalAPI import
   const handleDocumentUpload = async (files) => {
     if (!files || files.length === 0) return;
 
@@ -71,59 +70,43 @@ const RegisterHospital = () => {
     setSuccess("");
 
     try {
-      const token = localStorage.getItem('healthinsura360_token');
-      
-      if (!token) {
-        throw new Error('You must be logged in to upload documents');
-      }
+        // ✅ REMOVE the token check for new registrations
+        // const token = localStorage.getItem('healthinsura360_token');
+        // if (!token) {
+        //     throw new Error('You must be logged in to upload documents');
+        // }
 
-      console.log('🔄 Uploading documents...', files.length);
+        console.log('🔄 Uploading documents...', files.length);
 
-      // USING hospitalAPI - fixes the ESLint warning
-      const formDataObj = new FormData();
-      Array.from(files).forEach(file => {
-        formDataObj.append('documents', file);
-      });
-      formDataObj.append('document_type', 'hospital_registration');
+        // USING hospitalAPI - fixes the ESLint warning
+        const formDataObj = new FormData();
+        Array.from(files).forEach(file => {
+            formDataObj.append('documents', file);
+        });
+        formDataObj.append('document_type', 'hospital_registration');
 
-      let response;
-      let data;
-      
-      // Check if we have a hospital ID (editing existing hospital)
-      if (formData.hospitalId) {
-        const hospitalId = formData.hospitalId;
+        let response;
+        let data;
         
-        // USING hospitalAPI
-        data = await hospitalAPI.uploadDocuments(
-          hospitalId,
-          Array.from(files),
-          'hospital_registration'
-        );
-        
-        if (!data.success) {
-          throw new Error(data.message || 'Document upload failed');
-        }
-      } else {
-        // If no hospital ID (new registration), upload to temporary endpoint
+        // For new registration (no hospital ID), upload to temporary endpoint WITHOUT auth
+        // Remove the Authorization header
         response = await fetch(`${API_BASE_URL}/hospitals/upload-documents`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
-          body: formDataObj
+            method: 'POST',
+            // No Authorization header for new registrations
+            body: formDataObj
         });
         
         data = await response.json();
         
         if (!response.ok) {
-          throw new Error(data.message || data.error || 'Document upload failed');
+            throw new Error(data.message || data.error || 'Document upload failed');
         }
         
         // Store file info in formData for later submission with hospital registration
         setFormData(prev => ({
-          ...prev,
-          documents: [...prev.documents, ...data.files],
-          tempDocuments: [...(prev.tempDocuments || []), ...data.files]
+            ...prev,
+            documents: [...prev.documents, ...data.files],
+            tempDocuments: [...(prev.tempDocuments || []), ...data.files]
         }));
         
         setSuccess(`Successfully uploaded ${data.files.length} document(s). They will be attached to your hospital registration.`);
@@ -131,38 +114,19 @@ const RegisterHospital = () => {
         
         // Clear file input
         if (fileInputRef.current) {
-          fileInputRef.current.value = '';
+            fileInputRef.current.value = '';
         }
         
         setUploadingDocuments(false);
         return;
-      }
 
-      console.log('✅ Documents uploaded successfully:', data);
-
-      // Add uploaded files to form data with proper structure from backend
-      const uploadedFiles = data.documents || data.files || [];
-      
-      setFormData(prev => ({
-        ...prev,
-        documents: [...prev.documents, ...uploadedFiles]
-      }));
-
-      setSuccess(`Successfully uploaded ${uploadedFiles.length} document(s)`);
-      setTimeout(() => setSuccess(""), 3000);
-      
-      // Clear file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      
     } catch (err) {
-      console.error('❌ Document upload error:', err);
-      setError(err.message || 'Failed to upload documents. Please try again.');
+        console.error('❌ Document upload error:', err);
+        setError(err.message || 'Failed to upload documents. Please try again.');
     } finally {
-      setUploadingDocuments(false);
+        setUploadingDocuments(false);
     }
-  };
+};
 
   const handleFileInputChange = (e) => {
     const files = Array.from(e.target.files);
@@ -332,72 +296,72 @@ const RegisterHospital = () => {
     setError("");
 
     try {
-      // Prepare hospital data for backend
-      const hospitalData = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        contactPerson: formData.contactPerson,
-        registrationNumber: formData.registrationNumber || null,
-        street: formData.street,
-        city: formData.city,
-        state: formData.state,
-        zipcode: formData.zipCode,
-        documents: formData.documents.map(doc => doc.originalName || doc.file_name) // Send just the filenames
-      };
+        // Prepare hospital data for backend
+        const hospitalData = {
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            contactPerson: formData.contactPerson,
+            registrationNumber: formData.registrationNumber || null,
+            street: formData.street,
+            city: formData.city,
+            state: formData.state,
+            zipcode: formData.zipCode,
+            // ✅ FIX: Send the server-generated filename (filename), not originalName
+            documents: formData.documents.map(doc => doc.filename || doc.file_name || doc.originalName)
+        };
 
-      console.log('Sending hospital data to backend:', hospitalData);
+        console.log('Sending hospital data to backend:', hospitalData);
 
-      // API call to backend
-      const response = await fetch(`${API_BASE_URL}/auth/register/hospital`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(hospitalData),
-      });
+        // API call to backend
+        const response = await fetch(`${API_BASE_URL}/auth/register/hospital`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(hospitalData),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Hospital registration failed');
-      }
+        if (!response.ok) {
+            throw new Error(data.message || 'Hospital registration failed');
+        }
 
-      // Success - data saved to database
-      setLoading(false);
-      setSuccess('Hospital registration submitted successfully! Admin will verify and provide credentials via email. Redirecting to login...');
-      
-      // Store temporary data for reference
-      localStorage.setItem('tempHospitalEmail', formData.email);
-      localStorage.setItem('tempHospitalName', formData.name);
-      
-      // Clear form
-      setFormData({
-        name: "",
-        email: "",
-        phone: "",
-        contactPerson: "",
-        registrationNumber: "",
-        street: "",
-        city: "",
-        state: "",
-        zipCode: "",
-        documents: [],
-        tempDocuments: []
-      });
-      
-      // Redirect to login page after 3 seconds
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
+        // Success - data saved to database
+        setLoading(false);
+        setSuccess('Hospital registration submitted successfully! Admin will verify and provide credentials via email. Redirecting to login...');
+        
+        // Store temporary data for reference
+        localStorage.setItem('tempHospitalEmail', formData.email);
+        localStorage.setItem('tempHospitalName', formData.name);
+        
+        // Clear form
+        setFormData({
+            name: "",
+            email: "",
+            phone: "",
+            contactPerson: "",
+            registrationNumber: "",
+            street: "",
+            city: "",
+            state: "",
+            zipCode: "",
+            documents: [],
+            tempDocuments: []
+        });
+        
+        // Redirect to login page after 3 seconds
+        setTimeout(() => {
+            navigate('/login');
+        }, 3000);
 
     } catch (err) {
-      console.error('Hospital registration error:', err);
-      setError(err.message || 'Hospital registration failed. Please try again.');
-      setLoading(false);
+        console.error('Hospital registration error:', err);
+        setError(err.message || 'Hospital registration failed. Please try again.');
+        setLoading(false);
     }
-  };
-
+};
   const renderStepContent = (step) => {
     switch (step) {
       case 0:
@@ -546,81 +510,135 @@ const RegisterHospital = () => {
         );
 
       case 1:
-        // Step 2: Document Upload
-        return (
-          <Box sx={{ width: '100%', maxWidth: 500, mx: 'auto' }}>
-            <Typography variant="h6" gutterBottom sx={{ color: '#0a2540', fontWeight: 600 }}>
-              📄 Upload Documents
+    // Step 2: Document Upload - FIXED LAYOUT
+    return (
+        <Box sx={{ width: '100%', maxWidth: 500, mx: 'auto' }}>
+            <Typography variant="h6" gutterBottom sx={{ color: '#0a2540', fontWeight: 600, textAlign: 'center' }}>
+                📄 Upload Documents
             </Typography>
-            <Typography variant="body2" color="#64748b" paragraph>
-              Please upload hospital documents for verification:
+            <Typography variant="body2" color="#64748b" paragraph textAlign="center">
+                Please upload hospital documents for verification:
             </Typography>
 
-            {/* Document Upload Area */}
-            <Box
-              sx={{
-                border: '2px dashed #0cc0df',
-                borderRadius: 2,
-                p: 3,
-                textAlign: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                mb: 3,
-                bgcolor: '#f0faff',
-                '&:hover': {
-                  bgcolor: '#e0f7ff',
-                  borderColor: '#0aa9c4'
-                }
-              }}
-              component="label"
-            >
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                onChange={handleFileInputChange}
-                style={{ display: 'none' }}
-                disabled={uploadingDocuments}
-                ref={fileInputRef}
-              />
-              {uploadingDocuments ? (
-                <>
-                  <CircularProgress size={40} sx={{ mb: 2, color: '#0cc0df' }} />
-                  <Typography variant="body2" color="#0cc0df">
-                    Uploading documents...
-                  </Typography>
-                </>
-              ) : (
-                <>
-                  <CloudUpload sx={{ fontSize: 48, color: '#0cc0df', mb: 2 }} />
-                  <Typography variant="body1" sx={{ fontWeight: 600, color: '#0a2540', mb: 1 }}>
-                    Click to upload or drag and drop
-                  </Typography>
-                  <Typography variant="body2" color="#64748b">
-                    PDF, JPG, PNG, DOC, DOCX (Max 10MB per file)
-                  </Typography>
-                </>
-              )}
+            {/* Document Upload Area - Centered */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                <Box
+                    sx={{
+                        border: '2px dashed #0cc0df',
+                        borderRadius: 2,
+                        p: 4,
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        mb: 3,
+                        bgcolor: '#f0faff',
+                        width: '100%',
+                        '&:hover': {
+                            bgcolor: '#e0f7ff',
+                            borderColor: '#0aa9c4'
+                        }
+                    }}
+                    component="label"
+                >
+                    <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                        onChange={handleFileInputChange}
+                        style={{ display: 'none' }}
+                        disabled={uploadingDocuments}
+                        ref={fileInputRef}
+                    />
+                    {uploadingDocuments ? (
+                        <>
+                            <CircularProgress size={40} sx={{ mb: 2, color: '#0cc0df' }} />
+                            <Typography variant="body2" color="#0cc0df">
+                                Uploading documents...
+                            </Typography>
+                        </>
+                    ) : (
+                        <>
+                            <CloudUpload sx={{ fontSize: 48, color: '#0cc0df', mb: 2 }} />
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: '#0a2540', mb: 1 }}>
+                                Click to upload or drag and drop
+                            </Typography>
+                            <Typography variant="body2" color="#64748b">
+                                PDF, JPG, PNG, DOC, DOCX (Max 10MB per file)
+                            </Typography>
+                        </>
+                    )}
+                </Box>
+
+                {/* Accepted Document Types - Centered */}
+                <Box sx={{ 
+                    mb: 3, 
+                    p: 2, 
+                    bgcolor: '#f8fafc', 
+                    borderRadius: 1, 
+                    width: '100%',
+                    textAlign: 'center'
+                }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: '#0a2540' }}>
+                        ✓ Accepted documents:
+                    </Typography>
+                    <Typography variant="body2" color="#64748b">
+                        • Hospital License & Certifications<br />
+                        • Tax Clearance Certificate<br />
+                        • Board Registration Proof<br />
+                        • Any other relevant documents
+                    </Typography>
+                </Box>
             </Box>
 
-            {/* Accepted Document Types */}
-            <Box sx={{ mb: 3, p: 2, bgcolor: '#f8fafc', borderRadius: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: '#0a2540' }}>
-                ✓ Accepted documents:
-              </Typography>
-              <Typography variant="body2" color="#64748b">
-                • Hospital License & Certifications<br/>
-                • Tax Clearance Certificate<br/>
-                • Board Registration Proof<br/>
-                • Any other relevant documents
-              </Typography>
-            </Box>
+            {/* Uploaded Documents List */}
+            {formData.documents && formData.documents.length > 0 && (
+                <Box sx={{ mt: 2, width: '100%' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#0a2540', mb: 2, textAlign: 'center' }}>
+                        Uploaded Documents ({formData.documents.length})
+                    </Typography>
+                    <Stack spacing={1}>
+                        {formData.documents.map((doc, index) => (
+                            <Box
+                                key={index}
+                                sx={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    p: 1.5,
+                                    bgcolor: '#f0faff',
+                                    borderRadius: 1,
+                                    border: '1px solid #0cc0df30'
+                                }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                                    <Typography variant="body2" sx={{ color: '#0a2540', fontWeight: 500 }}>
+                                        {doc.originalName || doc.filename || doc.file_name || `Document ${index + 1}`}
 
-            {/* FIXED: Call renderUploadedDocuments here */}
-            {renderUploadedDocuments()}
-          </Box>
-        );
-
+                                    </Typography>
+                                    {doc.document_id && (
+                                        <Chip
+                                            label="Uploaded"
+                                            size="small"
+                                            sx={{ ml: 1, bgcolor: '#4caf50', color: 'white', fontSize: '0.7rem' }}
+                                        />
+                                    )}
+                                </Box>
+                                <Button
+                                    size="small"
+                                    color="error"
+                                    startIcon={<DeleteIcon />}
+                                    onClick={() => handleRemoveDocument(index, doc.document_id)}
+                                    sx={{ fontSize: '0.75rem', minWidth: 'auto' }}
+                                >
+                                    Remove
+                                </Button>
+                            </Box>
+                        ))}
+                    </Stack>
+                </Box>
+            )}
+        </Box>
+    );
       case 2:
         // Step 3: Confirmation
         return (

@@ -83,19 +83,65 @@ const processClaimDocuments = async (claimId, files, hospitalId) => {
     return documentUrls;
 };
 
+// // ----------------------------------------
+// // GET: Fetch all hospitals
+// // ----------------------------------------
+// router.get("/", async (req, res) => {
+//   try {
+//     const result = await db.query("SELECT * FROM hospital ORDER BY hospital_id DESC");
+//     res.json(result.rows);
+//   } catch (err) {
+//     console.error("Error fetching hospitals:", err);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// });
 // ----------------------------------------
 // GET: Fetch all hospitals
 // ----------------------------------------
 router.get("/", async (req, res) => {
   try {
-    const result = await db.query("SELECT * FROM hospital ORDER BY hospital_id DESC");
-    res.json(result.rows);
+    const result = await db.query(`
+      SELECT 
+        hospital_id,
+        name,
+        email,
+        phone,
+        contact_person,
+        registration_number,
+        street,
+        city,
+        state,
+        zipcode,
+        specialization,
+        status,
+        verified_status,
+        verified_at,
+        created_at,
+        updated_at,
+        documents  -- ✅ IMPORTANT: Include the documents column
+      FROM hospital 
+      ORDER BY hospital_id DESC
+    `);
+    
+    // ✅ Parse documents JSON for each hospital
+    const hospitals = result.rows.map(hospital => ({
+      ...hospital,
+      documents: hospital.documents ? (
+        typeof hospital.documents === 'string' 
+          ? JSON.parse(hospital.documents) 
+          : hospital.documents
+      ) : []
+    }));
+    
+    res.json({
+      success: true,
+      hospitals: hospitals
+    });
   } catch (err) {
     console.error("Error fetching hospitals:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
 // ----------------------------------------
 // GET: Fetch pending hospital applications (for admin)
 // ----------------------------------------
@@ -458,6 +504,96 @@ router.put("/:id", authMiddleware, adminMiddleware, async (req, res) => {
 });
 // ============================================
 // GET: Get hospital by ID (for dashboard - accessible by hospital themselves)
+// // ============================================
+// router.get("/:id", async (req, res) => {
+//   try {
+//     const { id } = req.params;
+    
+//     console.log(`📋 Fetching hospital with ID: ${id}`);
+    
+//     // Check if token is provided (for authenticated requests)
+//     const token = req.headers.authorization?.split(' ')[1];
+//     let isAuthorized = false;
+//     let userId = null;
+    
+//     if (token) {
+//       try {
+//         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'Allahuakbar786');
+//         userId = decoded.id;
+//         isAuthorized = (userId === parseInt(id));
+//         console.log(`🔐 Token verified. User ID: ${userId}, Hospital ID: ${id}, Authorized: ${isAuthorized}`);
+//       } catch (err) {
+//         console.log('⚠️ Token verification failed:', err.message);
+//         // Continue as unauthorized
+//       }
+//     }
+    
+//     // For hospital dashboard, we want to return full profile if authorized
+//     let query;
+//     let params = [id];
+    
+//     if (isAuthorized) {
+//       // Authorized hospital - return full profile
+//       query = `SELECT 
+//         hospital_id as id,
+//         name, 
+//         email, 
+//         registration_number,
+//         phone, 
+//         street, 
+//         city, 
+//         state, 
+//         zipcode,
+//         contact_person,
+//         specialization,
+//         status,
+//         verified_status,
+//         verified_at,
+//         created_at,
+//         updated_at
+//         FROM hospital WHERE hospital_id = $1`;
+//       console.log('📊 Returning full profile for authorized hospital');
+//     } else {
+//       // Public/non-authorized - return limited info
+//       query = `SELECT 
+//         hospital_id as id,
+//         name, 
+//         email, 
+//         registration_number,
+//         phone, 
+//         city, 
+//         state,
+//         status
+//         FROM hospital WHERE hospital_id = $1`;
+//       console.log('📊 Returning limited profile for public request');
+//     }
+    
+//     const result = await db.query(query, params);
+
+//     if (result.rows.length === 0) {
+//       return res.status(404).json({ 
+//         success: false, 
+//         message: "Hospital not found" 
+//       });
+//     }
+
+//     console.log(`✅ Hospital found: ${result.rows[0].name}`);
+    
+//     res.json({
+//       success: true,
+//       hospital: result.rows[0]
+//     });
+    
+//   } catch (err) {
+//     console.error("Error fetching hospital:", err);
+//     res.status(500).json({ 
+//       success: false, 
+//       message: "Server error: " + err.message 
+//     });
+//   }
+// });
+// ============================================
+// GET: Get hospital by ID
 // ============================================
 router.get("/:id", async (req, res) => {
   try {
@@ -478,16 +614,15 @@ router.get("/:id", async (req, res) => {
         console.log(`🔐 Token verified. User ID: ${userId}, Hospital ID: ${id}, Authorized: ${isAuthorized}`);
       } catch (err) {
         console.log('⚠️ Token verification failed:', err.message);
-        // Continue as unauthorized
       }
     }
     
-    // For hospital dashboard, we want to return full profile if authorized
+    // For hospital dashboard, return full profile if authorized
     let query;
     let params = [id];
     
     if (isAuthorized) {
-      // Authorized hospital - return full profile
+      // Authorized hospital - return full profile including documents
       query = `SELECT 
         hospital_id as id,
         name, 
@@ -504,11 +639,12 @@ router.get("/:id", async (req, res) => {
         verified_status,
         verified_at,
         created_at,
-        updated_at
+        updated_at,
+        documents  -- ✅ Include documents
         FROM hospital WHERE hospital_id = $1`;
       console.log('📊 Returning full profile for authorized hospital');
     } else {
-      // Public/non-authorized - return limited info
+      // Public/non-authorized - return limited info (no documents)
       query = `SELECT 
         hospital_id as id,
         name, 
@@ -529,6 +665,13 @@ router.get("/:id", async (req, res) => {
         success: false, 
         message: "Hospital not found" 
       });
+    }
+
+    // ✅ Parse documents if they exist
+    if (isAuthorized && result.rows[0].documents) {
+      result.rows[0].documents = typeof result.rows[0].documents === 'string' 
+        ? JSON.parse(result.rows[0].documents) 
+        : result.rows[0].documents;
     }
 
     console.log(`✅ Hospital found: ${result.rows[0].name}`);
@@ -937,14 +1080,13 @@ router.get("/:id/claims", authMiddleware, async (req, res) => {
     
     console.log(`📋 Fetching cashless claims for hospital ID: ${id}`);
     
-    // Query that joins claim with treatment_detail - only for this hospital
-    const result = await db.query(
-      `SELECT 
+    const result = await db.query(`
+      SELECT 
         c.claim_id as id,
         c.claim_type,
         c.claim_amount,
         c.approved_amount,
-        c.status,
+        LOWER(c.status) as status,
         c.filing_date as created_at,
         td.diagnosis,
         td.treatment_description,
@@ -954,13 +1096,12 @@ router.get("/:id/claims", authMiddleware, async (req, res) => {
         CONCAT(cust.first_name, ' ', cust.last_name) as patient_name,
         cust.email as patient_email,
         cust.phone as patient_phone
-       FROM claim c
-       LEFT JOIN treatment_detail td ON c.claim_id = td.claim_id
-       LEFT JOIN customer cust ON c.customer_id = cust.customer_id
-       WHERE c.hospital_id = $1
-       ORDER BY c.filing_date DESC`,
-      [id]
-    );
+      FROM claim c
+      LEFT JOIN treatment_detail td ON c.claim_id = td.claim_id
+      LEFT JOIN customer cust ON c.customer_id = cust.customer_id
+      WHERE c.hospital_id = $1
+      ORDER BY c.filing_date DESC
+    `, [id]);
     
     console.log(`✅ Found ${result.rows.length} cashless claims for hospital ${id}`);
 
@@ -1346,6 +1487,7 @@ router.get("/customers/:customerId/policies", authMiddleware, async (req, res) =
       `SELECT 
         p.policy_id,
         p.policy_type,
+        p.plan_id,
         p.sum_insured,
         p.premium_amount,
         p.start_date,
@@ -1363,12 +1505,12 @@ router.get("/customers/:customerId/policies", authMiddleware, async (req, res) =
         pp.exclusions,
         pp.benefits,
         pp.deductible as plan_deductible
-       FROM policy p
-       LEFT JOIN policy_plans pp ON p.policy_type = pp.policy_type
-       WHERE p.customer_id = $1 
-       AND p.status = 'active'
-       AND p.end_date > CURRENT_DATE
-       ORDER BY p.start_date DESC`,
+      FROM policy p
+      LEFT JOIN policy_plans pp ON p.plan_id = pp.plan_id  -- ✅ Use plan_id, not policy_type
+      WHERE p.customer_id = $1 
+        AND p.status = 'active'
+        AND p.end_date > CURRENT_DATE
+      ORDER BY p.start_date DESC`,
       [customerId]
     );
 
@@ -1734,13 +1876,13 @@ if (req.files && req.files.length > 0) {
             }
         };
 
-        const formattedAmount = claimAmount.toLocaleString();
+        const formattedAmount = claimAmount.toLocaleString('en-US');
         await createNotification(
             customerId,
             'customer',
             'claim_submitted',
             'Cashless Claim Request Received',
-            `A cashless claim request for Rs. ${formattedAmount} has been submitted by ${hospitalName}. We will process it shortly.`,
+            `A cashless claim request for $${formattedAmount} has been submitted by ${hospitalName}. We will process it shortly.`,
             claimId
         );
 
@@ -1782,6 +1924,9 @@ if (req.files && req.files.length > 0) {
 // ============================================
 // GET: Get hospital dashboard stats
 // ============================================
+// ============================================
+// GET: Get hospital dashboard stats
+// ============================================
 router.get("/dashboard/stats", authMiddleware, async (req, res) => {
   try {
     const hospitalId = req.user.id;
@@ -1789,9 +1934,9 @@ router.get("/dashboard/stats", authMiddleware, async (req, res) => {
     const result = await db.query(
       `SELECT 
         COUNT(*) as total_claims,
-        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_claims,
-        COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved_claims,
-        COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected_claims,
+        COUNT(CASE WHEN LOWER(status) = 'pending' THEN 1 END) as pending_claims,
+        COUNT(CASE WHEN LOWER(status) IN ('approved', 'paid') THEN 1 END) as approved_claims,
+        COUNT(CASE WHEN LOWER(status) IN ('rejected', 'disapproved') THEN 1 END) as rejected_claims,
         COALESCE(SUM(claim_amount), 0) as total_claimed_amount,
         COALESCE(SUM(insurance_paid), 0) as total_insurance_paid
        FROM claim 

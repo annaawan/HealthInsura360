@@ -30,6 +30,50 @@ function PaymentReminders({ agent }) {
     message: ''
   });
 
+  // ============================================
+  // DATE & TIME VALIDATION HELPERS
+  // ============================================
+  
+  // Get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+  
+  // Get minimum time for today (only future times allowed, with 5 min buffer)
+  const getMinTimeForToday = (selectedDate) => {
+    const today = getTodayDate();
+    
+    // If selected date is not today, any time is allowed
+    if (selectedDate !== today) {
+      return '00:00';
+    }
+    
+    // For today, only allow future times (add 5 min buffer)
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes() + 5; // 5 minutes buffer
+    
+    if (currentMinute >= 60) {
+      const nextHour = (currentHour + 1) % 24;
+      return `${nextHour.toString().padStart(2, '0')}:00`;
+    }
+    
+    return `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+  };
+  
+  // Check if selected date/time is in the future
+  const isDateTimeValid = (date, time) => {
+    if (!date || !time) return false;
+    const selectedDateTime = new Date(`${date}T${time}`);
+    return selectedDateTime > new Date();
+  };
+  
+  // Get current time in HH:MM format
+  const getCurrentTime = () => {
+    const now = new Date();
+    return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  };
+
   const getAuthToken = () => {
     let token = localStorage.getItem('healthinsura360_token');
     if (!token) token = localStorage.getItem('token');
@@ -88,9 +132,16 @@ function PaymentReminders({ agent }) {
     }
   };
 
-  // Create reminder
+  // Create reminder with validation
   const handleCreateReminder = async (e) => {
     e.preventDefault();
+    
+    // ✅ Validate date/time is in the future
+    if (!isDateTimeValid(reminderForm.reminder_date, reminderForm.reminder_time)) {
+      alert('Please select a future date and time for the reminder.');
+      return;
+    }
+    
     try {
       const response = await axios.post('http://localhost:5000/api/payments/reminders', 
         reminderForm,
@@ -158,12 +209,19 @@ function PaymentReminders({ agent }) {
       alert(error.response?.data?.message || 'Failed to delete reminder');
     }
   };
+  
   const formatCurrency = (amount) => {
-  if (!amount) return 'Rs. 0';
-  return `Rs. ${Math.floor(amount).toLocaleString('en-PK')}`;
-};
-// Mark reminder as completed (when client pays offline)
-const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
+    if (!amount && amount !== 0) return '$0';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(Math.floor(amount || 0));
+  };
+  
+  // Mark reminder as completed (when client pays offline)
+  const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
     const paymentReference = prompt('Enter payment reference number (optional):');
     
     if (!window.confirm(`Mark this reminder as PAID? This will record the payment for policy #${policyId} for $${parseFloat(amount).toLocaleString()}.`)) {
@@ -182,7 +240,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
         
         if (response.data.success) {
             alert('✅ Payment recorded successfully! Reminder marked as completed.');
-            fetchReminders(); // Refresh the list
+            fetchReminders();
         } else {
             alert(response.data.message || 'Failed to mark as completed');
         }
@@ -190,7 +248,8 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
         console.error('Error marking reminder as completed:', error);
         alert(error.response?.data?.message || 'Failed to mark payment as completed');
     }
-};
+  };
+  
   // Handle client selection change
   const handleClientChange = async (customerId) => {
     setReminderForm({ ...reminderForm, customer_id: customerId, policy_id: '' });
@@ -441,7 +500,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                   )}
                 </div>
                 
-                {/* Reminder Date & Time */}
+                {/* Reminder Date & Time - WITH VALIDATION */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-700 mb-2">Reminder Date *</label>
@@ -449,21 +508,40 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                       type="date"
                       required
                       value={reminderForm.reminder_date}
-                      onChange={(e) => setReminderForm({...reminderForm, reminder_date: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg"
-                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        setReminderForm({
+                          ...reminderForm, 
+                          reminder_date: newDate,
+                          reminder_time: newDate === getTodayDate() ? getMinTimeForToday(newDate) : reminderForm.reminder_time
+                        });
+                      }}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                      min={getTodayDate()}
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-700 mb-2">Reminder Time</label>
+                    <label className="block text-gray-700 mb-2">Reminder Time *</label>
                     <input
                       type="time"
+                      required
                       value={reminderForm.reminder_time}
                       onChange={(e) => setReminderForm({...reminderForm, reminder_time: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                      min={getMinTimeForToday(reminderForm.reminder_date)}
+                      step="300"
                     />
                   </div>
                 </div>
+                
+                {/* Warning message for invalid selection */}
+                {!isDateTimeValid(reminderForm.reminder_date, reminderForm.reminder_time) && 
+                 reminderForm.reminder_date && reminderForm.reminder_time && (
+                  <div className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Please select a future date and time.</span>
+                  </div>
+                )}
                 
                 {/* Frequency */}
                 <div>
@@ -479,7 +557,7 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                   </select>
                 </div>
                 
-                {/* Recurring End Date */}
+                {/* Recurring End Date - With validation */}
                 {reminderForm.frequency !== 'one-time' && (
                   <div>
                     <label className="block text-purple-700 mb-2">End Date (Optional)</label>
@@ -490,6 +568,9 @@ const handleMarkAsCompleted = async (reminderId, policyId, amount) => {
                       className="w-full px-3 py-2 border rounded-lg"
                       min={reminderForm.reminder_date}
                     />
+                    {reminderForm.recurring_end_date && reminderForm.recurring_end_date < reminderForm.reminder_date && (
+                      <p className="text-xs text-red-600 mt-1">End date must be after or equal to start date</p>
+                    )}
                   </div>
                 )}
                 

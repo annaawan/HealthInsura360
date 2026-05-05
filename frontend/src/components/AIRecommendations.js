@@ -18,9 +18,14 @@ const getAxiosConfig = () => {
 };
 
 const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return 'Rs. 0';
+    if (!amount && amount !== 0) return '$0';
     if (amount === 0) return 'FREE';
-    return `Rs. ${Math.floor(amount).toLocaleString('en-PK')}`;
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(Math.floor(amount));
 };
 
 const getScoreColor = (score) => {
@@ -36,6 +41,7 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
     const [greeting, setGreeting] = useState('');
     const [mlStatus, setMlStatus] = useState('Initializing AI...');
     const [error, setError] = useState(null);
+    const [aiMetadata, setAiMetadata] = useState(null);
 
     useEffect(() => {
         fetchRecommendations();
@@ -44,8 +50,36 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
     const fetchRecommendations = async () => {
         setLoading(true);
         setError(null);
-        setMlStatus('Loading customer profile...');
+        setMlStatus('Initializing AI Engine...');
         
+        try {
+            const config = getAxiosConfig();
+            
+            setMlStatus('Analyzing your profile with Groq...');
+            
+            // ✅ NEW: Try OpenAI API first
+            const aiResponse = await axios.get(`${API_BASE_URL}/ai/recommendations`, config);
+            
+            if (aiResponse.data.success) {
+                setRecommendations(aiResponse.data.recommendations);
+                setGreeting(aiResponse.data.greeting);
+                setAiMetadata(aiResponse.data.ai_metadata);
+                
+                console.log('🤖 AI Metadata:', aiResponse.data.ai_metadata);
+                console.log('📊 Customer Profile:', aiResponse.data.customer_profile);
+                
+                setMlStatus(aiResponse.data.ai_metadata.source === 'openai' ? 'AI Active' : 'Standard Mode');
+                setLoading(false);
+                return;
+            }
+        } catch (openAIError) {
+            console.log('⚠️ OpenAI API failed, falling back to ML recommender:', openAIError.message);
+            setMlStatus('Falling back to standard recommendations...');
+        }
+        
+        // ============================================
+        // FALLBACK: Use existing ML recommender
+        // ============================================
         try {
             const config = getAxiosConfig();
             
@@ -57,7 +91,6 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
             const policiesResponse = await axios.get(`${API_BASE_URL}/policies/my-policies`, config);
             const purchasedPolicies = policiesResponse.data.policies || [];
             
-            // ✅ Create a Set of purchased plan IDs
             const purchasedPlanIds = new Set(
                 purchasedPolicies
                     .map(p => p.plan_id)
@@ -66,7 +99,6 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
             
             console.log('📋 Purchased plan IDs:', [...purchasedPlanIds]);
             
-            // Get REAL data from database
             let age = 30;
             if (customerProfile.dob) {
                 const birthDate = new Date(customerProfile.dob);
@@ -74,11 +106,9 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
                 age = today.getFullYear() - birthDate.getFullYear();
             }
             
-            // Get claim count for previous_claims
             const claimsResponse = await axios.get(`${API_BASE_URL}/claims/my-claims`, config);
             const previousClaims = claimsResponse.data.claims?.length || 0;
             
-            // Use REAL customer data from database
             const customerData = {
                 age: age,
                 family_size: customerProfile.family_size || 1,
@@ -91,7 +121,7 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
             
             console.log('📊 Customer Data for Recommendations:', customerData);
             
-            setMlStatus('Running AI recommendation engine...');
+            setMlStatus('Running recommendation engine...');
             const plansResponse = await axios.get(`${API_BASE_URL}/insurance-plans`, config);
             const allPlans = plansResponse.data.plans || [];
             
@@ -106,21 +136,26 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
             console.log('📋 Final recommendations:', mlRecommendations.length);
             
             setRecommendations(mlRecommendations);
+            setAiMetadata({
+                source: 'rule_based_fallback',
+                model: 'ml_recommender_v1',
+                timestamp: new Date().toISOString()
+            });
             
             const firstName = customerProfile.first_name || 'Valued Customer';
             if (age >= 60) {
-                setGreeting(`Dear ${firstName}, our AI recommends these senior-friendly plans for your health needs.`);
+                setGreeting(`Dear ${firstName}, here are recommended senior-friendly plans for your health needs.`);
             } else if (age < 35) {
-                setGreeting(`Dear ${firstName}, start your health journey with these AI-curated affordable plans.`);
+                setGreeting(`Dear ${firstName}, start your health journey with these affordable plans.`);
             } else {
-                setGreeting(`Dear ${firstName}, here are personalized AI recommendations based on your profile.`);
+                setGreeting(`Dear ${firstName}, here are personalized recommendations based on your profile.`);
             }
             
             setMlStatus('Ready');
             
         } catch (err) {
             console.error('Error fetching recommendations:', err);
-            setError('Unable to load AI recommendations. Please try again.');
+            setError('Unable to load recommendations. Please try again.');
             setRecommendations([]);
         } finally {
             setLoading(false);
@@ -170,7 +205,13 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
                         <div>
                             <h2 className="text-2xl font-bold">AI-Powered Recommendations</h2>
                             <p className="text-blue-100 text-sm mt-0.5">
-                                Personalized based on your profile • {mlStatus === 'Ready' ? 'Active' : mlStatus}
+                                Personalized based on your profile • {mlStatus === 'Ready' || mlStatus === 'AI Active' ? 'Active' : mlStatus}
+                                {aiMetadata?.source === 'openai' && (
+                                    <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                                        <Sparkles className="h-2 w-2" />
+                                        OpenAI
+                                    </span>
+                                )}
                             </p>
                         </div>
                     </div>
@@ -185,11 +226,18 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
                         </button>
                         <div className="flex items-center gap-1.5 text-xs bg-white/15 px-3 py-1.5 rounded-full backdrop-blur-sm">
                             <TrendingUp className="h-3 w-3" />
-                            <span>AI Active</span>
+                            <span>{aiMetadata?.source === 'openai' ? 'AI Powered' : 'Recommendations'}</span>
                         </div>
                     </div>
                 </div>
                 <p className="text-blue-100 text-sm mt-4 pl-1 border-l-2 border-white/30 pl-3">{greeting}</p>
+                {aiMetadata?.source === 'openai' && aiMetadata?.insights?.confidence_score && (
+                    <div className="mt-3 text-xs text-blue-200 flex items-center gap-2">
+                        <span>🤖 AI Confidence: {aiMetadata.insights.confidence_score}%</span>
+                        <span>•</span>
+                        <span>🧠 Model: GPT-3.5 Turbo</span>
+                    </div>
+                )}
             </div>
 
             {/* Recommendations Grid - WITH NO RECOMMENDATIONS MESSAGE */}
@@ -240,6 +288,12 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
                                     </div>
                                     <h3 className="font-bold text-gray-900 text-lg leading-tight">{rec.plan_name}</h3>
                                     <p className="text-xs text-gray-500 mt-0.5 capitalize">{rec.policy_type || 'Health'}</p>
+                                    {rec.ai_generated && (
+                                        <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-blue-500">
+                                            <Sparkles className="h-2 w-2" />
+                                            AI Recommended
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             
@@ -278,7 +332,10 @@ function AIRecommendations({ onSelectPlan, onViewPolicies, refreshTrigger }) {
             {/* AI Info Footer */}
             <div className="text-center">
                 <p className="text-xs text-gray-400">
-                    🧠 AI recommendations powered by neural network • Personalized based on your profile
+                    {aiMetadata?.source === 'openai' 
+                        ? '🧠 AI recommendations powered by OpenAI GPT-3.5 Turbo • Real-time intelligent analysis'
+                        : '📊 Recommendations based on your profile and preferences'
+                    }
                 </p>
             </div>
         </div>

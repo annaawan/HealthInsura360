@@ -58,7 +58,7 @@ exports.submitClaim = async (req, res) => {
         if (claimAmountNum > policy.remaining_coverage) {
             return res.status(400).json({
                 success: false,
-                error: `Claim amount exceeds remaining coverage of Rs. ${policy.remaining_coverage}`
+                error: `Claim amount exceeds remaining coverage of $${policy.remaining_coverage}`
             });
         }
 
@@ -157,7 +157,7 @@ exports.submitClaim = async (req, res) => {
             'customer',
             'claim_submitted',
             'Claim Submitted Successfully',
-            `Your claim #${claimNumber} for Rs. ${formattedAmount} has been submitted successfully.`,
+            `Your claim #${claimNumber} for $${formattedAmount} has been submitted successfully.`,
             claimId
         ).catch(err => console.log('Notification error:', err.message));
         
@@ -244,7 +244,7 @@ exports.submitCashlessClaim = async (req, res) => {
         if (parseFloat(treatmentCost) > remainingCoverage) {
             return res.status(400).json({
                 success: false,
-                message: `Treatment cost exceeds remaining coverage of Rs. ${remainingCoverage}`
+                message: `Treatment cost exceeds remaining coverage of $${remainingCoverage}`
             });
         }
 
@@ -329,7 +329,7 @@ exports.submitCashlessClaim = async (req, res) => {
             'customer',
             'claim_submitted',
             'Cashless Claim Request Received',
-            `A cashless claim request for Rs. ${formattedCost} has been submitted by ${patientName} at the hospital. We will process it shortly.`,
+            `A cashless claim request for $${formattedCost} has been submitted by ${patientName} at the hospital. We will process it shortly.`,
             claimId
         ).catch(err => console.log('Notification error:', err.message));
         
@@ -644,20 +644,20 @@ exports.updateClaimStatus = async (req, res) => {
         switch (status) {
             case 'processing':
                 notificationTitle = 'Claim Under Review';
-                notificationMessage = `Your claim #${claimNumber} for Rs. ${formattedAmount} is now being reviewed.`;
+                notificationMessage = `Your claim #${claimNumber} for $${formattedAmount} is now being reviewed.`;
                 break;
             case 'approved':
-                const approvedAmt = approved_amount ? parseFloat(approved_amount).toLocaleString() : formattedAmount;
+                const approvedAmt = approved_amount ? parseFloat(approved_amount).toLocaleString('en-US') : formattedAmount;
                 notificationTitle = 'Claim Approved! 🎉';
-                notificationMessage = `Your claim #${claimNumber} for Rs. ${approvedAmt} has been APPROVED.`;
+                notificationMessage = `Your claim #${claimNumber} for $${approvedAmt} has been APPROVED.`;
                 break;
             case 'rejected':
                 notificationTitle = 'Claim Rejected';
-                notificationMessage = `Your claim #${claimNumber} for Rs. ${formattedAmount} has been REJECTED. Reason: ${rejection_reason || 'Please contact support.'}`;
+                notificationMessage = `Your claim #${claimNumber} for $${formattedAmount} has been REJECTED. Reason: ${rejection_reason || 'Please contact support.'}`;
                 break;
             case 'paid':
                 notificationTitle = 'Claim Payment Disbursed';
-                notificationMessage = `The payment of Rs. ${formattedAmount} for claim #${claimNumber} has been disbursed.`;
+                notificationMessage = `The payment of $${formattedAmount} for claim #${claimNumber} has been disbursed.`;
                 break;
             default:
                 notificationTitle = `Claim Status Updated`;

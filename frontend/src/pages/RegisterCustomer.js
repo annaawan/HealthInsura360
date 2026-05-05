@@ -702,7 +702,7 @@ const Register = () => {
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
                 fullWidth
-                label="Monthly Budget (Rs.)"
+                label="Monthly Budget ($.)"
                 name="monthlyBudget"
                 type="number"
                 value={formData.monthlyBudget}
@@ -742,7 +742,7 @@ const Register = () => {
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
                 fullWidth
-                label="Annual Income (Rs.)"
+                label="Annual Income ($.)"
                 name="annualIncome"
                 type="number"
                 value={formData.annualIncome}
@@ -842,7 +842,7 @@ const Register = () => {
                   </Typography>
                   {formData.monthlyBudget && (
                     <Typography variant="subtitle1" gutterBottom>
-                      <strong>Monthly Budget:</strong> Rs. {parseInt(formData.monthlyBudget).toLocaleString()}
+                      <strong>Monthly Budget:</strong> ${parseInt(formData.monthlyBudget).toLocaleString()}
                     </Typography>
                   )}
                   {formData.familySize && (
@@ -852,7 +852,7 @@ const Register = () => {
                   )}
                   {formData.annualIncome && (
                     <Typography variant="subtitle1" gutterBottom>
-                      <strong>Annual Income:</strong> Rs. {parseInt(formData.annualIncome).toLocaleString()}
+                      <strong>Annual Income:</strong> ${parseInt(formData.annualIncome).toLocaleString()}
                     </Typography>
                   )}
                   {formData.healthScore && (

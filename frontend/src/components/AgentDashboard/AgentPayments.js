@@ -316,7 +316,7 @@ function AgentPayments({ agent }) {
   
   // Format currency
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-PK', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2

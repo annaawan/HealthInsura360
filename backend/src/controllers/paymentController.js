@@ -155,7 +155,7 @@ exports.confirmPayment = async (req, res) => {
           'customer',                          // user type
           'payment_received',                  // notification type
           'Payment Received Successfully',     // title
-          `Your payment of Rs. ${formattedAmount} for "${policyNameFromMetadata}" has been received successfully. Thank you for your purchase!`, // message
+          `Your payment of $${formattedAmount} for "${policyNameFromMetadata}" has been received successfully. Thank you for your purchase!`, // message
           policyId                             // related policy ID
         );
         
@@ -229,7 +229,7 @@ exports.handleStripeWebhook = async (req, res) => {
           'customer',                          // user type
           'payment_received',                  // notification type
           'Payment Received Successfully',     // title
-          `Your payment of Rs. ${formattedAmount} for "${policyName}" has been received successfully. Thank you for your purchase!`, // message
+          `Your payment of $${formattedAmount} for "${policyName}" has been received successfully. Thank you for your purchase!`, // message
           policyId ? parseInt(policyId) : null // related policy ID
         );
         
@@ -267,7 +267,7 @@ exports.handleStripeWebhook = async (req, res) => {
           'customer',                          // user type
           'payment_failed',                    // notification type
           'Payment Failed',                    // title
-          `Your payment of Rs. ${formattedAmount} for "${policyName}" failed. Please check your payment method and try again.`, // message
+          `Your payment of $${formattedAmount} for "${policyName}" failed. Please check your payment method and try again.`, // message
           null
         );
         
@@ -461,7 +461,7 @@ exports.processPremiumPayment = async (req, res) => {
                     subject, message, status, sent_at
                 ) VALUES ($1, $2, (SELECT email FROM customer WHERE customer_id = $2), 
                     'payment_completed', 'Payment Completed', $3, 'success', NOW())`,
-                [reminderId, customerId, `Payment of Rs. ${paymentAmount.toLocaleString()} completed for policy #${policyId}`]
+                [reminderId, customerId, `Payment of $${paymentAmount.toLocaleString('en-US')} completed for policy #${policyId}`]
             );
         }
         
@@ -473,7 +473,7 @@ exports.processPremiumPayment = async (req, res) => {
             'customer',
             'payment_received',
             'Payment Successful ✅',
-            `Your payment of Rs. ${paymentAmount.toLocaleString()} for policy "${policy.plan_name}" has been received successfully.`,
+            `Your payment of $${paymentAmount.toLocaleString('en-US')} for policy "${policy.plan_name}" has been received successfully.`,
             policyId
         ).catch(err => console.log('Notification error:', err.message));
         

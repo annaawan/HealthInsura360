@@ -386,12 +386,13 @@ class StripePaymentService {
     //     }
     // }
     
-    async processCommissionPayment(commissionId, agentId, amount, paymentMethod = 'stripe') {
+    async processCommissionPayment(commissionId, agentId, amount, currency = 'usd') {
     try {
         console.log('💰 Processing payment for commission:', commissionId);
-        console.log('📝 Payment method:', paymentMethod);
+        console.log('💰 Currency:', currency);
         
-        const paymentIntent = await this.createCommissionPaymentIntent(commissionId, agentId, amount, paymentMethod);
+        // ✅ Fix: Always use 'usd' as currency
+        const paymentIntent = await this.createCommissionPaymentIntent(commissionId, agentId, amount, currency);
         return paymentIntent;
     } catch (error) {
         console.error('❌ Process payment error:', error.message);

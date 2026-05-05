@@ -13,6 +13,214 @@ const generateRegistrationNumber = () => {
   return `${prefix}${timestamp}${random}`;
 };
 
+// // Customer Registration with Round-Robin Agent Assignment
+// exports.registerCustomer = async (req, res) => {
+//   const {
+//     firstName,
+//     lastName,
+//     gender,
+//     email,
+//     phone,
+//     dob,
+//     password,
+//     street,
+//     city,
+//     state,
+//     zipcode,
+//     monthly_budget,    // ✅ ADD THIS
+//     family_size,       // ✅ ADD THIS
+//     annual_income,     // ✅ ADD THIS
+//     health_score       // ✅ ADD THIS
+//   } = req.body;
+
+//   try {
+//     // Validate required fields
+//     if (!firstName || !lastName || !email || !password || !gender || !dob) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Please fill all required fields'
+//       });
+//     }
+
+//     // Validate numeric fields
+//     const validatedMonthlyBudget = monthly_budget && !isNaN(monthly_budget) ? parseFloat(monthly_budget) : 10000;
+//     const validatedFamilySize = family_size && !isNaN(family_size) ? parseInt(family_size) : 1;
+//     const validatedAnnualIncome = annual_income && !isNaN(annual_income) ? parseFloat(annual_income) : 0;
+//     const validatedHealthScore = health_score && !isNaN(health_score) ? parseFloat(health_score) : 0.7;
+
+//     // Validate ranges
+//     if (validatedMonthlyBudget < 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Monthly budget cannot be negative'
+//       });
+//     }
+//     if (validatedFamilySize < 1) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Family size must be at least 1'
+//       });
+//     }
+//     if (validatedAnnualIncome < 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Annual income cannot be negative'
+//       });
+//     }
+//     if (validatedHealthScore < 0 || validatedHealthScore > 10) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Health score must be between 0 and 10'
+//       });
+//     }
+
+//     // Check if email exists in any user table
+//     const existingUser = await db.query(
+//       'SELECT email FROM customer WHERE email = $1 UNION SELECT email FROM agent WHERE email = $1 UNION SELECT email FROM admin WHERE email = $1',
+//       [email]
+//     );
+
+//     if (existingUser.rows.length > 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Email already registered'
+//       });
+//     }
+    
+//     console.log('Registration - Original password:', password);
+
+//     // ========== ROUND-ROBIN AGENT ASSIGNMENT ==========
+//     let assignedAgentId = null;
+    
+//     const agents = await db.query(
+//       `SELECT 
+//          agent_id, 
+//          first_name, 
+//          last_name,
+//          COALESCE(total_sales, 0) as total_sales
+//        FROM agent 
+//        WHERE status = 'active'
+//        ORDER BY COALESCE(total_sales, 0) ASC, agent_id ASC`
+//     );
+
+//     if (agents.rows.length > 0) {
+//       assignedAgentId = agents.rows[0].agent_id;
+//       console.log(`✅ Round-robin assigned agent ID: ${assignedAgentId} (${agents.rows[0].first_name} ${agents.rows[0].last_name}) - Current customers: ${agents.rows[0].total_sales}`);
+//     } else {
+//       console.log('⚠️ No active agents available for assignment');
+//     }
+
+//     // Hash password
+//     const salt = await bcrypt.genSalt(10);
+//     const passwordHash = await bcrypt.hash(password, salt);
+
+//     console.log('Registration - Hashed password:', passwordHash);
+
+//     // Start transaction
+//     await db.query('BEGIN');
+
+//     // ✅ UPDATED INSERT with new fields
+//     const result = await db.query(
+//       `INSERT INTO customer (
+//         first_name, last_name, gender, email, phone, dob, 
+//         password_hash, street, city, state, zipcode,
+//         agent_id, monthly_budget, family_size, annual_income, health_score,
+//         created_at, updated_at, status
+//       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW(), 'active')
+//       RETURNING customer_id, first_name, last_name, email, created_at, updated_at, agent_id, monthly_budget, family_size, annual_income, health_score`,
+//       [
+//         firstName,
+//         lastName,
+//         gender,
+//         email.toLowerCase(),
+//         phone || null,
+//         dob,
+//         passwordHash,
+//         street || null,
+//         city || null,
+//         state || null,
+//         zipcode || null,
+//         assignedAgentId,
+//         validatedMonthlyBudget,
+//         validatedFamilySize,
+//         validatedAnnualIncome,
+//         validatedHealthScore
+//       ]
+//     );
+
+//     const customerId = result.rows[0].customer_id;
+
+//     // Update agent's total_sales
+//     if (assignedAgentId) {
+//       await db.query(
+//         `UPDATE agent 
+//          SET total_sales = COALESCE(total_sales, 0) + 1,
+//              updated_at = NOW()
+//          WHERE agent_id = $1`,
+//         [assignedAgentId]
+//       );
+//       console.log(`✅ Agent ${assignedAgentId} total_sales incremented for new customer ${customerId}`);
+//     }
+
+//     // Create token
+//     const tokenData = {
+//       userId: customerId,
+//       email: result.rows[0].email,
+//       userType: 'customer'
+//     };
+
+//     const token = jwt.sign(
+//       tokenData,
+//       process.env.JWT_SECRET || 'Allahuakbar786',
+//       { expiresIn: '7d' }
+//     );
+
+//     // Log audit
+//     await db.query(
+//       `INSERT INTO audit_log (user_type, user_id, action, entity, entity_id, timestamp)
+//        VALUES ('customer', $1, 'register', 'customer', $1, NOW())`,
+//       [customerId]
+//     );
+
+//     await db.query('COMMIT');
+
+//     res.status(201).json({
+//       success: true,
+//       message: assignedAgentId ? 'Customer registered successfully and assigned to agent' : 'Customer registered successfully (agent assignment pending)',
+//       token,
+//       user: {
+//         id: customerId,
+//         firstName: result.rows[0].first_name,
+//         lastName: result.rows[0].last_name,
+//         email: result.rows[0].email,
+//         userType: 'customer',
+//         assignedAgentId: result.rows[0].agent_id,
+//         monthly_budget: parseFloat(result.rows[0].monthly_budget),
+//         family_size: parseInt(result.rows[0].family_size),
+//         annual_income: parseFloat(result.rows[0].annual_income),
+//         health_score: parseFloat(result.rows[0].health_score),
+//         createdAt: result.rows[0].created_at,
+//         updatedAt: result.rows[0].updated_at
+//       }
+//     });
+
+//   } catch (error) {
+//     await db.query('ROLLBACK');
+//     console.error('Customer registration error:', error);
+    
+//     if (error.code === '23505') {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Email already exists'
+//       });
+//     }
+
+//     res.status(500).json({
+//       success: false,
+//       message: 'Server error during registration'
+//     });
+//   }
+// };
 // Customer Registration with Round-Robin Agent Assignment
 exports.registerCustomer = async (req, res) => {
   const {
@@ -149,6 +357,22 @@ exports.registerCustomer = async (req, res) => {
     );
 
     const customerId = result.rows[0].customer_id;
+
+    // ✅ ============================================
+    // ✅ CREATE CUSTOMER PAYMENT ACCOUNT (NEW)
+    // ✅ ============================================
+    await db.query(
+      `INSERT INTO customer_payment_account (
+        customer_id, 
+        balance, 
+        total_received, 
+        total_withdrawn,
+        created_at, 
+        updated_at
+      ) VALUES ($1, 0, 0, 0, NOW(), NOW())`,
+      [customerId]
+    );
+    console.log(`✅ Created payment account for customer ${customerId} with balance $0`);
 
     // Update agent's total_sales
     if (assignedAgentId) {

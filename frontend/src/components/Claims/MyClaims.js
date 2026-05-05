@@ -35,16 +35,16 @@ const MyClaims = () => {
         console.log('✅ All fields:', Object.keys(firstClaim));
         
         // Test formatCurrency directly
-        console.log('✅ formatCurrency(10000):', new Intl.NumberFormat('en-IN', {
+        console.log('✅ formatCurrency(10000):', new Intl.NumberFormat('en-US', {
           style: 'currency',
-          currency: 'INR',
+          currency: 'USD',
           minimumFractionDigits: 0,
           maximumFractionDigits: 0
         }).format(10000));
         
-        console.log('✅ formatCurrency(firstClaim.amount):', new Intl.NumberFormat('en-IN', {
+        console.log('✅ formatCurrency(firstClaim.amount):', new Intl.NumberFormat('en-US', {
           style: 'currency',
-          currency: 'INR',
+          currency: 'USD',
           minimumFractionDigits: 0,
           maximumFractionDigits: 0
         }).format(firstClaim.amount || 0));
@@ -79,13 +79,13 @@ const MyClaims = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-IN');
+    return new Date(dateString).toLocaleDateString('en-US');
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'INR',
+      currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(amount || 0);

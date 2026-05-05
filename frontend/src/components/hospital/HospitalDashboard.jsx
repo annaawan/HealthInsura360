@@ -71,7 +71,42 @@ const HospitalDashboard = () => {
       navigate('/login');
     }
   }, []);
+// Add these helper functions at the top of your component (after useState declarations, before any functions)
 
+// ============================================
+// DATE VALIDATION HELPERS FOR CLAIM FORM
+// ============================================
+
+// Get today's date in YYYY-MM-DD format
+const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0];
+};
+
+// Get max date (cannot be more than 1 year in future for claims)
+const getMaxDate = () => {
+    const maxDate = new Date();
+    maxDate.setFullYear(maxDate.getFullYear() + 1);
+    return maxDate.toISOString().split('T')[0];
+};
+
+// Check if date is valid (not future and not more than 1 year old)
+const isTreatmentDateValid = (dateString) => {
+    if (!dateString) return true;
+    const selectedDate = new Date(dateString);
+    const today = new Date();
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    
+    // Cannot be in the future
+    if (selectedDate > today) {
+        return { valid: false, message: 'Treatment date cannot be in the future' };
+    }
+    // Cannot be more than 1 year old
+    if (selectedDate < oneYearAgo) {
+        return { valid: false, message: 'Treatment date cannot be more than 1 year old' };
+    }
+    return { valid: true, message: '' };
+};
   const fetchHospitalData = async (hospitalId) => {
     try {
       const token = localStorage.getItem('healthinsura360_token');
@@ -139,33 +174,48 @@ const HospitalDashboard = () => {
       setCustomersLoading(false);
     }
   };
-
+// Add this helper function to format status display
+const formatStatus = (status) => {
+    const normalized = status?.toLowerCase();
+    if (normalized === 'approved' || normalized === 'paid') return 'Approved';
+    if (normalized === 'pending') return 'Pending';
+    if (normalized === 'disapproved' || normalized === 'rejected') return 'Rejected';
+    return status || 'Unknown';
+};
   const fetchClaims = async (hospitalId) => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('healthinsura360_token');
-      
-      const response = await axios.get(`${API_BASE_URL}/claims/hospital/${hospitalId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.data.success) {
-        const claimsData = response.data.claims || [];
-        setClaims(claimsData);
-        setStats({
-          totalClaims: claimsData.length,
-          pendingClaims: claimsData.filter(c => c.status === 'pending').length,
-          approvedClaims: claimsData.filter(c => c.status === 'approved').length,
-          rejectedClaims: claimsData.filter(c => c.status === 'rejected').length
+        setLoading(true);
+        const token = localStorage.getItem('healthinsura360_token');
+        
+        const response = await axios.get(`${API_BASE_URL}/claims/hospital/${hospitalId}`, {
+            headers: { Authorization: `Bearer ${token}` }
         });
-      }
+
+        if (response.data.success) {
+            const claimsData = response.data.claims || [];
+            setClaims(claimsData);
+            
+            // ✅ FIXED: Handle multiple status values
+            setStats({
+                totalClaims: claimsData.length,
+                pendingClaims: claimsData.filter(c => c.status?.toLowerCase() === 'pending').length,
+                approvedClaims: claimsData.filter(c => {
+                    const status = c.status?.toLowerCase();
+                    return status === 'approved' || status === 'paid';
+                }).length,
+                rejectedClaims: claimsData.filter(c => {
+                    const status = c.status?.toLowerCase();
+                    return status === 'rejected' || status === 'disapproved';
+                }).length
+            });
+        }
     } catch (err) {
-      console.error('Error fetching claims:', err);
-      showNotification('Failed to load claims', 'error');
+        console.error('Error fetching claims:', err);
+        showNotification('Failed to load claims', 'error');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   // Select policy for claim
   const selectPolicyForClaim = (policy) => {
@@ -383,36 +433,35 @@ const HospitalDashboard = () => {
   };
 
   const getStatusBadgeClass = (status) => {
-    if (status === 'approved') return 'bg-green-100 text-green-800';
-    if (status === 'pending') return 'bg-orange-100 text-orange-800';
-    return 'bg-red-100 text-red-800';
-  };
+    const normalizedStatus = status?.toLowerCase();
+    if (normalizedStatus === 'approved' || normalizedStatus === 'paid') {
+        return 'bg-green-100 text-green-800';
+    }
+    if (normalizedStatus === 'pending') {
+        return 'bg-orange-100 text-orange-800';
+    }
+    if (normalizedStatus === 'disapproved' || normalizedStatus === 'rejected') {
+        return 'bg-red-100 text-red-800';
+    }
+    return 'bg-gray-100 text-gray-800';
+};
 
   const handleSidebarToggle = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  // Calculate claim preview
   const getClaimPreview = () => {
     if (!claimValidation || !claimFormData.treatmentCost) return null;
     const amount = parseFloat(claimFormData.treatmentCost);
+    
+    // ✅ NO DEDUCTIBLE - Insurance pays full amount
     let insurancePayment = amount;
     let patientResponsibility = 0;
     let deductibleApplied = 0;
     let coPayAmount = 0;
     
-    if (claimValidation.deductibleAmount > 0) {
-      deductibleApplied = Math.min(claimValidation.deductibleAmount, amount);
-      insurancePayment = amount - deductibleApplied;
-      patientResponsibility = deductibleApplied;
-    }
-    if (claimValidation.coPayPercentage > 0 && insurancePayment > 0) {
-      coPayAmount = (insurancePayment * claimValidation.coPayPercentage) / 100;
-      insurancePayment = insurancePayment - coPayAmount;
-      patientResponsibility += coPayAmount;
-    }
     return { insurancePayment, patientResponsibility, deductibleApplied, coPayAmount };
-  };
+};
 
   const renderContent = () => {
     switch(currentView) {
@@ -515,8 +564,8 @@ const HospitalDashboard = () => {
                         <td className="px-6 py-4 text-sm font-semibold text-gray-900">${claim.treatmentCost}</td>
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(claim.status)}`}>
-                            {claim.status}
-                          </span>
+    {formatStatus(claim.status)}
+</span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">{new Date(claim.createdAt).toLocaleDateString()}</td>
                       </tr>
@@ -601,7 +650,8 @@ case 'account':
                     <div key={policy.policy_id} className="border rounded-lg p-4 hover:shadow-md transition">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-bold text-lg">{policy.policy_type}</p>
+                          <p className="font-bold text-lg">{policy.plan_name || policy.policy_type}</p>
+
                           <p className="text-sm text-gray-600">Policy ID: #{policy.policy_id}</p>
                           <div className="grid grid-cols-2 gap-4 mt-2">
                             <div>
@@ -669,7 +719,7 @@ case 'account':
   );
 
   // Claim Modal
-  const renderClaimModal = () => {
+const renderClaimModal = () => {
     const preview = getClaimPreview();
     return (
       <>
@@ -722,8 +772,27 @@ case 'account':
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Treatment Date *</label>
-                        <input type="date" className="w-full px-3 py-2 border rounded-lg" value={claimFormData.treatmentDate}
-                          onChange={(e) => handleClaimInputChange('treatmentDate', e.target.value)} />
+                        <input 
+                          type="date" 
+                          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500" 
+                          value={claimFormData.treatmentDate}
+                          onChange={(e) => {
+                            const validation = isTreatmentDateValid(e.target.value);
+                            if (!validation.valid && e.target.value) {
+                              showNotification(validation.message, 'warning');
+                            }
+                            handleClaimInputChange('treatmentDate', e.target.value);
+                          }}
+                          max={getTodayDate()}
+                          min={(() => {
+                            const oneYearAgo = new Date();
+                            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                            return oneYearAgo.toISOString().split('T')[0];
+                          })()}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Treatment date cannot be in the future or more than 1 year old
+                        </p>
                       </div>
                     </div>
                     <div>
@@ -735,32 +804,32 @@ case 'account':
                 )}
 
                 {activeStep === 2 && (
-  <div>
-    <input
-      type="file"
-      multiple
-      accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx"
-      onChange={handleDocumentUpload}
-      className="w-full"
-    />
-    {uploadingDocs && <p className="text-sm text-blue-600 mt-1">Uploading...</p>}
-    {claimFormData.documents.length > 0 && (
-      <ul className="mt-2 space-y-1">
-        {claimFormData.documents.map((doc, idx) => (
-          <li key={idx} className="flex justify-between items-center text-sm">
-            <span>{doc.originalName || doc.originalname || doc.filename}</span>
-            <button onClick={() => removeDocument(idx)} className="text-red-500 hover:text-red-700">
-              Remove
-            </button>
-          </li>
-        ))}
-      </ul>
-    )}
-    <p className="text-xs text-gray-500 mt-2">
-      Files will be uploaded when you submit the claim.
-    </p>
-  </div>
-)}
+                  <div>
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx"
+                      onChange={handleDocumentUpload}
+                      className="w-full"
+                    />
+                    {uploadingDocs && <p className="text-sm text-blue-600 mt-1">Uploading...</p>}
+                    {claimFormData.documents.length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {claimFormData.documents.map((doc, idx) => (
+                          <li key={idx} className="flex justify-between items-center text-sm">
+                            <span>{doc.originalName || doc.originalname || doc.filename}</span>
+                            <button onClick={() => removeDocument(idx)} className="text-red-500 hover:text-red-700">
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      Files will be uploaded when you submit the claim.
+                    </p>
+                  </div>
+                )}
 
                 {activeStep === 3 && preview && (
                   <div className="space-y-4">
@@ -801,7 +870,7 @@ case 'account':
         )}
       </>
     );
-  };
+};
 
   const renderClaimDetailsModal = () => (
     <>

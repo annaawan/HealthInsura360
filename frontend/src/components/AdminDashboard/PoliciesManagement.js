@@ -391,7 +391,7 @@ const handleSubmit = async (e) => {
   }
 };
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-PK', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 0,
@@ -736,7 +736,7 @@ const handleSubmit = async (e) => {
                     
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-gray-700 mb-2">Premium Amount (Rs.) *</label>
+                        <label className="block text-gray-700 mb-2">Premium Amount ($) *</label>
                         <input
                           type="number"
                           required
@@ -748,7 +748,7 @@ const handleSubmit = async (e) => {
                         />
                       </div>
                       <div>
-                        <label className="block text-gray-700 mb-2">Coverage Amount (Rs.) *</label>
+                        <label className="block text-gray-700 mb-2">Coverage Amount ($) *</label>
                         <input
                           type="number"
                           required
@@ -763,7 +763,7 @@ const handleSubmit = async (e) => {
 
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-gray-700 mb-2">Deductible (Rs.)</label>
+                        <label className="block text-gray-700 mb-2">Deductible ($)</label>
                         <input
                           type="number"
                           min="0"
@@ -774,7 +774,7 @@ const handleSubmit = async (e) => {
                         />
                       </div>
                       <div>
-                        <label className="block text-gray-700 mb-2">Max Claim Limit (Rs.) *</label>
+                        <label className="block text-gray-700 mb-2">Max Claim Limit ($) *</label>
                         <input
                           type="number"
                           required

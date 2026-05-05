@@ -558,29 +558,29 @@ router.put('/transactions/:id/status', async (req, res) => {
 router.post('/commissions/:commissionId/pay', authenticate, adminMiddleware, async (req, res) => {
     try {
         const { commissionId } = req.params;
-        const { amount, agentId, paymentMethod } = req.body;  // ← ADD paymentMethod
+        const { amount, agentId, currency } = req.body;  // ← Change paymentMethod to currency
         
-        console.log('💰 Payment request received:', { commissionId, amount, agentId, paymentMethod });
+        console.log('💰 Payment request received:', { commissionId, amount, agentId, currency });
         
         if (!amount || !agentId) {
             return res.status(400).json({ error: 'Missing required fields: amount and agentId' });
         }
         
-        // Store the payment method for later use
-        const selectedPaymentMethod = paymentMethod || 'stripe';  // Default to stripe if not specified
+        // Use 'usd' as default currency if not provided
+        const selectedCurrency = currency || 'usd';
         
         const paymentIntent = await stripePaymentService.processCommissionPayment(
             commissionId,
             agentId,
             parseFloat(amount),
-            selectedPaymentMethod  // ← Pass payment method
+            selectedCurrency  // ← Pass currency (e.g., 'usd')
         );
         
         res.json({
             success: true,
             clientSecret: paymentIntent.clientSecret,
             paymentIntentId: paymentIntent.paymentIntentId,
-            paymentMethod: selectedPaymentMethod  // ← Return payment method
+            currency: selectedCurrency
         });
         
     } catch (error) {
@@ -1564,6 +1564,376 @@ router.get('/agent/claims/:claimId', authenticate, async (req, res) => {
     }
 });
 
+// // Approve claim with hospital payout account check
+// router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
+//     const client = await pool.connect();
+//     const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+//     const companyAccountService = require('../services/companyAccountService');
+    
+//     try {
+//         const { claimId } = req.params;
+//         const { approved_amount, coverage_type, notes } = req.body;
+//         const agentId = req.user.userId || req.user.id;
+        
+//         await client.query('BEGIN');
+        
+//         const claimResult = await client.query(`
+//             SELECT c.*, 
+//                    p.policy_id, 
+//                    p.sum_insured, 
+//                    p.remaining_coverage, 
+//                    p.used_coverage,
+//                    p.used_deductible,
+//                    p.deductible_amount as policy_deductible, 
+//                    p.co_pay_percentage as policy_copay,
+//                    p.policy_type, 
+//                    cust.email as customer_email, 
+//                    cust.first_name, 
+//                    cust.last_name, 
+//                    cust.phone,
+//                    h.name as hospital_name, 
+//                    h.hospital_id, 
+//                    h.email as hospital_email
+//             FROM claim c
+//             JOIN policy p ON c.policy_id = p.policy_id
+//             LEFT JOIN customer cust ON c.customer_id = cust.customer_id
+//             LEFT JOIN hospital h ON c.hospital_id = h.hospital_id
+//             WHERE c.claim_id = $1
+//         `, [claimId]);
+        
+//         if (claimResult.rows.length === 0) {
+//             await client.query('ROLLBACK');
+//             return res.status(404).json({ success: false, message: 'Claim not found' });
+//         }
+        
+//         const claim = claimResult.rows[0];
+//         const isHospitalClaim = claim.hospital_id !== null;
+//         const requestedAmount = parseFloat(claim.claim_amount) || 0;
+//         let finalApprovedAmount = approved_amount ? parseFloat(approved_amount) : requestedAmount;
+        
+//         if (isNaN(finalApprovedAmount) || finalApprovedAmount <= 0) {
+//             await client.query('ROLLBACK');
+//             return res.status(400).json({ success: false, message: 'Invalid approved amount' });
+//         }
+        
+//         // ============================================
+//         // CHECK FOR HOSPITAL PAYOUT ACCOUNT
+//         // ============================================
+//         let hasPayoutAccount = true;
+//         let pendingPayment = false;
+        
+//         if (isHospitalClaim) {
+//             const hospitalPayoutResult = await client.query(`
+//                 SELECT * FROM hospital_payout_account 
+//                 WHERE hospital_id = $1 AND status = 'active'
+//                 ORDER BY is_default DESC, created_at DESC
+//                 LIMIT 1
+//             `, [claim.hospital_id]);
+            
+//             hasPayoutAccount = hospitalPayoutResult.rows.length > 0;
+            
+//             if (!hasPayoutAccount) {
+//                 console.log(`🏥 Hospital ${claim.hospital_id} has no payout account. Payment will be pending.`);
+//                 pendingPayment = true;
+                
+//                 // Send email notification to hospital about missing payout account
+//                 const emailService = require('../services/emailServices');
+//                 await emailService.sendHospitalMissingPayoutAccountEmail(
+//                     claim.hospital_email,
+//                     claim.hospital_name,
+//                     claimId,
+//                     finalApprovedAmount
+//                 );
+//                 console.log(`✅ Email sent to hospital ${claim.hospital_email} about missing payout account`);
+//             }
+//         }
+        
+//         const remainingCoverage = parseFloat(claim.remaining_coverage) || 0;
+//         if (finalApprovedAmount > remainingCoverage) {
+//             await client.query('ROLLBACK');
+//             return res.status(400).json({ success: false, message: `Insufficient coverage. Remaining: $${remainingCoverage.toFixed(2)}` });
+//         }
+        
+//         // ============================================
+//         // ✅ FIXED DEDUCTIBLE LOGIC - Deductible is per policy year, not per claim
+//         // ============================================
+//         const policyDeductible = parseFloat(claim.policy_deductible) || 0;
+//         const usedDeductible = parseFloat(claim.used_deductible) || 0;
+//         const coPayPercentage = parseFloat(claim.policy_copay) || 0;
+        
+//         // Calculate remaining deductible for THIS policy year
+//         let remainingDeductible = Math.max(0, policyDeductible - usedDeductible);
+//         let deductibleApplied = Math.min(remainingDeductible, finalApprovedAmount);
+//         let remainingAfterDeductible = finalApprovedAmount - deductibleApplied;
+        
+//         let coPayAmount = (remainingAfterDeductible * coPayPercentage) / 100;
+//         let insurancePaid = remainingAfterDeductible - coPayAmount;
+        
+//         deductibleApplied = Math.round(deductibleApplied * 100) / 100;
+//         coPayAmount = Math.round(coPayAmount * 100) / 100;
+//         insurancePaid = Math.round(insurancePaid * 100) / 100;
+//         let clientResponsibility = Math.round((deductibleApplied + coPayAmount) * 100) / 100;
+        
+//         console.log('💰 Deductible calculation:', {
+//             claimAmount: finalApprovedAmount,
+//             policyDeductible,
+//             usedDeductible,
+//             remainingDeductible,
+//             deductibleApplied,
+//             remainingAfterDeductible,
+//             coPayPercentage,
+//             coPayAmount,
+//             insurancePaid,
+//             clientResponsibility
+//         });
+        
+//         const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+//         const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        
+//         let transferStatus = 'pending';
+//         let stripeTransferId = null;
+//         let paymentIntentId = null;
+//         let paymentStatusForClaim = pendingPayment ? 'pending_account' : 'completed';
+//         let claimStatus = pendingPayment ? 'approved' : 'paid';
+        
+//         // ============================================
+//         // DETERMINE THE RECIPIENT (ONLY ONE!)
+//         // ============================================
+//         let toAccountType = 'customer';
+//         let toAccountId = claim.customer_id;
+//         let transactionDescription = `Claim payout for claim #${claimId} - Customer: ${claim.first_name} ${claim.last_name}`;
+//         let transactionType = 'claim_payout';
+        
+//         if (isHospitalClaim && !pendingPayment) {
+//             toAccountType = 'hospital';
+//             toAccountId = claim.hospital_id;
+//             transactionDescription = `Claim payout for claim #${claimId} - Hospital: ${claim.hospital_name}`;
+//             transactionType = 'hospital_payout';
+//         }
+        
+//         // Only process payment if hospital has payout account (or it's a customer claim) AND insurancePaid > 0
+//         if (!pendingPayment && insurancePaid > 0) {
+//             try {
+//                 if (isHospitalClaim) {
+//                     // Hospital claim - record only (no actual Stripe transfer for now)
+//                     console.log(`🏥 Processing hospital payout for claim ${claimId}`);
+//                     stripeTransferId = `HOSPITAL_PAYOUT_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+//                     transferStatus = 'completed';
+                    
+//                     console.log(`✅ Hospital payout recorded: $${insurancePaid} to hospital ${claim.hospital_id}`);
+                    
+//                 } else {
+//                     // Customer claim - transfer to customer's Stripe account
+//                     console.log(`👤 Processing customer payout for claim ${claimId}`);
+                    
+//                     const paymentIntent = await stripe.paymentIntents.create({
+//                         amount: Math.round(insurancePaid * 100),
+//                         currency: 'usd',
+//                         payment_method_types: ['card'],
+//                         description: `Claim payment for claim #${claimId} - ${claim.policy_type}`,
+//                         metadata: { claim_id: claimId, customer_id: claim.customer_id, policy_id: claim.policy_id, payment_id: paymentId },
+//                         receipt_email: claim.customer_email
+//                     });
+                    
+//                     paymentIntentId = paymentIntent.id;
+//                     stripeTransferId = paymentIntentId;
+//                     transferStatus = 'completed';
+//                 }
+                
+//                 // Debit company account (ONE TIME)
+//                 const debitResult = await companyAccountService.debitCompanyAccount(
+//                     insurancePaid, 
+//                     isHospitalClaim ? claim.hospital_id : claim.customer_id, 
+//                     claimId,
+//                     transactionDescription
+//                 );
+                
+//                 console.log(`✅ Company account debited: $${insurancePaid} (Recipient: ${toAccountType})`);
+                
+//             } catch (stripeError) {
+//                 console.error('Payment transfer error:', stripeError);
+//                 transferStatus = 'failed';
+//                 claimStatus = 'approved';
+//                 paymentStatusForClaim = 'failed';
+//             }
+//         } else if (pendingPayment) {
+//             console.log(`⏳ Payment pending for hospital ${claim.hospital_id} - waiting for payout account setup`);
+//         } else if (insurancePaid <= 0) {
+//             console.log(`⚠️ No payment required. insurancePaid = $${insurancePaid}. This may be due to deductible > claim amount.`);
+//             // Still mark as paid/completed even if no money is transferred
+//             transferStatus = 'completed';
+//             claimStatus = 'paid';
+//             paymentStatusForClaim = 'completed';
+//         }
+        
+//         // ============================================
+//         // INSERT ONLY ONE LEDGER TRANSACTION
+//         // ============================================
+//         await client.query(`
+//             INSERT INTO ledger_transactions 
+//             (transaction_type, amount, from_account_type, from_account_id, to_account_type, to_account_id, 
+//              reference_id, description, stripe_transfer_id, status, created_at)
+//             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+//         `, [
+//             transactionType,
+//             insurancePaid,
+//             'company',
+//             1,
+//             toAccountType,
+//             toAccountId,
+//             paymentId,
+//             transactionDescription,
+//             stripeTransferId || paymentId,
+//             transferStatus === 'completed' ? 'completed' : 'pending'
+//         ]);
+        
+//         console.log(`✅ Ledger entry created: $${insurancePaid} from company to ${toAccountType} ${toAccountId}`);
+        
+//         // Insert payment record (only if insurancePaid > 0, otherwise insert with 0)
+//         await client.query(`
+//             INSERT INTO payment (payment_id, policy_id, customer_id, amount, method, status, transaction_ref, paid_at)
+//             VALUES ($1, $2, $3, $4, 'stripe', $5, $6, ${pendingPayment ? 'NULL' : (insurancePaid > 0 ? 'NOW()' : 'NOW()')})
+//         `, [paymentId, claim.policy_id, claim.customer_id, insurancePaid, transferStatus === 'completed' ? 'completed' : 'pending', transactionId]);
+        
+//         // Insert transaction record (ONLY ONE)
+//         await client.query(`
+//             INSERT INTO transaction (transaction_id, related_payment_id, related_claim_id, amount, type, status, created_at, notes, payment_method)
+//             VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'stripe')
+//         `, [
+//             transactionId, 
+//             paymentId, 
+//             claimId, 
+//             insurancePaid, 
+//             isHospitalClaim ? 'hospital_payout' : 'claim_payout', 
+//             transferStatus === 'completed' ? 'completed' : 'pending',
+//             pendingPayment ? `Payment pending - Hospital needs to add payout account` : 
+//             (insurancePaid <= 0 ? `No payment - Deductible ($${deductibleApplied}) covered the claim amount` : `Payout for claim #${claimId}`)
+//         ]);
+        
+//         // Update claim with all calculated values
+//         await client.query(`
+//             UPDATE claim 
+//             SET status = $1,
+//                 approved_amount = $2::DECIMAL,
+//                 reviewed_by = $3::INTEGER,
+//                 reviewed_at = NOW(),
+//                 approval_notes = $4::TEXT,
+//                 deductible_applied = $5::DECIMAL,
+//                 co_pay_amount = $6::DECIMAL,
+//                 insurance_paid = $7::DECIMAL,
+//                 client_responsibility = $8::DECIMAL,
+//                 coverage_type = $9::VARCHAR,
+//                 agent_notes = $10::TEXT,
+//                 payment_status = $11::VARCHAR,
+//                 payment_transfer_date = CASE WHEN $12 = 'completed' OR $15 = 'completed' THEN NOW() ELSE NULL END,
+//                 payment_intent_id = COALESCE($13, $14, NULL),
+//                 stripe_transfer_id = COALESCE($14, $13, NULL),
+//                 transfer_status = $15::VARCHAR,
+//                 updated_at = NOW()
+//             WHERE claim_id = $16::INTEGER
+//         `, [
+//             claimStatus,                    // $1
+//             finalApprovedAmount,            // $2
+//             agentId,                        // $3
+//             notes || null,                  // $4
+//             deductibleApplied,              // $5
+//             coPayAmount,                    // $6
+//             insurancePaid,                  // $7
+//             clientResponsibility,           // $8
+//             coverage_type || 'full_coverage', // $9
+//             notes || null,                  // $10
+//             paymentStatusForClaim,          // $11
+//             transferStatus,                 // $12 - for payment_transfer_date condition
+//             paymentIntentId,                // $13 - Stripe payment intent ID (for customer claims)
+//             stripeTransferId,               // $14 - Custom transfer ID (for hospital claims)
+//             transferStatus,                 // $15 - for transfer_status column and condition
+//             claimId                         // $16
+//         ]);
+        
+//         if (insurancePaid > 0) {
+//             await client.query(`UPDATE transaction SET status = $1 WHERE related_payment_id = $2`, 
+//                 [transferStatus === 'completed' ? 'completed' : 'pending', paymentId]);
+//         }
+        
+//         // Update policy remaining coverage and track deductible usage
+//         const newRemainingCoverage = remainingCoverage - insurancePaid;
+//         const newUsedCoverage = (parseFloat(claim.sum_insured) || 0) - newRemainingCoverage;
+//         const newUsedDeductible = (parseFloat(claim.used_deductible) || 0) + deductibleApplied;
+        
+//         await client.query(`
+//             UPDATE policy 
+//             SET remaining_coverage = $1::DECIMAL, 
+//                 used_coverage = $2::DECIMAL,
+//                 used_deductible = $3::DECIMAL,
+//                 updated_at = NOW() 
+//             WHERE policy_id = $4::INTEGER
+//         `, [newRemainingCoverage, newUsedCoverage, newUsedDeductible, claim.policy_id]);
+        
+//         console.log(`✅ Policy updated: remaining_coverage=$${newRemainingCoverage}, used_deductible=$${newUsedDeductible}`);
+        
+//         // Add audit log entry
+//         await client.query(`
+//             INSERT INTO claim_audit_log (claim_id, action, old_status, new_status, performed_by, performed_by_type, reason, notes, created_at)
+//             VALUES ($1::INTEGER, 'APPROVE_AND_PAY', 'pending', $2, $3::INTEGER, 'agent', $4::TEXT, $5::TEXT, NOW())
+//         `, [
+//             claimId, 
+//             claimStatus, 
+//             agentId, 
+//             pendingPayment ? `Amount: $${insurancePaid} pending - Hospital needs payout account` : 
+//             (insurancePaid <= 0 ? `No payment - Deductible ($${deductibleApplied}) covered the claim amount` : `Amount: $${insurancePaid} transferred`), 
+//             notes || null
+//         ]);
+        
+//         await client.query('COMMIT');
+        
+//         // Send email confirmation if payment was processed
+//         if (!pendingPayment && !isHospitalClaim && insurancePaid > 0) {
+//             const claimService = require('../services/claimService');
+//             await claimService.sendClaimPaymentConfirmationEmail({
+//                 claim_id: claimId, 
+//                 claim_amount: requestedAmount, 
+//                 approved_amount: finalApprovedAmount,
+//                 insurance_paid: insurancePaid, 
+//                 payment_id: paymentId, 
+//                 transaction_id: transactionId,
+//                 payment_status: transferStatus, 
+//                 stripe_transfer_id: stripeTransferId
+//             }, claim.customer_email, `${claim.first_name} ${claim.last_name}`);
+//         }
+        
+//         // Prepare response message
+//         let responseMessage;
+//         if (pendingPayment) {
+//             responseMessage = `Claim approved for $${finalApprovedAmount.toFixed(2)}. Payment is pending - Hospital needs to add payout account. An email notification has been sent to the hospital.`;
+//         } else if (insurancePaid <= 0) {
+//             responseMessage = `Claim approved for $${finalApprovedAmount.toFixed(2)}. No payment transferred because deductible of $${deductibleApplied.toFixed(2)} covered the claim amount. Patient responsibility: $${clientResponsibility.toFixed(2)}.`;
+//         } else {
+//             responseMessage = `Claim approved and $${insurancePaid.toFixed(2)} transferred to ${isHospitalClaim ? 'hospital payout account' : 'customer account'}`;
+//         }
+        
+//         res.json({ 
+//             success: true, 
+//             message: responseMessage,
+//             data: { 
+//                 claim_id: claimId, 
+//                 status: claimStatus,
+//                 recipient: isHospitalClaim ? 'hospital' : 'customer',
+//                 pendingAccount: pendingPayment,
+//                 amountPending: pendingPayment ? finalApprovedAmount : null,
+//                 insurancePaid: insurancePaid,
+//                 deductibleApplied: deductibleApplied,
+//                 patientResponsibility: clientResponsibility
+//             }
+//         });
+        
+//     } catch (error) {
+//         await client.query('ROLLBACK');
+//         console.error('Error approving claim:', error);
+//         res.status(500).json({ success: false, message: error.message });
+//     } finally {
+//         client.release();
+//     }
+// });
 // Approve claim with hospital payout account check
 router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
     const client = await pool.connect();
@@ -1578,10 +1948,19 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
         await client.query('BEGIN');
         
         const claimResult = await client.query(`
-            SELECT c.*, p.policy_id, p.sum_insured, p.remaining_coverage, p.used_coverage,
-                   p.deductible_amount as policy_deductible, p.co_pay_percentage as policy_copay,
-                   p.policy_type, cust.email as customer_email, cust.first_name, cust.last_name, cust.phone,
-                   h.name as hospital_name, h.hospital_id, h.email as hospital_email
+            SELECT c.*, 
+                   p.policy_id, 
+                   p.sum_insured, 
+                   p.remaining_coverage, 
+                   p.used_coverage,
+                   p.policy_type, 
+                   cust.email as customer_email, 
+                   cust.first_name, 
+                   cust.last_name, 
+                   cust.phone,
+                   h.name as hospital_name, 
+                   h.hospital_id, 
+                   h.email as hospital_email
             FROM claim c
             JOIN policy p ON c.policy_id = p.policy_id
             LEFT JOIN customer cust ON c.customer_id = cust.customer_id
@@ -1624,7 +2003,6 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
                 console.log(`🏥 Hospital ${claim.hospital_id} has no payout account. Payment will be pending.`);
                 pendingPayment = true;
                 
-                // Send email notification to hospital about missing payout account
                 const emailService = require('../services/emailServices');
                 await emailService.sendHospitalMissingPayoutAccountEmail(
                     claim.hospital_email,
@@ -1642,19 +2020,19 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
             return res.status(400).json({ success: false, message: `Insufficient coverage. Remaining: $${remainingCoverage.toFixed(2)}` });
         }
         
-        const deductibleAmount = parseFloat(claim.policy_deductible) || 0;
-        const coPayPercentage = parseFloat(claim.policy_copay) || 0;
+        // ============================================
+        // ✅ REMOVED DEDUCTIBLE LOGIC - Insurance pays full approved amount
+        // ============================================
+        let insurancePaid = finalApprovedAmount;
+        let deductibleApplied = 0;
+        let coPayAmount = 0;
+        let clientResponsibility = 0;
         
-        let deductibleApplied = Math.min(deductibleAmount, finalApprovedAmount);
-        let remainingAfterDeductible = finalApprovedAmount - deductibleApplied;
-        let coPayAmount = (remainingAfterDeductible * coPayPercentage) / 100;
-        let insurancePaid = remainingAfterDeductible - coPayAmount;
-        let clientResponsibility = deductibleApplied + coPayAmount;
-        
-        deductibleApplied = Math.round(deductibleApplied * 100) / 100;
-        coPayAmount = Math.round(coPayAmount * 100) / 100;
-        insurancePaid = Math.round(insurancePaid * 100) / 100;
-        clientResponsibility = Math.round(clientResponsibility * 100) / 100;
+        console.log('💰 Payment calculation (No Deductible):', {
+            claimAmount: finalApprovedAmount,
+            insurancePaid: insurancePaid,
+            message: 'Full amount paid by insurance'
+        });
         
         const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
         const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -1680,36 +2058,74 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
             transactionType = 'hospital_payout';
         }
         
-        // Only process payment if hospital has payout account (or it's a customer claim)
+        // ============================================
+        // ✅ CREDIT CUSTOMER BALANCE (For customer claims)
+        // ============================================
+        let customerBalanceBefore = 0;
+        let customerBalanceAfter = 0;
+        
+        if (!isHospitalClaim && !pendingPayment && insurancePaid > 0) {
+            // Get current balance before update
+            const balanceResult = await client.query(
+                `SELECT balance FROM customer_payment_account WHERE customer_id = $1`,
+                [claim.customer_id]
+            );
+            
+            customerBalanceBefore = balanceResult.rows[0]?.balance || 0;
+            
+            // Credit the customer's account balance
+            await client.query(`
+                UPDATE customer_payment_account 
+                SET balance = balance + $1,
+                    total_received = total_received + $1,
+                    last_activity_date = NOW(),
+                    updated_at = NOW()
+                WHERE customer_id = $2
+            `, [insurancePaid, claim.customer_id]);
+            
+            // Get new balance after update
+            const newBalanceResult = await client.query(
+                `SELECT balance FROM customer_payment_account WHERE customer_id = $1`,
+                [claim.customer_id]
+            );
+            customerBalanceAfter = newBalanceResult.rows[0]?.balance || 0;
+            
+            console.log(`✅ Customer ${claim.customer_id} balance credited: $${insurancePaid}`);
+            console.log(`   Balance before: $${customerBalanceBefore}, After: $${customerBalanceAfter}`);
+        }
+        
+        // Only process payment if hospital has payout account AND insurancePaid > 0
         if (!pendingPayment && insurancePaid > 0) {
             try {
                 if (isHospitalClaim) {
-                    // Hospital claim - record only (no actual Stripe transfer for now)
                     console.log(`🏥 Processing hospital payout for claim ${claimId}`);
                     stripeTransferId = `HOSPITAL_PAYOUT_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
                     transferStatus = 'completed';
-                    
                     console.log(`✅ Hospital payout recorded: $${insurancePaid} to hospital ${claim.hospital_id}`);
                     
                 } else {
-                    // Customer claim - transfer to customer's Stripe account
                     console.log(`👤 Processing customer payout for claim ${claimId}`);
                     
-                    const paymentIntent = await stripe.paymentIntents.create({
-                        amount: Math.round(insurancePaid * 100),
-                        currency: 'usd',
-                        payment_method_types: ['card'],
-                        description: `Claim payment for claim #${claimId} - ${claim.policy_type}`,
-                        metadata: { claim_id: claimId, customer_id: claim.customer_id, policy_id: claim.policy_id, payment_id: paymentId },
-                        receipt_email: claim.customer_email
-                    });
-                    
-                    paymentIntentId = paymentIntent.id;
-                    stripeTransferId = paymentIntentId;
+                    try {
+                        const paymentIntent = await stripe.paymentIntents.create({
+                            amount: Math.round(insurancePaid * 100),
+                            currency: 'usd',
+                            payment_method_types: ['card'],
+                            description: `Claim payment for claim #${claimId} - ${claim.policy_type}`,
+                            metadata: { claim_id: claimId, customer_id: claim.customer_id, policy_id: claim.policy_id, payment_id: paymentId },
+                            receipt_email: claim.customer_email
+                        });
+                        
+                        paymentIntentId = paymentIntent.id;
+                        stripeTransferId = paymentIntentId;
+                    } catch (stripeError) {
+                        console.log('⚠️ Stripe transfer skipped - using internal balance only');
+                        stripeTransferId = `INTERNAL_CREDIT_${Date.now()}_${claimId}`;
+                    }
                     transferStatus = 'completed';
                 }
                 
-                // Debit company account (ONE TIME)
+                // Debit company account
                 const debitResult = await companyAccountService.debitCompanyAccount(
                     insurancePaid, 
                     isHospitalClaim ? claim.hospital_id : claim.customer_id, 
@@ -1730,7 +2146,7 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
         }
         
         // ============================================
-        // INSERT ONLY ONE LEDGER TRANSACTION
+        // INSERT LEDGER TRANSACTION
         // ============================================
         await client.query(`
             INSERT INTO ledger_transactions 
@@ -1755,10 +2171,10 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
         // Insert payment record
         await client.query(`
             INSERT INTO payment (payment_id, policy_id, customer_id, amount, method, status, transaction_ref, paid_at)
-            VALUES ($1, $2, $3, $4, 'stripe', $5, $6, ${pendingPayment ? 'NULL' : 'NOW()'})
-        `, [paymentId, claim.policy_id, claim.customer_id, insurancePaid, transferStatus, transactionId]);
+            VALUES ($1, $2, $3, $4, 'stripe', $5, $6, ${pendingPayment ? 'NULL' : (insurancePaid > 0 ? 'NOW()' : 'NOW()')})
+        `, [paymentId, claim.policy_id, claim.customer_id, insurancePaid, transferStatus === 'completed' ? 'completed' : 'pending', transactionId]);
         
-        // Insert transaction record (ONLY ONE)
+        // Insert transaction record
         await client.query(`
             INSERT INTO transaction (transaction_id, related_payment_id, related_claim_id, amount, type, status, created_at, notes, payment_method)
             VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'stripe')
@@ -1769,85 +2185,133 @@ router.put('/agent/claims/:claimId/approve', authenticate, async (req, res) => {
             insurancePaid, 
             isHospitalClaim ? 'hospital_payout' : 'claim_payout', 
             transferStatus === 'completed' ? 'completed' : 'pending',
-            pendingPayment ? `Payment pending - Hospital needs to add payout account` : `Payout for claim #${claimId}`
+            pendingPayment ? `Payment pending - Hospital needs to add payout account` : 
+            `Payout for claim #${claimId} - Customer balance credited: $${insurancePaid}`
         ]);
         
-       // Update claim - FIXED for hospital claims
-await client.query(`
-    UPDATE claim 
-    SET status = $1,
-        approved_amount = $2::DECIMAL,
-        reviewed_by = $3::INTEGER,
-        reviewed_at = NOW(),
-        approval_notes = $4::TEXT,
-        deductible_applied = $5::DECIMAL,
-        co_pay_amount = $6::DECIMAL,
-        insurance_paid = $7::DECIMAL,
-        client_responsibility = $8::DECIMAL,
-        coverage_type = $9::VARCHAR,
-        agent_notes = $10::TEXT,
-        payment_status = $11::VARCHAR,
-        payment_transfer_date = CASE WHEN $12 = 'completed' OR $15 = 'completed' THEN NOW() ELSE NULL END,
-        payment_intent_id = COALESCE($13, $14, NULL),
-        stripe_transfer_id = COALESCE($14, $13, NULL),
-        transfer_status = $15::VARCHAR,
-        updated_at = NOW()
-    WHERE claim_id = $16::INTEGER
-`, [
-    claimStatus,                    // $1
-    finalApprovedAmount,            // $2
-    agentId,                        // $3
-    notes || null,                  // $4
-    deductibleApplied,              // $5
-    coPayAmount,                    // $6
-    insurancePaid,                  // $7
-    clientResponsibility,           // $8
-    coverage_type || 'full_coverage', // $9
-    notes || null,                  // $10
-    paymentStatusForClaim,          // $11
-    transferStatus,                 // $12 - for payment_transfer_date condition
-    paymentIntentId,                // $13 - Stripe payment intent ID (for customer claims)
-    stripeTransferId,               // $14 - Custom transfer ID (for hospital claims)
-    transferStatus,                 // $15 - for transfer_status column and condition
-    claimId                         // $16
-]);
+        // Update claim with all calculated values
+        await client.query(`
+            UPDATE claim 
+            SET status = $1,
+                approved_amount = $2::DECIMAL,
+                reviewed_by = $3::INTEGER,
+                reviewed_at = NOW(),
+                approval_notes = $4::TEXT,
+                deductible_applied = $5::DECIMAL,
+                co_pay_amount = $6::DECIMAL,
+                insurance_paid = $7::DECIMAL,
+                client_responsibility = $8::DECIMAL,
+                coverage_type = $9::VARCHAR,
+                agent_notes = $10::TEXT,
+                payment_status = $11::VARCHAR,
+                payment_transfer_date = CASE WHEN $12 = 'completed' OR $15 = 'completed' THEN NOW() ELSE NULL END,
+                payment_intent_id = COALESCE($13, $14, NULL),
+                stripe_transfer_id = COALESCE($14, $13, NULL),
+                transfer_status = $15::VARCHAR,
+                updated_at = NOW()
+            WHERE claim_id = $16::INTEGER
+        `, [
+            claimStatus,                    // $1
+            finalApprovedAmount,            // $2
+            agentId,                        // $3
+            notes || null,                  // $4
+            deductibleApplied,              // $5 (0 now)
+            coPayAmount,                    // $6 (0 now)
+            insurancePaid,                  // $7 (full amount)
+            clientResponsibility,           // $8 (0 now)
+            coverage_type || 'full_coverage', // $9
+            notes || null,                  // $10
+            paymentStatusForClaim,          // $11
+            transferStatus,                 // $12
+            paymentIntentId,                // $13
+            stripeTransferId,               // $14
+            transferStatus,                 // $15
+            claimId                         // $16
+        ]);
         
-        await client.query(`UPDATE transaction SET status = $1 WHERE related_payment_id = $2`, 
-            [transferStatus === 'completed' ? 'completed' : 'pending', paymentId]);
+        if (insurancePaid > 0) {
+            await client.query(`UPDATE transaction SET status = $1 WHERE related_payment_id = $2`, 
+                [transferStatus === 'completed' ? 'completed' : 'pending', paymentId]);
+        }
         
         // Update policy remaining coverage
         const newRemainingCoverage = remainingCoverage - insurancePaid;
         const newUsedCoverage = (parseFloat(claim.sum_insured) || 0) - newRemainingCoverage;
         
-        await client.query(`UPDATE policy SET remaining_coverage = $1::DECIMAL, used_coverage = $2::DECIMAL, updated_at = NOW() WHERE policy_id = $3::INTEGER`,
-            [newRemainingCoverage, newUsedCoverage, claim.policy_id]);
+        await client.query(`
+            UPDATE policy 
+            SET remaining_coverage = $1::DECIMAL, 
+                used_coverage = $2::DECIMAL,
+                updated_at = NOW() 
+            WHERE policy_id = $3::INTEGER
+        `, [newRemainingCoverage, newUsedCoverage, claim.policy_id]);
+        
+        console.log(`✅ Policy updated: remaining_coverage=$${newRemainingCoverage}, used_coverage=$${newUsedCoverage}`);
         
         // Add audit log entry
-        await client.query(`INSERT INTO claim_audit_log (claim_id, action, old_status, new_status, performed_by, performed_by_type, reason, notes, created_at)
-            VALUES ($1::INTEGER, 'APPROVE_AND_PAY', 'pending', $2, $3::INTEGER, 'agent', $4::TEXT, $5::TEXT, NOW())`,
-            [claimId, claimStatus, agentId, 
-             pendingPayment ? `Amount: $${insurancePaid} pending - Hospital needs payout account` : `Amount: $${insurancePaid} transferred`, 
-             notes || null]);
+let auditReason;
+if (pendingPayment) {
+    auditReason = `Amount: $${insurancePaid} pending - Hospital needs payout account`;
+} else {
+    const beforeAmount = parseFloat(customerBalanceBefore || 0).toFixed(2);
+    const afterAmount = parseFloat(customerBalanceAfter || 0).toFixed(2);
+    auditReason = `Amount: $${insurancePaid} credited to customer balance (Before: $${beforeAmount}, After: $${afterAmount})`;
+}
+
+await client.query(`
+    INSERT INTO claim_audit_log (claim_id, action, old_status, new_status, performed_by, performed_by_type, reason, notes, created_at)
+    VALUES ($1::INTEGER, 'APPROVE_AND_PAY', 'pending', $2, $3::INTEGER, 'agent', $4::TEXT, $5::TEXT, NOW())
+`, [
+    claimId, 
+    claimStatus, 
+    agentId, 
+    auditReason, 
+    notes || null
+]);
         
         await client.query('COMMIT');
         
         // Send email confirmation if payment was processed
-        if (!pendingPayment && !isHospitalClaim) {
+        if (!pendingPayment && !isHospitalClaim && insurancePaid > 0) {
             const claimService = require('../services/claimService');
             await claimService.sendClaimPaymentConfirmationEmail({
-                claim_id: claimId, claim_amount: requestedAmount, approved_amount: finalApprovedAmount,
-                insurance_paid: insurancePaid, payment_id: paymentId, transaction_id: transactionId,
-                payment_status: transferStatus, stripe_transfer_id: stripeTransferId
+                claim_id: claimId, 
+                claim_amount: requestedAmount, 
+                approved_amount: finalApprovedAmount,
+                insurance_paid: insurancePaid, 
+                payment_id: paymentId, 
+                transaction_id: transactionId,
+                payment_status: transferStatus, 
+                stripe_transfer_id: stripeTransferId,
+                customer_balance: customerBalanceAfter
             }, claim.customer_email, `${claim.first_name} ${claim.last_name}`);
         }
         
-        // Prepare response message
-        let responseMessage;
-        if (pendingPayment) {
-            responseMessage = `Claim approved for $${insurancePaid.toFixed(2)}. Payment is pending - Hospital needs to add payout account. An email notification has been sent to the hospital.`;
-        } else {
-            responseMessage = `Claim approved and $${insurancePaid.toFixed(2)} transferred to ${isHospitalClaim ? 'hospital payout account' : 'customer account'}`;
-        }
+        // Create notification for customer about balance credit
+if (!isHospitalClaim && insurancePaid > 0) {
+    const { createNotification } = require('../routes/notificationRoutes');
+    const balanceAmount = parseFloat(customerBalanceAfter || 0).toFixed(2);
+    await createNotification(
+        claim.customer_id,
+        'customer',
+        'claim_payment_credited',
+        'Claim Payment Credited! 💰',
+        `Your claim #${claimId} for $${insurancePaid.toFixed(2)} has been approved and credited to your account balance. 
+         Current balance: $${balanceAmount}. You can withdraw this amount anytime.`,
+        claimId
+    ).catch(err => console.log('Notification error:', err.message));
+}
+        
+       // Prepare response message
+let responseMessage;
+if (pendingPayment) {
+    responseMessage = `Claim approved for $${finalApprovedAmount.toFixed(2)}. Payment is pending - Hospital needs to add payout account. An email notification has been sent to the hospital.`;
+} else if (!isHospitalClaim) {
+    const balanceAmount = parseFloat(customerBalanceAfter || 0).toFixed(2);
+    responseMessage = `Claim approved and $${insurancePaid.toFixed(2)} has been credited to your account balance. Current balance: $${balanceAmount}.`;
+} else {
+    responseMessage = `Claim approved and $${insurancePaid.toFixed(2)} transferred to hospital payout account.`;
+}
         
         res.json({ 
             success: true, 
@@ -1857,7 +2321,10 @@ await client.query(`
                 status: claimStatus,
                 recipient: isHospitalClaim ? 'hospital' : 'customer',
                 pendingAccount: pendingPayment,
-                amountPending: pendingPayment ? insurancePaid : null
+                amountPending: pendingPayment ? finalApprovedAmount : null,
+                insurancePaid: insurancePaid,
+                customer_balance: !isHospitalClaim ? customerBalanceAfter : null,
+                balance_change: !isHospitalClaim ? insurancePaid : null
             }
         });
         
@@ -2066,20 +2533,6 @@ router.post('/agent/claims/:claimId/retry-payment', authenticate, async (req, re
         res.status(500).json({ success: false, message: error.message });
     } finally {
         client.release();
-    }
-});
-
-// Get company account balance
-router.get('/company/balance', authenticate, async (req, res) => {
-    try {
-        const companyAccountService = require('../services/companyAccountService');
-        const balance = await companyAccountService.getCompanyBalance();
-        const summary = await companyAccountService.getCompanySummary();
-        const ledger = await companyAccountService.getLedgerTransactions(20, 0);
-        res.json({ success: true, data: { balance, summary, recent_transactions: ledger } });
-    } catch (error) {
-        console.error('Error fetching company balance:', error);
-        res.status(500).json({ success: false, message: error.message });
     }
 });
 
@@ -2468,6 +2921,128 @@ router.get('/customer/history', authenticate, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+// Get customer's account balance
+router.get('/customer/balance', authenticate, async (req, res) => {
+    try {
+        const customerId = req.user.userId;
+        
+        const result = await pool.query(
+            `SELECT 
+                balance,
+                total_received,
+                total_withdrawn,
+                last_activity_date
+             FROM customer_payment_account 
+             WHERE customer_id = $1`,
+            [customerId]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.json({ 
+                success: true, 
+                balance: 0, 
+                total_received: 0, 
+                total_withdrawn: 0 
+            });
+        }
+        
+        res.json({
+            success: true,
+            balance: parseFloat(result.rows[0].balance),
+            total_received: parseFloat(result.rows[0].total_received),
+            total_withdrawn: parseFloat(result.rows[0].total_withdrawn),
+            last_activity_date: result.rows[0].last_activity_date
+        });
+        
+    } catch (error) {
+        console.error('Error fetching customer balance:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// Request withdrawal from customer balance
+router.post('/customer/withdraw', authenticate, async (req, res) => {
+    const client = await pool.connect();
+    
+    try {
+        const customerId = req.user.userId;
+        const { amount, bankAccountId } = req.body;
+        
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ success: false, error: 'Valid amount required' });
+        }
+        
+        await client.query('BEGIN');
+        
+        // Check current balance
+        const balanceResult = await client.query(
+            `SELECT balance FROM customer_payment_account WHERE customer_id = $1`,
+            [customerId]
+        );
+        
+        const currentBalance = parseFloat(balanceResult.rows[0]?.balance || 0);
+        
+        if (amount > currentBalance) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                success: false, 
+                error: `Insufficient balance. Available: $${currentBalance.toFixed(2)}` 
+            });
+        }
+        
+        // Deduct from balance
+        await client.query(
+            `UPDATE customer_payment_account 
+             SET balance = balance - $1,
+                 total_withdrawn = total_withdrawn + $1,
+                 last_activity_date = NOW(),
+                 updated_at = NOW()
+             WHERE customer_id = $2`,
+            [amount, customerId]
+        );
+        
+        // Create withdrawal transaction record
+        const withdrawalId = `WDL_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        
+        await client.query(
+            `INSERT INTO transaction (
+                transaction_id, 
+                amount, 
+                type, 
+                status, 
+                created_at,
+                notes
+            ) VALUES ($1, $2, 'withdrawal', 'pending', NOW(), $3)`,
+            [withdrawalId, amount, `Withdrawal request by customer ${customerId}`]
+        );
+        
+        await client.query('COMMIT');
+        
+        // Create notification for admin to process withdrawal
+        const { createNotification } = require('../routes/notificationRoutes');
+        await createNotification(
+            1, // Admin user ID
+            'admin',
+            'withdrawal_request',
+            'Withdrawal Request',
+            `Customer ${customerId} requested withdrawal of $${amount.toFixed(2)}`,
+            null
+        );
+        
+        res.json({
+            success: true,
+            message: 'Withdrawal request submitted successfully',
+            withdrawalId: withdrawalId,
+            newBalance: currentBalance - amount
+        });
+        
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Withdrawal error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        client.release();
+    }
+});
 // ============ CUSTOMER PAYMENT PANEL ROUTES ============
 // Get customer's payment history
 router.get('/customer/payments', authenticate, async (req, res) => {
@@ -2478,26 +3053,27 @@ router.get('/customer/payments', authenticate, async (req, res) => {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
         
-        // ✅ FIXED: Join on policy_type instead of plan_id
         const result = await pool.query(
-            `SELECT 
-                p.payment_id,
-                p.policy_id,
-                p.amount,
-                p.method,
-                p.status,
-                p.transaction_ref,
-                p.paid_at,
-                pol.policy_type,
-                pol.premium_amount,
-                pp.plan_name
-             FROM payment p
-             JOIN policy pol ON p.policy_id = pol.policy_id
-             LEFT JOIN policy_plans pp ON pp.policy_type = pol.policy_type
-             WHERE p.customer_id = $1
-             ORDER BY p.paid_at DESC`,
-            [customerId]
-        );
+        `SELECT 
+            p.payment_id,
+            p.policy_id,
+            p.amount,
+            p.method,
+            p.status,
+            p.transaction_ref,
+            p.paid_at,
+            pol.policy_type,
+            pol.premium_amount,
+            COALESCE(
+                (SELECT plan_name FROM policy_plans WHERE plan_id = pol.plan_id AND status = 'active' LIMIT 1),
+                pol.policy_type
+            ) as plan_name
+         FROM payment p
+         JOIN policy pol ON p.policy_id = pol.policy_id
+         WHERE p.customer_id = $1
+         ORDER BY p.paid_at DESC`,
+        [customerId]
+    );
         
         res.json({
             success: true,
@@ -2510,6 +3086,56 @@ router.get('/customer/payments', authenticate, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+// router.get('/customer/reminders', authenticate, async (req, res) => {
+//     try {
+//         const customerId = req.user?.userId;
+        
+//         if (!customerId) {
+//             return res.status(401).json({ success: false, error: 'Unauthorized' });
+//         }
+        
+//         const result = await pool.query(
+//             `SELECT DISTINCT
+//                 r.reminder_id,
+//                 r.policy_id,
+//                 r.reminder_type,
+//                 r.reminder_date,
+//                 r.reminder_time,
+//                 r.frequency,
+//                 r.message,
+//                 r.status,
+//                 r.next_reminder_date,
+//                 p.policy_type,
+//                 p.premium_amount,
+//                 COALESCE(
+//                     (SELECT plan_name FROM policy_plans WHERE policy_type = p.policy_type AND status = 'active' LIMIT 1),
+//                     p.policy_type
+//                 ) as plan_name,
+//                 a.first_name as agent_first_name,
+//                 a.last_name as agent_last_name
+//              FROM payment_reminders r
+//              JOIN policy p ON r.policy_id = p.policy_id
+//              LEFT JOIN agent a ON r.agent_id = a.agent_id
+//              WHERE r.customer_id = $1 
+//                AND r.status = 'sent'
+//                AND r.reminder_date <= CURRENT_DATE + INTERVAL '30 days'
+//              ORDER BY r.reminder_date ASC`,
+//             [customerId]
+//         );
+        
+//         console.log(`📊 Found ${result.rows.length} reminders with status 'sent'`);
+        
+//         res.json({
+//             success: true,
+//             reminders: result.rows,
+//             count: result.rows.length
+//         });
+        
+//     } catch (error) {
+//         console.error('Error fetching payment reminders:', error);
+//         res.status(500).json({ success: false, error: error.message });
+//     }
+// });
 router.get('/customer/reminders', authenticate, async (req, res) => {
     try {
         const customerId = req.user?.userId;
@@ -2532,7 +3158,7 @@ router.get('/customer/reminders', authenticate, async (req, res) => {
                 p.policy_type,
                 p.premium_amount,
                 COALESCE(
-                    (SELECT plan_name FROM policy_plans WHERE policy_type = p.policy_type AND status = 'active' LIMIT 1),
+                    (SELECT plan_name FROM policy_plans WHERE plan_id = p.plan_id AND status = 'active' LIMIT 1),
                     p.policy_type
                 ) as plan_name,
                 a.first_name as agent_first_name,
@@ -2547,7 +3173,7 @@ router.get('/customer/reminders', authenticate, async (req, res) => {
             [customerId]
         );
         
-        console.log(`📊 Found ${result.rows.length} reminders with status 'sent'`);
+        console.log(`📊 Found ${result.rows.length} reminders for customer ${customerId}`);
         
         res.json({
             success: true,
@@ -2560,145 +3186,6 @@ router.get('/customer/reminders', authenticate, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-// // Process premium payment
-// router.post('/customer/process-payment', authenticate, async (req, res) => {
-//     const client = await pool.connect();
-    
-//     try {
-//         const customerId = req.user?.userId;
-//         const { policyId, amount, paymentMethod, reminderId } = req.body;
-        
-//         if (!customerId || !policyId || !amount) {
-//             return res.status(400).json({ success: false, error: 'Missing required fields' });
-//         }
-        
-//         await client.query('BEGIN');
-        
-//         // 1. Verify policy belongs to customer
-//         const policyResult = await client.query(
-//             `SELECT p.*, pp.plan_name 
-//              FROM policy p
-//              JOIN policy_plans pp ON pp.policy_type = p.policy_type
-//              WHERE p.policy_id = $1 AND p.customer_id = $2 AND p.status = 'active'`,
-//             [policyId, customerId]
-//         );
-        
-//         if (policyResult.rows.length === 0) {
-//             await client.query('ROLLBACK');
-//             return res.status(404).json({ success: false, error: 'Policy not found' });
-//         }
-        
-//         const policy = policyResult.rows[0];
-//         const paymentAmount = parseFloat(amount);
-        
-//         // 2. Create payment record
-//         const paymentId = `PAY_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-//         const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-        
-//         await client.query(
-//             `INSERT INTO payment (
-//                 payment_id, policy_id, customer_id, amount, method, status, 
-//                 transaction_ref, paid_at
-//             ) VALUES ($1, $2, $3, $4, $5, 'Completed', $6, NOW())`,
-//             [paymentId, policyId, customerId, paymentAmount, paymentMethod || 'card', transactionId]
-//         );
-        
-//         // 3. Create transaction record
-//         await client.query(
-//             `INSERT INTO transaction (
-//                 transaction_id, related_payment_id, amount, type, status, 
-//                 created_at, payment_method, notes
-//             ) VALUES ($1, $2, $3, 'premium_payment', 'completed', NOW(), $4, $5)`,
-//             [transactionId, paymentId, paymentAmount, paymentMethod || 'card', `Premium payment for policy #${policyId}`]
-//         );
-        
-//         // 4. Credit company account
-//         const creditResult = await companyAccountService.creditCompanyAccount(
-//             paymentAmount,
-//             customerId,
-//             policyId,
-//             `Premium payment from customer ${customerId} for policy #${policyId} - ${policy.plan_name}`
-//         );
-        
-//         if (!creditResult.success) {
-//             throw new Error('Failed to credit company account');
-//         }
-        
-//         // 5. Update policy remaining coverage
-//         await client.query(
-//             `UPDATE policy 
-//              SET remaining_coverage = remaining_coverage + $1,
-//                  updated_at = NOW()
-//              WHERE policy_id = $2`,
-//             [paymentAmount, policyId]
-//         );
-        
-//         // ✅ 6. If this payment was from a reminder, mark reminder as 'completed'
-//         if (reminderId) {
-//             // First, get the reminder details to log properly
-//             const reminderResult = await client.query(
-//                 `SELECT reminder_date, reminder_type FROM payment_reminders WHERE reminder_id = $1`,
-//                 [reminderId]
-//             );
-            
-//             // Update reminder status to 'completed'
-//             await client.query(
-//                 `UPDATE payment_reminders 
-//                  SET status = 'completed', 
-//                      updated_at = NOW(),
-//                      notes = COALESCE(notes, 'Payment completed via customer dashboard')
-//                  WHERE reminder_id = $1`,
-//                 [reminderId]
-//             );
-            
-//             // Log reminder completion in reminder_logs
-//             await client.query(
-//                 `INSERT INTO reminder_logs (
-//                     reminder_id, customer_id, customer_email, notification_type, 
-//                     subject, message, status, sent_at
-//                 ) VALUES ($1, $2, (SELECT email FROM customer WHERE customer_id = $2), 
-//                     'payment_completed', 'Payment Completed', $3, 'success', NOW())`,
-//                 [reminderId, customerId, `Payment of Rs. ${paymentAmount.toLocaleString()} completed for policy #${policyId}`]
-//             );
-            
-//             console.log(`✅ Reminder ${reminderId} marked as completed after payment`);
-//         }
-        
-//         await client.query('COMMIT');
-        
-//         // 7. Create notification for customer
-//         const { createNotification } = require('../routes/notificationRoutes');
-//         await createNotification(
-//             customerId,
-//             'customer',
-//             'payment_received',
-//             'Payment Successful ✅',
-//             `Your payment of Rs. ${paymentAmount.toLocaleString()} for policy "${policy.plan_name}" has been received successfully.`,
-//             policyId
-//         ).catch(err => console.log('Notification error:', err.message));
-        
-//         console.log(`✅ Premium payment processed: ${paymentId} for customer ${customerId}`);
-        
-//         res.json({
-//             success: true,
-//             message: 'Payment processed successfully',
-//             data: {
-//                 payment_id: paymentId,
-//                 transaction_id: transactionId,
-//                 amount: paymentAmount,
-//                 company_balance: creditResult.new_balance,
-//                 reminder_completed: !!reminderId
-//             }
-//         });
-        
-//     } catch (error) {
-//         await client.query('ROLLBACK');
-//         console.error('Error processing premium payment:', error);
-//         res.status(500).json({ success: false, error: error.message });
-//     } finally {
-//         client.release();
-//     }
-// });
 // Process premium payment
 router.post('/customer/process-payment', authenticate, async (req, res) => {
     const client = await pool.connect();

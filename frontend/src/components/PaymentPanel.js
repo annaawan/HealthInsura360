@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { DollarSign, Calendar, Clock, CheckCircle, XCircle, AlertCircle, CreditCard, Bell } from 'lucide-react';
+import { DollarSign, Calendar, Clock, CheckCircle, XCircle, AlertCircle, CreditCard, Bell, Wallet } from 'lucide-react';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -17,8 +17,13 @@ const getAxiosConfig = () => {
 };
 
 const formatCurrency = (amount) => {
-  if (!amount) return 'Rs. 0';
-  return `Rs. ${Math.floor(amount).toLocaleString('en-PK')}`;
+  if (!amount && amount !== 0) return '$0';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(Math.floor(amount || 0));
 };
 
 const formatDate = (dateString) => {
@@ -30,10 +35,15 @@ function PaymentPanel() {
   const [payments, setPayments] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [summary, setSummary] = useState({ total_due: 0, reminders_count: 0, last_payment_date: null });
+  const [customerBalance, setCustomerBalance] = useState(0);
+  const [totalReceived, setTotalReceived] = useState(0);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -45,6 +55,13 @@ function PaymentPanel() {
     
     try {
       const config = getAxiosConfig();
+      
+      // Fetch customer balance
+      const balanceRes = await axios.get(`${API_BASE_URL}/payments/customer/balance`, config);
+      if (balanceRes.data.success) {
+        setCustomerBalance(balanceRes.data.balance || 0);
+        setTotalReceived(balanceRes.data.total_received || 0);
+      }
       
       // Fetch payments history
       const paymentsRes = await axios.get(`${API_BASE_URL}/payments/customer/payments`, config);
@@ -109,6 +126,46 @@ function PaymentPanel() {
     }
   };
 
+  const handleWithdraw = async () => {
+    const amount = parseFloat(withdrawAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    
+    if (amount > customerBalance) {
+      alert(`Insufficient balance. Available balance: ${formatCurrency(customerBalance)}`);
+      return;
+    }
+    
+    setWithdrawLoading(true);
+    setError(null);
+    
+    try {
+      const config = getAxiosConfig();
+      const response = await axios.post(
+        `${API_BASE_URL}/payments/customer/withdraw`,
+        { amount: amount },
+        config
+      );
+      
+      if (response.data.success) {
+        setSuccessMessage(`Withdrawal request of ${formatCurrency(amount)} submitted successfully!`);
+        setShowWithdrawModal(false);
+        setWithdrawAmount('');
+        fetchData(); // Refresh balance
+      } else {
+        setError(response.data.error || 'Withdrawal failed');
+      }
+    } catch (err) {
+      console.error('Withdrawal error:', err);
+      setError(err.response?.data?.error || 'Withdrawal processing failed');
+    } finally {
+      setWithdrawLoading(false);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    }
+  };
+
   const getStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
       case 'completed':
@@ -157,23 +214,44 @@ function PaymentPanel() {
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Summary Cards - Now 4 cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Available Balance Card - NEW */}
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-6 shadow-sm border border-green-200">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <Wallet className="h-5 w-5 text-green-600" />
+            </div>
+            <span className="text-gray-600 font-medium">Available Balance</span>
+          </div>
+          <div className="text-3xl font-bold text-green-600">{formatCurrency(customerBalance)}</div>
+          <div className="text-sm text-gray-500 mt-1">From approved claims</div>
+          {customerBalance > 0 && (
+            <button
+              onClick={() => setShowWithdrawModal(true)}
+              className="mt-3 text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+            >
+              Withdraw Funds →
+            </button>
+          )}
+        </div>
+
+        {/* Total Received Card - NEW */}
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-              <DollarSign className="h-5 w-5 text-yellow-600" />
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <DollarSign className="h-5 w-5 text-blue-600" />
             </div>
-            <span className="text-gray-600">Total Due</span>
+            <span className="text-gray-600">Total Received</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_due)}</div>
-          <div className="text-sm text-gray-500 mt-1">Upcoming payments</div>
+          <div className="text-2xl font-bold text-gray-900">{formatCurrency(totalReceived)}</div>
+          <div className="text-sm text-gray-500 mt-1">From all claim payouts</div>
         </div>
 
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <Calendar className="h-5 w-5 text-blue-600" />
+            <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Calendar className="h-5 w-5 text-yellow-600" />
             </div>
             <span className="text-gray-600">Reminders</span>
           </div>
@@ -183,8 +261,8 @@ function PaymentPanel() {
 
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-              <Clock className="h-5 w-5 text-green-600" />
+            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+              <Clock className="h-5 w-5 text-purple-600" />
             </div>
             <span className="text-gray-600">Last Payment</span>
           </div>
@@ -300,6 +378,49 @@ function PaymentPanel() {
           </div>
         )}
       </div>
+
+      {/* Withdrawal Modal */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Withdraw Funds</h3>
+            <p className="text-gray-600 mb-4">
+              Available Balance: <span className="font-bold text-green-600">{formatCurrency(customerBalance)}</span>
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Amount to Withdraw</label>
+              <input
+                type="number"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+                placeholder="Enter amount"
+                min="0"
+                max={customerBalance}
+                step="0.01"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-600"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowWithdrawModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWithdraw}
+                disabled={withdrawLoading}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {withdrawLoading ? 'Processing...' : 'Request Withdrawal'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-4 text-center">
+              Withdrawal requests will be processed within 3-5 business days.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

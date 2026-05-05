@@ -15,6 +15,11 @@ const app = express();
 
 // This should point to the correct uploads folder
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/hospital-documents', express.static(path.join(__dirname, 'uploads/hospital-documents')));
+app.use('/uploads/claims', express.static(path.join(__dirname, 'uploads/claims')));
+app.use('/uploads/profiles', express.static(path.join(__dirname, 'uploads/profiles')));
+
+
 // Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -37,6 +42,17 @@ app.use((req, res, next) => {
 const notificationRoutes = require('./src/routes/notificationRoutes');
 app.use('/api/notifications', notificationRoutes);
 
+// ============================================
+// ✅ NEW: AI Recommendation Routes
+// ============================================
+try {
+  console.log('🔵 Importing AI recommendation routes...');
+  const aiRecommendationRoutes = require('./src/routes/aiRecommendationRoutes');
+  app.use('/api/ai', aiRecommendationRoutes);
+  console.log('✅ AI recommendation routes mounted at /api/ai');
+} catch (err) {
+  console.error('❌ Error loading AI recommendation routes:', err.message);
+}
 
 console.log('🔵 Attempting to import routes...');
 
@@ -219,7 +235,8 @@ app.get('/api/test', (req, res) => {
       'GET /api/hospitals',
       'PUT /api/hospitals/:id/status',
       'GET /api/payments/test',
-      'GET /api/payments/transactions'
+      'GET /api/payments/transactions',
+      'GET /api/ai/recommendations'
     ]
   });
 });
@@ -295,7 +312,8 @@ app.use('*', (req, res) => {
       'GET    /api/hospitals',
       'PUT    /api/hospitals/:id/status',
       'GET    /api/payments/test',
-      'GET    /api/payments/transactions'
+      'GET    /api/payments/transactions',
+      'GET    /api/ai/recommendations'
     ]
   });
 });
@@ -313,5 +331,6 @@ app.listen(PORT, () => {
   console.log(`📝 Test endpoint: http://localhost:${PORT}/api/test`);
   console.log(`💳 Payment test: http://localhost:${PORT}/api/payments/test`);
   console.log(`📊 Transactions: http://localhost:${PORT}/api/payments/transactions`);
+  console.log(`🤖 AI Recommendations: http://localhost:${PORT}/api/ai/recommendations`);
   console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}\n`);
 });

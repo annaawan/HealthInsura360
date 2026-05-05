@@ -215,38 +215,115 @@ function HospitalNetwork() {
     setTouched({});
   };
 
-  // Fetch hospitals from backend
-  const fetchHospitals = async () => {
+  // // Fetch hospitals from backend
+  // const fetchHospitals = async () => {
+  //   setLoading(true);
+  //   try {
+  //     const config = getAxiosConfig();
+  //     let response;
+  //     try {
+  //       response = await axios.get(`${API_BASE_URL}/hospitals`, config);
+  //       if (response.data.success && response.data.hospitals) {
+  //         setHospitals(response.data.hospitals);
+  //         setLoading(false);
+  //         return;
+  //       }
+  //     } catch (err) {
+  //       console.log('Trying accounts endpoint...');
+  //     }
+      
+  //     response = await axios.get(`${API_BASE_URL}/accounts/hospitals`, config);
+  //     if (response.data.success) {
+  //       setHospitals(response.data.data || []);
+  //     } else {
+  //       console.error("Failed to fetch hospitals:", response.data.message);
+  //       setHospitals([]);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching hospitals:", error);
+  //     setHospitals([]);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+// Add this helper function before fetchHospitals
+const parseHospitalDocuments = (hospital) => {
+    let documents = [];
+    
+    // Check if documents exist in various possible formats
+    if (hospital.documents) {
+        if (typeof hospital.documents === 'string') {
+            try {
+                documents = JSON.parse(hospital.documents);
+            } catch (e) {
+                documents = [{ file_name: hospital.documents, file_path: hospital.documents }];
+            }
+        } else if (Array.isArray(hospital.documents)) {
+            documents = hospital.documents;
+        } else if (typeof hospital.documents === 'object') {
+            documents = [hospital.documents];
+        }
+    }
+    
+    // Also check if there's a separate documents_data field
+    if (hospital.documents_data) {
+        try {
+            const parsed = typeof hospital.documents_data === 'string' 
+                ? JSON.parse(hospital.documents_data) 
+                : hospital.documents_data;
+            if (Array.isArray(parsed)) {
+                documents = [...documents, ...parsed];
+            }
+        } catch (e) {}
+    }
+    
+    return documents;
+};
+
+// Update fetchHospitals function
+const fetchHospitals = async () => {
     setLoading(true);
     try {
-      const config = getAxiosConfig();
-      let response;
-      try {
-        response = await axios.get(`${API_BASE_URL}/hospitals`, config);
-        if (response.data.success && response.data.hospitals) {
-          setHospitals(response.data.hospitals);
-          setLoading(false);
-          return;
+        const config = getAxiosConfig();
+        let response;
+        try {
+            response = await axios.get(`${API_BASE_URL}/hospitals`, config);
+            if (response.data.success && response.data.hospitals) {
+                // Parse documents for each hospital
+                const hospitalsWithDocs = response.data.hospitals.map(h => ({
+                    ...h,
+                    documents: parseHospitalDocuments(h)
+                }));
+                setHospitals(hospitalsWithDocs);
+                setLoading(false);
+                return;
+            }
+        } catch (err) {
+            console.log('Trying accounts endpoint...');
         }
-      } catch (err) {
-        console.log('Trying accounts endpoint...');
-      }
-      
-      response = await axios.get(`${API_BASE_URL}/accounts/hospitals`, config);
-      if (response.data.success) {
-        setHospitals(response.data.data || []);
-      } else {
-        console.error("Failed to fetch hospitals:", response.data.message);
-        setHospitals([]);
-      }
+        
+        response = await axios.get(`${API_BASE_URL}/accounts/hospitals`, config);
+        if (response.data.success) {
+            const hospitalsWithDocs = (response.data.data || []).map(h => ({
+                ...h,
+                documents: parseHospitalDocuments(h)
+            }));
+            setHospitals(hospitalsWithDocs);
+            // After fetching hospitals
+console.log('📋 Raw hospital data (first hospital):', hospitals[0]);
+console.log('📋 Documents field:', hospitals[0]?.documents);
+console.log('📋 Documents type:', typeof hospitals[0]?.documents);
+        } else {
+            console.error("Failed to fetch hospitals:", response.data.message);
+            setHospitals([]);
+        }
     } catch (error) {
-      console.error("Error fetching hospitals:", error);
-      setHospitals([]);
+        console.error("Error fetching hospitals:", error);
+        setHospitals([]);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
-
+};
   useEffect(() => {
     fetchHospitals();
   }, []);
@@ -667,164 +744,272 @@ function HospitalNetwork() {
               </div>
 
               {modalType === 'view' ? (
-                // VIEW DETAILS FORM (Read-only)
-                <div className="space-y-6">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center gap-3">
-                      <Building className="h-6 w-6 text-blue-600" />
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">{selectedHospital?.name}</h3>
-                        <p className="text-gray-600">{selectedHospital?.specialization}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-6">
-                    {/* Basic Information */}
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-gray-900 border-b pb-2">Basic Information</h4>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Hospital Name</label>
-                        <div className="text-gray-900 font-medium">{selectedHospital?.name}</div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Email</label>
-                        <div className="text-gray-900 flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-gray-400" />
-                          {selectedHospital?.email}
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Phone</label>
-                        <div className="text-gray-900">{selectedHospital?.phone || 'N/A'}</div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Registration Number</label>
-                        <div className="text-gray-900">{selectedHospital?.registration_number || 'N/A'}</div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Specialization</label>
-                        <div className="text-gray-900">{selectedHospital?.specialization || 'N/A'}</div>
-                      </div>
-                    </div>
-
-                    {/* Contact & Location */}
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-gray-900 border-b pb-2">Contact & Location</h4>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Contact Person</label>
-                        <div className="text-gray-900">{selectedHospital?.contact_person || 'N/A'}</div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Address</label>
-                        <div className="text-gray-900">{selectedHospital?.address || 'N/A'}</div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">City</label>
-                        <div className="text-gray-900">{selectedHospital?.city || 'N/A'}</div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">State</label>
-                        <div className="text-gray-900">{selectedHospital?.state || 'N/A'}</div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">ZIP Code</label>
-                        <div className="text-gray-900">{selectedHospital?.zip_code || 'N/A'}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Status & Additional Info */}
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-gray-900 border-b pb-2">Status Information</h4>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Status</label>
-                        <span className={`px-3 py-1 rounded-full text-sm ${getStatusColor(selectedHospital?.status)}`}>
-                          {selectedHospital?.status?.charAt(0).toUpperCase() + selectedHospital?.status?.slice(1)}
-                        </span>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Verification Status</label>
-                        <div className="text-gray-900">
-                          {selectedHospital?.verified_status ? 'Verified' : 'Not Verified'}
-                        </div>
-                      </div>
-                      
-                      {selectedHospital?.verified_at && (
-                        <div>
-                          <label className="block text-sm text-gray-500 mb-1">Verified At</label>
-                          <div className="text-gray-900">{formatDate(selectedHospital?.verified_at)}</div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-gray-900 border-b pb-2">System Information</h4>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Hospital ID</label>
-                        <div className="font-mono text-gray-900">#{selectedHospital?.hospital_id || selectedHospital?.id}</div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Created At</label>
-                        <div className="text-gray-900">{formatDate(selectedHospital?.created_at)}</div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm text-gray-500 mb-1">Last Updated</label>
-                        <div className="text-gray-900">{formatDate(selectedHospital?.updated_at)}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4 border-t">
-                    <button
-                      type="button"
-                      onClick={handleCloseModal}
-                      className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Close
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setModalType('edit');
-                        setFormData({
-                          name: selectedHospital.name || '',
-                          email: selectedHospital.email || '',
-                          phone: selectedHospital.phone || '',
-                          address: selectedHospital.address || '',
-                          city: selectedHospital.city || '',
-                          state: selectedHospital.state || '',
-                          zip_code: selectedHospital.zip_code || '',
-                          registration_number: selectedHospital.registration_number || '',
-                          contact_person: selectedHospital.contact_person || '',
-                          specialization: selectedHospital.specialization || '',
-                          status: selectedHospital.status || 'pending'
-                        });
-                      }}
-                      className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                      Edit Hospital
-                    </button>
-                  </div>
+    // VIEW DETAILS FORM (Read-only) WITH DOCUMENTS
+    <div className="space-y-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+                <Building className="h-6 w-6 text-blue-600" />
+                <div>
+                    <h3 className="text-lg font-semibold text-gray-900">{selectedHospital?.name}</h3>
+                    <p className="text-gray-600">{selectedHospital?.specialization}</p>
                 </div>
-              ) : (
+            </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+            {/* Basic Information */}
+            <div className="space-y-4">
+                <h4 className="font-medium text-gray-900 border-b pb-2">Basic Information</h4>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Hospital Name</label>
+                    <div className="text-gray-900 font-medium">{selectedHospital?.name}</div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Email</label>
+                    <div className="text-gray-900 flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-gray-400" />
+                        {selectedHospital?.email}
+                    </div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Phone</label>
+                    <div className="text-gray-900">{selectedHospital?.phone || 'N/A'}</div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Registration Number</label>
+                    <div className="text-gray-900">{selectedHospital?.registration_number || 'N/A'}</div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Specialization</label>
+                    <div className="text-gray-900">{selectedHospital?.specialization || 'N/A'}</div>
+                </div>
+            </div>
+
+            {/* Contact & Location */}
+            <div className="space-y-4">
+                <h4 className="font-medium text-gray-900 border-b pb-2">Contact & Location</h4>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Contact Person</label>
+                    <div className="text-gray-900">{selectedHospital?.contact_person || 'N/A'}</div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Address</label>
+                    <div className="text-gray-900">{selectedHospital?.address || 'N/A'}</div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">City</label>
+                    <div className="text-gray-900">{selectedHospital?.city || 'N/A'}</div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">State</label>
+                    <div className="text-gray-900">{selectedHospital?.state || 'N/A'}</div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">ZIP Code</label>
+                    <div className="text-gray-900">{selectedHospital?.zip_code || 'N/A'}</div>
+                </div>
+            </div>
+        </div>
+
+        {/* Status & Additional Info */}
+        <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+                <h4 className="font-medium text-gray-900 border-b pb-2">Status Information</h4>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Status</label>
+                    <span className={`px-3 py-1 rounded-full text-sm ${getStatusColor(selectedHospital?.status)}`}>
+                        {selectedHospital?.status?.charAt(0).toUpperCase() + selectedHospital?.status?.slice(1)}
+                    </span>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Verification Status</label>
+                    <div className="text-gray-900">
+                        {selectedHospital?.verified_status ? 'Verified' : 'Not Verified'}
+                    </div>
+                </div>
+                
+                {selectedHospital?.verified_at && (
+                    <div>
+                        <label className="block text-sm text-gray-500 mb-1">Verified At</label>
+                        <div className="text-gray-900">{formatDate(selectedHospital?.verified_at)}</div>
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-4">
+                <h4 className="font-medium text-gray-900 border-b pb-2">System Information</h4>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Hospital ID</label>
+                    <div className="font-mono text-gray-900">#{selectedHospital?.hospital_id || selectedHospital?.id}</div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Created At</label>
+                    <div className="text-gray-900">{formatDate(selectedHospital?.created_at)}</div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm text-gray-500 mb-1">Last Updated</label>
+                    <div className="text-gray-900">{formatDate(selectedHospital?.updated_at)}</div>
+                </div>
+            </div>
+        </div>
+
+        {/* ✅ DOCUMENTS SECTION - FIXED FOR CORRECT URL */}
+<div className="space-y-4">
+    <h4 className="font-medium text-gray-900 border-b pb-2">Uploaded Documents</h4>
+    
+    {selectedHospital?.documents && selectedHospital.documents.length > 0 ? (
+        <div className="grid gap-3">
+            {selectedHospital.documents.map((doc, index) => {
+                // Handle different document formats
+                let fileName = '';
+                let filePath = '';
+                let fileType = '';
+                let fileId = null;
+                
+                if (typeof doc === 'string') {
+                    filePath = doc;
+                    fileName = doc.split('/').pop();
+                } else if (typeof doc === 'object') {
+                    fileName = doc.file_name || doc.originalName || doc.name || doc.filename || `Document ${index + 1}`;
+                    filePath = doc.file_url || doc.url || doc.path || doc.file_path || doc.filename;
+                    fileType = doc.file_type || doc.type;
+                    fileId = doc.document_id || doc.id;
+                }
+                
+                // ✅ IMPORTANT: Construct correct URL for hospital documents
+let fullUrl = null;
+
+if (filePath) {
+    // Check if it's already a full URL
+    if (filePath.startsWith('http')) {
+        fullUrl = filePath;
+    } 
+    // Check if it already has the correct path
+    else if (filePath.includes('/uploads/')) {
+        fullUrl = `${API_BASE_URL}${filePath.startsWith('/') ? filePath : '/' + filePath}`;
+    }
+    // If it's just a filename, construct the correct path
+    else {
+        // The files are saved as hospital_{originalName}_{timestamp}_{random}.ext
+        // Construct using the base URL without /api prefix
+        const baseUrl = API_BASE_URL.replace('/api', '');
+        
+        if (fileName && fileName.startsWith('hospital_')) {
+            // ✅ FIXED: Assign to outer fullUrl variable
+            fullUrl = `${baseUrl}/uploads/hospital-documents/${fileName}`;
+        } else if (filePath && filePath.startsWith('hospital_')) {
+            fullUrl = `${baseUrl}/uploads/hospital-documents/${filePath}`;
+        } else {
+            fullUrl = `${baseUrl}/uploads/hospital-documents/${fileName}`;
+        }
+    }
+}
+                
+                // Debug log to see what URL is being generated
+                console.log('📄 Document:', { fileName, filePath, fullUrl });
+                
+                const getFileIcon = (filename) => {
+                    const ext = filename?.split('.').pop()?.toLowerCase();
+                    if (ext === 'pdf') return '📄';
+                    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return '🖼️';
+                    if (['doc', 'docx'].includes(ext)) return '📝';
+                    if (['xls', 'xlsx'].includes(ext)) return '📊';
+                    return '📎';
+                };
+                
+                return (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center gap-3 flex-1">
+                            <span className="text-2xl">{getFileIcon(fileName)}</span>
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">{fileName}</p>
+                                {fileType && <p className="text-xs text-gray-500">{fileType}</p>}
+                            </div>
+                        </div>
+                        {fullUrl && (
+                            <div className="flex items-center gap-2">
+                                <a
+                                    href={fullUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    View
+                                </a>
+                                <a
+                                    href={fullUrl}
+                                    download={fileName}
+                                    className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1"
+                                >
+                                    <Save className="h-3.5 w-3.5" />
+                                    Download
+                                </a>
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    ) : (
+        <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Building className="h-6 w-6 text-gray-400" />
+            </div>
+            <p className="text-gray-500">No documents uploaded</p>
+            <p className="text-gray-400 text-sm mt-1">Documents will appear here once uploaded</p>
+        </div>
+    )}
+</div>
+
+        <div className="flex justify-end gap-3 pt-4 border-t">
+            <button
+                type="button"
+                onClick={handleCloseModal}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+                Close
+            </button>
+            <button
+                type="button"
+                onClick={() => {
+                    setModalType('edit');
+                    setFormData({
+                        name: selectedHospital.name || '',
+                        email: selectedHospital.email || '',
+                        phone: selectedHospital.phone || '',
+                        address: selectedHospital.address || '',
+                        city: selectedHospital.city || '',
+                        state: selectedHospital.state || '',
+                        zip_code: selectedHospital.zip_code || '',
+                        registration_number: selectedHospital.registration_number || '',
+                        contact_person: selectedHospital.contact_person || '',
+                        specialization: selectedHospital.specialization || '',
+                        status: selectedHospital.status || 'pending'
+                    });
+                }}
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+                <Edit className="h-4 w-4" />
+                Edit Hospital
+            </button>
+        </div>
+    </div>) : (
                 // CREATE/EDIT FORM with validations
                 <form onSubmit={handleSubmit}>
                   <div className="space-y-4 mb-6">
