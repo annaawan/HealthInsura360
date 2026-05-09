@@ -438,7 +438,7 @@ const formatStatus = (status) => {
         return 'bg-green-100 text-green-800';
     }
     if (normalizedStatus === 'pending') {
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-green-100 text-green-800';
     }
     if (normalizedStatus === 'disapproved' || normalizedStatus === 'rejected') {
         return 'bg-red-100 text-red-800';
@@ -481,7 +481,7 @@ const formatStatus = (status) => {
               </div>
               <div className="bg-white p-6 rounded-lg shadow">
                 <p className="text-gray-500 text-sm">Pending</p>
-                <p className="text-3xl font-bold text-orange-600">{stats.pendingClaims}</p>
+                <p className="text-3xl font-bold text-green-600">{stats.pendingClaims}</p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow">
                 <p className="text-gray-500 text-sm">Approved</p>
@@ -499,7 +499,7 @@ const formatStatus = (status) => {
               <div className="bg-white rounded-lg shadow overflow-hidden">
                 {customersLoading ? (
                   <div className="p-8 text-center">
-                    <div className="inline-block w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="inline-block w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
                     <p className="text-gray-600 mt-2">Loading customers...</p>
                   </div>
                 ) : customers.length > 0 ? (
@@ -524,7 +524,7 @@ const formatStatus = (status) => {
                             <td className="px-6 py-4">
                               <button
                                 onClick={() => fetchCustomerPolicies(customer)}
-                                className="px-4 py-2 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 transition"
+                                className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
                               >
                                 View Policies
                               </button>
@@ -664,7 +664,7 @@ case 'account':
                             </div>
                             <div>
                               <p className="text-sm text-gray-500">Used Coverage</p>
-                              <p className="font-semibold text-orange-600">${policy.used_coverage?.toLocaleString()}</p>
+                              <p className="font-semibold text-green-600">${policy.used_coverage?.toLocaleString()}</p>
                             </div>
                             <div>
                               <p className="text-sm text-gray-500">Premium Amount</p>
@@ -734,7 +734,7 @@ const renderClaimModal = () => {
                   <div className="flex items-center justify-between">
                     {steps.map((s, idx) => (
                       <div key={s} className="flex-1 text-center">
-                        <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center ${idx <= activeStep ? 'bg-orange-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                        <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center ${idx <= activeStep ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
                           {idx + 1}
                         </div>
                         <p className="text-xs mt-1">{s}</p>
@@ -774,7 +774,7 @@ const renderClaimModal = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Treatment Date *</label>
                         <input 
                           type="date" 
-                          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500" 
+                          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500" 
                           value={claimFormData.treatmentDate}
                           onChange={(e) => {
                             const validation = isTreatmentDateValid(e.target.value);
@@ -843,10 +843,10 @@ const renderClaimModal = () => {
                       <h4 className="font-semibold mb-2">Payment Breakdown</h4>
                       <div className="space-y-1">
                         <div className="flex justify-between"><span>Total Claim:</span><span>${claimFormData.treatmentCost}</span></div>
-                        {preview.deductibleApplied > 0 && <div className="flex justify-between text-orange-600"><span>Deductible:</span><span>- ${preview.deductibleApplied}</span></div>}
-                        {preview.coPayAmount > 0 && <div className="flex justify-between text-orange-600"><span>Co-pay:</span><span>- ${preview.coPayAmount}</span></div>}
+                        {preview.deductibleApplied > 0 && <div className="flex justify-between text-green-600"><span>Deductible:</span><span>- ${preview.deductibleApplied}</span></div>}
+                        {preview.coPayAmount > 0 && <div className="flex justify-between text-green-600"><span>Co-pay:</span><span>- ${preview.coPayAmount}</span></div>}
                         <div className="flex justify-between pt-2 border-t font-bold"><span>Insurance Pays:</span><span className="text-green-600">${preview.insurancePayment.toFixed(2)}</span></div>
-                        <div className="flex justify-between font-bold"><span>Patient Pays:</span><span className="text-orange-600">${preview.patientResponsibility.toFixed(2)}</span></div>
+                        <div className="flex justify-between font-bold"><span>Patient Pays:</span><span className="text-green-600">${preview.patientResponsibility.toFixed(2)}</span></div>
                       </div>
                     </div>
                   </div>
@@ -857,7 +857,7 @@ const renderClaimModal = () => {
                 <div className="space-x-2">
                   {activeStep > 0 && <button onClick={handleBack} className="px-4 py-2 bg-gray-300 rounded">Back</button>}
                   {activeStep < steps.length - 1 ? (
-                    <button onClick={handleNext} className="px-4 py-2 bg-orange-600 text-white rounded">Next</button>
+                    <button onClick={handleNext} className="px-4 py-2 bg-green-600 text-white rounded">Next</button>
                   ) : (
                     <button onClick={submitClaim} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50">
                       {loading ? 'Submitting...' : 'Submit Claim'}
@@ -900,7 +900,7 @@ const renderClaimModal = () => {
       <div className={`flex-1 overflow-auto transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
         <div className="p-8">
           {loading && currentView === 'dashboard' ? (
-            <div className="text-center py-12"><div className="inline-block w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div><p className="text-gray-600 mt-4">Loading...</p></div>
+            <div className="text-center py-12"><div className="inline-block w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div><p className="text-gray-600 mt-4">Loading...</p></div>
           ) : (
             renderContent()
           )}
@@ -972,7 +972,7 @@ const PaymentPanel = ({ hospital }) => {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="inline-block w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        <div className="inline-block w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-gray-600 mt-2">Loading payment history...</p>
       </div>
     );
@@ -1005,10 +1005,10 @@ const PaymentPanel = ({ hospital }) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm">Pending Payments</p>
-                <p className="text-2xl font-bold text-orange-600">{formatCurrency(summary.pending_amount)}</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(summary.pending_amount)}</p>
               </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                <History className="h-6 w-6 text-orange-600" />
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <History className="h-6 w-6 text-green-600" />
               </div>
             </div>
             <p className="text-sm text-gray-500 mt-2">{summary.pending_payouts || 0} claims pending</p>
@@ -1155,7 +1155,7 @@ const AccountPanel = ({ hospital }) => {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="inline-block w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        <div className="inline-block w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-gray-600 mt-2">Loading account details...</p>
       </div>
     );
@@ -1171,7 +1171,7 @@ const AccountPanel = ({ hospital }) => {
         {account && !isEditing && (
           <button
             onClick={() => setIsEditing(true)}
-            className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition flex items-center gap-2"
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2"
           >
             <Edit className="h-4 w-4" />
             Edit Account
@@ -1199,7 +1199,7 @@ const AccountPanel = ({ hospital }) => {
                   required
                   value={formData.account_holder_name}
                   onChange={(e) => setFormData({ ...formData, account_holder_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="John Doe"
                 />
               </div>
@@ -1213,7 +1213,7 @@ const AccountPanel = ({ hospital }) => {
                   required
                   value={formData.bank_name}
                   onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="Bank of America"
                 />
               </div>
@@ -1227,7 +1227,7 @@ const AccountPanel = ({ hospital }) => {
                   required
                   value={formData.account_number}
                   onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="1234567890"
                 />
               </div>
@@ -1240,7 +1240,7 @@ const AccountPanel = ({ hospital }) => {
                   type="text"
                   value={formData.routing_number}
                   onChange={(e) => setFormData({ ...formData, routing_number: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="021000021"
                 />
               </div>
@@ -1248,7 +1248,7 @@ const AccountPanel = ({ hospital }) => {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition disabled:opacity-50"
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save Account'}
               </button>
@@ -1267,7 +1267,7 @@ const AccountPanel = ({ hospital }) => {
                   required
                   value={formData.account_holder_name}
                   onChange={(e) => setFormData({ ...formData, account_holder_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
               
@@ -1280,7 +1280,7 @@ const AccountPanel = ({ hospital }) => {
                   required
                   value={formData.bank_name}
                   onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
               
@@ -1293,7 +1293,7 @@ const AccountPanel = ({ hospital }) => {
                   required
                   value={formData.account_number}
                   onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
               
@@ -1305,7 +1305,7 @@ const AccountPanel = ({ hospital }) => {
                   type="text"
                   value={formData.routing_number}
                   onChange={(e) => setFormData({ ...formData, routing_number: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
               
@@ -1313,7 +1313,7 @@ const AccountPanel = ({ hospital }) => {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition disabled:opacity-50"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : 'Update Account'}
                 </button>
