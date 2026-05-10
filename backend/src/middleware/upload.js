@@ -119,7 +119,7 @@ const uploadProfilePicture = multer({
 
 // Helper functions
 const getBaseUrl = () => {
-  return process.env.BASE_URL || 'http://localhost:5000';
+  return process.env.BASE_URL || process.env.REACT_APP_API_BASE_URL;;
 };
 
 const getDocumentPath = (filename, type = 'hospital') => {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Image, File, Download, ExternalLink } from 'lucide-react'; // Added icons
+import { API_BASE_URL, IMAGE_BASE_URL } from '../../utils/config';
 
 const MyClaims = () => {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ const MyClaims = () => {
     const token = localStorage.getItem('healthinsura360_token');
     console.log('🔑 Token being used:', token ? 'Present' : 'MISSING');
     
-    const response = await axios.get('http://localhost:5000/api/claims/my-claims', {
+    const response = await axios.get(`${API_BASE_URL}/claims/my-claims`, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
@@ -110,7 +111,7 @@ const MyClaims = () => {
 
   // Helper function to get document URL
   const getDocumentUrl = (doc) => {
-    const baseUrl = 'http://localhost:5000';
+    const baseUrl = IMAGE_BASE_URL;
     
     if (typeof doc === 'string') {
       // If it's just a filename string

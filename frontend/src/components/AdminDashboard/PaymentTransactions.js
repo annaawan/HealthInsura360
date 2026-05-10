@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip as ChartTooltip, Legend, Filler } from 'chart.js';
 import { Check, Download, CreditCard as CreditCardIcon, Eye, AlertCircle, RefreshCw, FileText, FileSpreadsheet, X } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../utils/config';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler);
 
@@ -94,7 +95,7 @@ function PaymentTransactions() {
     setUsingDummyData(false);
     
     try {
-      const response = await axios.get('http://localhost:5000/api/payments/transactions');
+      const response = await axios.get(`${API_BASE_URL}/payments/transactions`);
       
       console.log('Response:', response.data);
       
@@ -201,7 +202,7 @@ function PaymentTransactions() {
     setUpdatingStatus(transactionId);
     
     try {
-      const response = await axios.put(`http://localhost:5000/api/payments/transactions/${transactionId}/status`, {
+      const response = await axios.put(`${API_BASE_URL}/payments/transactions/${transactionId}/status`, {
         status: newStatus
       });
       

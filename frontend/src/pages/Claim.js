@@ -23,6 +23,7 @@ import {
 } from '@mui/material';
 import { ArrowBack, Upload, CheckCircle } from '@mui/icons-material';
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/config';
 
 const Claims = () => {
   const navigate = useNavigate();
@@ -128,7 +129,7 @@ const Claims = () => {
       });
 
       const response = await axios.post(
-        'http://localhost:5000/api/claims/submit',
+        `${API_BASE_URL}/claims/submit`,
         claimsFormData,
         {
           headers: {

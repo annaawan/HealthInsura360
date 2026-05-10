@@ -6,6 +6,7 @@ import {
   AlertCircle, RefreshCw, Plus, Filter
 } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../utils/config';
 
 function PaymentReminders({ agent }) {
   const [reminders, setReminders] = useState([]);
@@ -88,7 +89,7 @@ function PaymentReminders({ agent }) {
   // Fetch clients for dropdown
   const fetchClients = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/payments/agent/clients', {
+      const response = await axios.get(`${API_BASE_URL}/payments/agent/clients`, {
         headers: getAuthHeaders()
       });
       if (response.data.success) {
@@ -102,7 +103,7 @@ function PaymentReminders({ agent }) {
   // Fetch policies for selected client
   const fetchPoliciesForClient = async (customerId) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/payments/agent/clients/${customerId}/policies`, {
+      const response = await axios.get(`${API_BASE_URL}/payments/agent/clients/${customerId}/policies`, {
         headers: getAuthHeaders()
       });
       if (response.data.success) {
@@ -118,8 +119,8 @@ function PaymentReminders({ agent }) {
     setLoading(true);
     try {
       const url = filterStatus === 'all' 
-        ? 'http://localhost:5000/api/payments/reminders'
-        : `http://localhost:5000/api/payments/reminders?status=${filterStatus}`;
+        ? `${API_BASE_URL}/payments/reminders`
+        : `${API_BASE_URL}/payments/reminders?status=${filterStatus}`;
       
       const response = await axios.get(url, { headers: getAuthHeaders() });
       if (response.data.success) {
@@ -143,7 +144,7 @@ function PaymentReminders({ agent }) {
     }
     
     try {
-      const response = await axios.post('http://localhost:5000/api/payments/reminders', 
+      const response = await axios.post(`${API_BASE_URL}/payments/reminders`, 
         reminderForm,
         { headers: getAuthHeaders() }
       );
@@ -174,7 +175,7 @@ function PaymentReminders({ agent }) {
     
     setSendingReminder(reminderId);
     try {
-      const response = await axios.post(`http://localhost:5000/api/payments/reminders/${reminderId}/send`, 
+      const response = await axios.post(`${API_BASE_URL}/payments/reminders/${reminderId}/send`, 
         {},
         { headers: getAuthHeaders() }
       );
@@ -197,7 +198,7 @@ function PaymentReminders({ agent }) {
     if (!window.confirm('Are you sure you want to delete this reminder?')) return;
     
     try {
-      const response = await axios.delete(`http://localhost:5000/api/payments/reminders/${reminderId}`, {
+      const response = await axios.delete(`${API_BASE_URL}/payments/reminders/${reminderId}`, {
         headers: getAuthHeaders()
       });
       
@@ -230,7 +231,7 @@ function PaymentReminders({ agent }) {
     
     try {
         const response = await axios.put(
-            `http://localhost:5000/api/payments/reminders/${reminderId}/complete`,
+            `${API_BASE_URL}/payments/reminders/${reminderId}/complete`,
             { 
                 paymentReference: paymentReference || 'MANUAL_PAYMENT',
                 notes: `Payment marked as completed by agent. Reference: ${paymentReference || 'Manual'}`

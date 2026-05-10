@@ -23,7 +23,7 @@ function AuditLogsPanel({ token }) {
       if (filters.startDate) params.append('startDate', filters.startDate);
       if (filters.endDate) params.append('endDate', filters.endDate);
       
-      const response = await axios.get(`http://localhost:5000/api/payments/admin/audit-logs?${params}`);
+const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/payments/admin/audit-logs?${params}`);
       setLogs(response.data.data);
     } catch (error) {
       console.error('Error fetching audit logs:', error);

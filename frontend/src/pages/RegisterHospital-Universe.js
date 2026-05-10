@@ -29,6 +29,7 @@ import {
   Delete as DeleteIcon,
   Person,
 } from "@mui/icons-material";
+import { API_BASE_URL } from '../utils/config';
 
 const steps = ['Hospital Details', 'Upload Documents', 'Confirmation'];
 
@@ -72,7 +73,7 @@ const RegisterHospital = () => {
       }
 
       // Upload files to backend
-      const response = await fetch('http://localhost:5000/api/hospitals/upload-documents', {
+      const response = await fetch(`${API_BASE_URL}/hospitals/upload-documents`, {
         method: 'POST',
         body: formDataObj
       });
@@ -184,7 +185,7 @@ const RegisterHospital = () => {
       console.log('Sending hospital data to backend:', hospitalData);
 
       // API call to backend
-      const response = await fetch('http://localhost:5000/api/hospitals/register', {
+      const response = await fetch(`${API_BASE_URL}/hospitals/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

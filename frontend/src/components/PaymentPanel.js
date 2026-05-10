@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DollarSign, Calendar, Clock, CheckCircle, XCircle, AlertCircle, CreditCard, Bell, Wallet } from 'lucide-react';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL ;
 
 const getAxiosConfig = () => {
   const token = localStorage.getItem('healthinsura360_token');

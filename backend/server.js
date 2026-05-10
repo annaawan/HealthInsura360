@@ -22,7 +22,7 @@ app.use('/uploads/profiles', express.static(path.join(__dirname, 'uploads/profil
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000' || 'https://healthinsura360.dpdns.org',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

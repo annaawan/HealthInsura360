@@ -42,7 +42,7 @@ import {
 } from 'recharts';
 
 // ==================== CONSTANTS & HELPERS ====================
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
+import { API_BASE_URL, IMAGE_BASE_URL } from '../utils/config';
 
 // Currency formatter
 const formatCurrency = (amount) => {
@@ -1383,8 +1383,7 @@ function ClaimsSection({ customerPolicies = [] }) {
         // Construct full URL if needed
         const fullUrl = fileUrl.startsWith('http') 
           ? fileUrl 
-          : `http://localhost:5000${fileUrl.startsWith('/') ? fileUrl : '/' + fileUrl}`;
-        
+: `${process.env.REACT_APP_API_BASE_URL.replace('/api', '')}${fileUrl.startsWith('/') ? fileUrl : '/' + fileUrl}`;        
         return (
           <a
             key={idx}
@@ -1596,7 +1595,7 @@ function ProfileSection() {
       if (!picturePath.startsWith('/')) {
         picturePath = '/' + picturePath;
       }
-      return `http://localhost:5000${picturePath}`;
+return `${process.env.REACT_APP_BASE_URL}${picturePath}`;
     }
     return null;
   };
@@ -1809,7 +1808,7 @@ function ProfileSection() {
                 <div className="w-20 h-20 bg-sky-100 rounded-full overflow-hidden border-2 border-sky-200">
                   {profileData.profile_picture ? (
                     <img 
-                      src={`http://localhost:5000${profileData.profile_picture.startsWith('/') ? profileData.profile_picture : `/${profileData.profile_picture}`}`}
+                      src={`${IMAGE_BASE_URL}${profileData.profile_picture.startsWith('/') ? profileData.profile_picture : `/${profileData.profile_picture}`}`}
                       alt="Profile"
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -2666,7 +2665,7 @@ function CustomerDashboard() {
                 >
                   {customerName.profile_picture ? (
                     <img 
-                      src={`http://localhost:5000${customerName.profile_picture}`}
+                      src={`${IMAGE_BASE_URL}${customerName.profile_picture}`}
                       alt={customerName.first_name || 'Profile'}
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -2687,7 +2686,7 @@ function CustomerDashboard() {
                         <div className="w-10 h-10 bg-sky-100 rounded-full overflow-hidden flex-shrink-0">
                           {customerName.profile_picture ? (
                             <img 
-                              src={`http://localhost:5000${customerName.profile_picture}`}
+                              src={`${IMAGE_BASE_URL}${customerName.profile_picture}`}
                               alt={customerName.first_name}
                               className="w-full h-full object-cover"
                             />

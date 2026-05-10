@@ -34,6 +34,7 @@ import {
   Home,
   CalendarMonth,
 } from "@mui/icons-material";
+import { API_BASE_URL } from '../utils/config';
 
 const steps = ['Agent Details', 'Account Security', 'Confirmation'];
 
@@ -213,7 +214,7 @@ const RegisterAgent = () => {
     console.log('Sending agent data to backend:', agentData);
 
     // API call to backend
-    const response = await fetch('http://localhost:5000/api/auth/register/agent', {
+    const response = await fetch(`${API_BASE_URL}/auth/register/agent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

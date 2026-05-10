@@ -1,7 +1,7 @@
 // src/config.js
 
 // API Base URL - supports environment variables with fallback
-export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
+export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_BASE_URL;
 
 // Get axios configuration with authentication token
 export const getAxiosConfig = () => {

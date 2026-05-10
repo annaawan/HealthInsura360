@@ -6,6 +6,7 @@ import {
   ChevronRight, Users, ClipboardList, X, AlertTriangle, Shield
 } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../utils/config';
 
 function ClaimManagement({ agent }) {
   const [clients, setClients] = useState([]);
@@ -83,7 +84,7 @@ function ClaimManagement({ agent }) {
   const fetchClients = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/payments/agent/clients', {
+      const response = await axios.get(`${API_BASE_URL}/payments/agent/clients`, {
         headers: getAuthHeaders()
       });
       if (response.data.success) {
@@ -102,7 +103,7 @@ function ClaimManagement({ agent }) {
   // Fetch claim statistics for a specific client
   const fetchClientClaimStats = async (customerId) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/payments/agent/clients/${customerId}/claim-stats`, {
+      const response = await axios.get(`${API_BASE_URL}/payments/agent/clients/${customerId}/claim-stats`, {
         headers: getAuthHeaders()
       });
       if (response.data.success) {
@@ -121,7 +122,7 @@ function ClaimManagement({ agent }) {
     setLoading(true);
     try {
         const activeStatus = statusValue !== null ? statusValue : filterStatus;
-        let url = `http://localhost:5000/api/agent/clients/${customerId}/claims`;
+        let url = `${API_BASE_URL}/agent/clients/${customerId}/claims`;
         
         if (activeStatus !== 'all') {
             url += `?status=${activeStatus}`;
@@ -190,7 +191,7 @@ function ClaimManagement({ agent }) {
     if (!months) return;
     
     try {
-        const response = await axios.post(`http://localhost:5000/api/agent/policies/${policyId}/renew`,
+        const response = await axios.post(`${API_BASE_URL}/agent/policies/${policyId}/renew`,
             { renewal_period_months: parseInt(months) },
             { headers: getAuthHeaders() }
         );
@@ -213,7 +214,7 @@ function ClaimManagement({ agent }) {
     
     setActionLoading(true);
     try {
-        const response = await axios.post(`http://localhost:5000/api/agent/claims/${claim.claim_id}/retry-payment`,
+        const response = await axios.post(`${API_BASE_URL}/agent/claims/${claim.claim_id}/retry-payment`,
             {},
             { headers: getAuthHeaders() }
         );
@@ -250,7 +251,7 @@ function ClaimManagement({ agent }) {
     
     setActionLoading(true);
     try {
-        const response = await axios.put(`http://localhost:5000/api/payments/agent/claims/${currentClaim.claim_id}/approve`,
+        const response = await axios.put(`${API_BASE_URL}/payments/agent/claims/${currentClaim.claim_id}/approve`,
             { 
                 approved_amount: approvedAmt,
                 coverage_type: coverageType,
@@ -286,7 +287,7 @@ function ClaimManagement({ agent }) {
     
     setActionLoading(true);
     try {
-      const response = await axios.put(`http://localhost:5000/api/payments/agent/claims/${currentClaim.claim_id}/disapprove`,
+      const response = await axios.put(`${API_BASE_URL}/payments/agent/claims/${currentClaim.claim_id}/disapprove`,
         { reason: disapprovalReason, notes: approvalNotes },
         { headers: getAuthHeaders() }
       );
@@ -321,7 +322,7 @@ const viewDocument = async (claim, document) => {
     }
     
     // ✅ FIXED: Use the correct claims endpoint (not agent endpoint)
-    const url = `http://localhost:5000/api/claims/${claim.claim_id}/documents/${filename}`;
+    const url = `${API_BASE_URL}/claims/${claim.claim_id}/documents/${filename}`;
     
     console.log('📄 Opening document:', url);
     

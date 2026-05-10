@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, AlertTriangle, CheckCircle, TrendingUp, RefreshCw } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../utils/config';
 
 function PolicyCoverage({ agent }) {
     const [clients, setClients] = useState([]);
@@ -16,7 +17,7 @@ function PolicyCoverage({ agent }) {
     const fetchCoverageSummary = async () => {
         setLoading(true);
         try {
-            const response = await axios.get('http://localhost:5000/api/payments/agent/claims/summary', {
+            const response = await axios.get(`${API_BASE_URL}/payments/agent/claims/summary`, {
                 headers: getAuthHeaders()
             });
             if (response.data.success) {

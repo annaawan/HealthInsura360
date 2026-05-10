@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { X, FileText, Image, File, AlertCircle } from 'lucide-react'; // Added icons
+import { API_BASE_URL } from '../../utils/config';
 
 const SubmitClaim = () => {
   const navigate = useNavigate();
@@ -65,7 +66,7 @@ const SubmitClaim = () => {
   const fetchUserPolicies = async () => {
     try {
       const token = localStorage.getItem('healthinsura360_token');
-      const response = await axios.get('http://localhost:5000/api/policies/my-policies', {
+      const response = await axios.get(`${API_BASE_URL}/policies/my-policies`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -217,7 +218,7 @@ const SubmitClaim = () => {
       });
 
       const response = await axios.post(
-        'http://localhost:5000/api/claims/submit',
+        `${API_BASE_URL}/claims/submit`,
         submitData,
         {
           headers: { 

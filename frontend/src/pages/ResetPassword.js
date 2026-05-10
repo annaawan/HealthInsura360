@@ -24,6 +24,7 @@ import {
   Email,
   MedicalServices
 } from '@mui/icons-material';
+import { API_BASE_URL } from '../utils/config';
 
 const ResetPassword = () => {
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ const ResetPassword = () => {
       }
 
       try {
-        const response = await fetch('http://localhost:5000/api/auth/verify-reset-token', {
+        const response = await fetch(`${API_BASE_URL}/auth/verify-reset-token`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -135,7 +136,7 @@ const ResetPassword = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/reset-password', {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -16,6 +16,7 @@ import {
   Stack,
 } from '@mui/material';
 import { Email, Lock, Person, Visibility, VisibilityOff, Business } from '@mui/icons-material';
+import { API_BASE_URL } from '../utils/config';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -197,7 +198,7 @@ const Login = () => {
           registrationNumber: formData.registrationNumber
         });
 
-        const response = await fetch('http://localhost:5000/api/hospitals/login', {
+        const response = await fetch(`${API_BASE_URL}/hospitals/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -258,8 +259,9 @@ const Login = () => {
           password: '[HIDDEN]',
           userType: formData.accountType
         });
-
-        const response = await fetch('http://localhost:5000/api/auth/login', {
+console.log('ENV VAR:', process.env.REACT_APP_API_BASE_URL);
+console.log('API_BASE_URL value:', API_BASE_URL);
+        const response = await fetch(`${API_BASE_URL}/auth/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

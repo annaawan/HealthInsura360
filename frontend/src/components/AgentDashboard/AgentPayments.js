@@ -16,6 +16,7 @@ import {
   Printer
 } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../utils/config';
 
 function AgentPayments({ agent }) {
   const [loading, setLoading] = useState(true);
@@ -75,7 +76,7 @@ function AgentPayments({ agent }) {
         return;
       }
       
-      const response = await axios.get('http://localhost:5000/api/payments/agent/clients', {
+      const response = await axios.get(`${API_BASE_URL}/payments/agent/clients`, {
         headers: getAuthHeaders()
       });
       
@@ -94,7 +95,7 @@ function AgentPayments({ agent }) {
   // Fetch client policies
   const fetchClientPolicies = async (customerId) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/payments/agent/clients/${customerId}/policies`, {
+      const response = await axios.get(`${API_BASE_URL}/payments/agent/clients/${customerId}/policies`, {
         headers: getAuthHeaders()
       });
       
@@ -112,7 +113,7 @@ function AgentPayments({ agent }) {
   // Fetch payment statistics
   const fetchStats = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/payments/agent/payments/stats', {
+      const response = await axios.get(`${API_BASE_URL}/payments/agent/payments/stats`, {
         headers: getAuthHeaders()
       });
       
@@ -129,7 +130,7 @@ function AgentPayments({ agent }) {
     console.log('🔵 Fetching payments for customer ID:', customerId);
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/payments/agent/clients/${customerId}/payments`, {
+      const response = await axios.get(`${API_BASE_URL}/payments/agent/clients/${customerId}/payments`, {
         headers: getAuthHeaders()
       });
       
@@ -156,7 +157,7 @@ function AgentPayments({ agent }) {
     setSendingEmail(paymentId);
     try {
       const token = getAuthToken();
-      const response = await axios.post(`http://localhost:5000/api/payments/receipt/${paymentId}/email`, 
+      const response = await axios.post(`${API_BASE_URL}/payments/receipt/${paymentId}/email`, 
         { email },
         { 
           headers: { 
@@ -184,7 +185,7 @@ function AgentPayments({ agent }) {
     try {
       const token = getAuthToken();
       
-      const response = await axios.get(`http://localhost:5000/api/payments/receipt/${paymentId}/print`, {
+      const response = await axios.get(`${API_BASE_URL}/payments/receipt/${paymentId}/print`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'text/html'
@@ -222,7 +223,7 @@ function AgentPayments({ agent }) {
     setRecordingPayment(true);
     
     try {
-      const response = await axios.post('http://localhost:5000/api/payments/agent/record-payment', 
+      const response = await axios.post(`${API_BASE_URL}/payments/agent/record-payment`, 
         {
           customer_id: parseInt(paymentForm.customer_id, 10),
           policy_id: parseInt(paymentForm.policy_id, 10),

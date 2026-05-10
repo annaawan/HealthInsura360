@@ -39,6 +39,7 @@ import {
   MonetizationOn,
   Favorite,
 } from "@mui/icons-material";
+import { API_BASE_URL } from '../utils/config';
 
 const steps = ['Account Details', 'Personal Information', 'Confirmation'];
 
@@ -234,7 +235,7 @@ const Register = () => {
 
       console.log('Sending to backend:', customerData);
 
-      const response = await fetch('http://localhost:5000/api/auth/register/customer', {
+      const response = await fetch(`${API_BASE_URL}/auth/register/customer`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

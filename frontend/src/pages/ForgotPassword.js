@@ -48,7 +48,7 @@ const ForgotPassword = () => {
   try {
     console.log('🔄 Sending password reset request:', formData);
 
-    const response = await fetch('http://localhost:5000/api/auth/forgot-password', {
+const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/auth/forgot-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ const ForgotPassword = () => {
     // More specific error messages
     let errorMessage = err.message;
     if (err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
-      errorMessage = 'Cannot connect to server. Please check if backend is running on http://localhost:5000';
+errorMessage = `Cannot connect to server. Please check if backend is running on ${process.env.REACT_APP_API_BASE_URL}`;
     } else if (err.message.includes('404')) {
       errorMessage = 'Password reset endpoint not found. Check backend routes.';
     } else if (err.message.includes('500')) {

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Download, Calendar, FileText, TrendingUp, Users, Building, DollarSign } from 'lucide-react';
+import { API_BASE_URL } from '../utils/config';
 
 function ReportsPanel({ token }) {
   const [reportType, setReportType] = useState('summary');
@@ -16,7 +17,7 @@ function ReportsPanel({ token }) {
     setError(null);
     
     try {
-      const response = await axios.post('http://localhost:5000/api/payments/admin/reports/generate', {
+      const response = await axios.post(`${API_BASE_URL}/payments/admin/reports/generate`, {
         reportType,
         startDate,
         endDate,
